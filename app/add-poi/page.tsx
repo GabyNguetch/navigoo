@@ -73,7 +73,6 @@ function AddPoiContent() {
         if (existing.poi_images_urls && existing.poi_images_urls[0]) {
           setPreviewImage(existing.poi_images_urls[0]);
         }
-        // @ts-expect-error type fallback
         setKeywordsString(existing.poi_keywords?.join(", ") || "");
       }
     } else {
