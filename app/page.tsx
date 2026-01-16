@@ -12,11 +12,12 @@ import { POI, Location, TransportMode } from "@/types";
 import { getRoute } from "@/services/routingService";
 import { useUserData } from "@/hooks/useUserData";
 import { Settings as SettingsIcon, Check, X } from "lucide-react";
+import { Loader } from "@/components/ui/Loader";
 
 
 const MapComponent = dynamic(() => import("@/components/map/Map"), {
   ssr: false,
-  loading: () => <div className="h-screen w-screen bg-zinc-100 flex items-center justify-center font-bold text-primary">Chargement Navigoo...</div>,
+  loading: () => <Loader />,
 });
 
 const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9"; 
