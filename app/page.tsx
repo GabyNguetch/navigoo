@@ -59,7 +59,7 @@ export default function Home() {
   // --- GESTIONNAIRES D'AFFICHAGE ---
 
   // 1. Clic sur un POI (Carte ou Recherche)
-  const handleSelectPoi = (poi: POI) => {
+  const handleSelectPoi = (poi: POI | null) => {
     if(!poi) {
         // Clic dans le vide -> Tout fermer sauf la barre de recherche
         setPanelState({ type: null });
