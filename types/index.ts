@@ -24,12 +24,14 @@ export interface POI {
   // Adresses
   address_informal?: string; // Ex: "Mvog-Betsi, face station"
   address_city: string;
+  address_country?: string; // <--- AJOUTER CETTE LIGNE
 
   // Stats & Infos
   rating: number; // vient de la table aggrégée review ou calculé
   review_count: number;
   poi_images_urls: string[]; // split from TEXT
   popularity_score: number;
+  poi_keywords?: string[]; // <--- AJOUTER CETTE LIGNE (tu l'utilises aussi dans add-poi)
   
   // Contact JSON
   poi_contacts?: {
