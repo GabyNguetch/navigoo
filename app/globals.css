@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #9400D3;
+  --color-primary-dark: #7200a3;
+  --color-primary-light: #b64dff;
+  --color-background: #ffffff;
+  --color-foreground: #171717;
+  
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overflow: hidden; /* Empêche le scroll global pour une expérience app map */
+}
+
+/* Custom Scrollbar pour le look moderne */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9475aa;
+}
+
+@media print {
+  body {
+    background-color: white;
+  }
+  /* On cache tout sauf la carte */
+  .fixed, .absolute:not(.mapboxgl-map):not(.maplibregl-map), header, aside {
+    display: none !important;
+  }
+  
+  /* On s'assure que la carte prend tout */
+  main {
+    width: 100vw;
+    height: 100vh;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  .maplibregl-map {
+      width: 100% !important;
+      height: 100% !important;
+  }
+}
+
+
+
