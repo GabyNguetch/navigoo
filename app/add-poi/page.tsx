@@ -156,7 +156,6 @@ function AddPoiContent() {
     const finalPoi: POI = {
         ...formData as POI,
         poi_id: editId || Date.now().toString(),
-        // @ts-expect-error compatibility
         poi_keywords: keywordsString.split(",").map(s => s.trim()).filter(Boolean),
         rating: formData.rating || 4.5,
         review_count: formData.review_count || 0,
