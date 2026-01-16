@@ -59,7 +59,7 @@ export interface Trip {
   duration: number;
 }
 
-export type MapStyle = "streets-v2" | "satellite-hybrid";
+export type MapStyle = "streets-v2" | "hybrid";
 
 
 

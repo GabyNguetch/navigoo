@@ -18,7 +18,7 @@ interface MapProps {
   selectedPoi: POI | null;
   userLocation: Location | null;
   routeGeometry: any | null; 
-  mapStyleType: "streets-v2" | "satellite-hybrid"; // Nouveau
+  mapStyleType: "streets-v2" | "hybrid"; // Nouveau
 }
 
 export default function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, routeGeometry, mapStyleType }: MapProps) {

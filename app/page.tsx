@@ -13,6 +13,7 @@ import { getRoute } from "@/services/routingService";
 import { useUserData } from "@/hooks/useUserData";
 import { Settings as SettingsIcon, Check, X } from "lucide-react";
 
+
 const MapComponent = dynamic(() => import("@/components/map/Map"), {
   ssr: false,
   loading: () => <div className="h-screen w-screen bg-zinc-100 flex items-center justify-center font-bold text-primary">Chargement Navigoo...</div>,
@@ -32,7 +33,7 @@ export default function Home() {
      data?: any; // Pour passer le POI selectionné ou autre
   }>({ type: null });
   
-  const { savedPois, recentPois, recentTrips, mapStyle, addRecentPoi, addTrip, toggleMapStyle } = useUserData();
+  const { savedPois, recentPois, recentTrips, mapStyle, addRecentPoi, addTrip, toggleMapStyle, myPois } = useUserData();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   // États transverses
@@ -122,12 +123,13 @@ export default function Home() {
   };
 
   const filteredPois = useMemo(() => {
-    return POI_DATA.filter((poi) => {
+    const base = [...POI_DATA, ...myPois]; // Fusion
+    return base.filter((poi) => {
       const cat = selectedCategory ? poi.poi_category === selectedCategory : true;
       const search = searchQuery ? poi.poi_name.toLowerCase().includes(searchQuery.toLowerCase()) : true;
       return cat && search;
     });
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, searchQuery, myPois]);
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-zinc-50 dark:bg-black font-sans">
@@ -218,7 +220,7 @@ export default function Home() {
                     >
                          <div className="w-full h-20 bg-zinc-700 rounded-lg bg-cover bg-center" style={{backgroundImage: "url('https://cloud.maptiler.com/static/img/maps/hybrid.png')"}}></div>
                         <span className="font-semibold text-sm">Satellite</span>
-                        {mapStyle === 'satellite-hybrid' && <Check size={16} className="text-primary"/>}
+                        {mapStyle === 'hybrid' && <Check size={16} className="text-primary"/>}
                     </button>
                  </div>
              </div>

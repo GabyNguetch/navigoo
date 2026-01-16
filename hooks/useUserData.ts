@@ -7,6 +7,7 @@ export const useUserData = () => {
   const [savedPois, setSavedPois] = useState<POI[]>([]);
   const [recentPois, setRecentPois] = useState<POI[]>([]);
   const [recentTrips, setRecentTrips] = useState<Trip[]>([]);
+  const [myPois, setMyPois] = useState<POI[]>([]); 
   const [mapStyle, setMapStyle] = useState<MapStyle>("streets-v2");
 
   // Chargement initial
@@ -16,11 +17,13 @@ export const useUserData = () => {
       const recents = localStorage.getItem("navigoo_recent");
       const trips = localStorage.getItem("navigoo_trips");
       const style = localStorage.getItem("navigoo_style");
+      const my = localStorage.getItem("navigoo_my_pois");
 
       if (saved) setSavedPois(JSON.parse(saved));
       if (recents) setRecentPois(JSON.parse(recents));
       if (trips) setRecentTrips(JSON.parse(trips));
-      if (style) setMapStyle(style as MapStyle);
+      if (my) setMyPois(JSON.parse(my));
+      if (style === "hybrid" || style === "streets-v2") setMapStyle(style);
     }
   }, []);
 
@@ -39,7 +42,7 @@ export const useUserData = () => {
 
   const addRecentPoi = (poi: POI) => {
     const filtered = recentPois.filter((p) => p.poi_id !== poi.poi_id);
-    const newRecent = [poi, ...filtered].slice(0, 10); // Garder les 10 derniers
+    const newRecent = [poi, ...filtered].slice(0, 10);
     setRecentPois(newRecent);
     localStorage.setItem("navigoo_recent", JSON.stringify(newRecent));
   };
@@ -50,8 +53,29 @@ export const useUserData = () => {
     localStorage.setItem("navigoo_trips", JSON.stringify(newTrips));
   };
 
+  // Ajout d'un nouveau POI utilisateur
+  const addMyPoi = (poi: POI) => {
+    const newPois = [poi, ...myPois];
+    setMyPois(newPois);
+    localStorage.setItem("navigoo_my_pois", JSON.stringify(newPois));
+  };
+
+  // Modification d'un POI existant
+  const updateMyPoi = (updatedPoi: POI) => {
+    const newPois = myPois.map(p => p.poi_id === updatedPoi.poi_id ? updatedPoi : p);
+    setMyPois(newPois);
+    localStorage.setItem("navigoo_my_pois", JSON.stringify(newPois));
+  };
+
+  // Suppression d'un POI
+  const deleteMyPoi = (poiId: string) => {
+    const newPois = myPois.filter(p => p.poi_id !== poiId);
+    setMyPois(newPois);
+    localStorage.setItem("navigoo_my_pois", JSON.stringify(newPois));
+  };
+
   const toggleMapStyle = () => {
-    const newStyle = mapStyle === "streets-v2" ? "satellite-hybrid" : "streets-v2";
+    const newStyle: MapStyle = mapStyle === "streets-v2" ? "hybrid" : "streets-v2";
     setMapStyle(newStyle);
     localStorage.setItem("navigoo_style", newStyle);
   };
@@ -60,10 +84,14 @@ export const useUserData = () => {
     savedPois,
     recentPois,
     recentTrips,
+    myPois,
     mapStyle,
     toggleSavePoi,
     addRecentPoi,
     addTrip,
+    addMyPoi,
+    updateMyPoi,
+    deleteMyPoi,
     toggleMapStyle,
     isSaved: (id: string) => savedPois.some(p => p.poi_id === id)
   };

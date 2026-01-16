@@ -31,10 +31,10 @@ export const Sidebar = ({
   const [isHovered, setIsHovered] = useState(false);
   const isExpanded = isHovered || isOpen;
 
-  // Wrapper pour fermer le menu mobile lors d'un clic
   const handleAction = (action: () => void) => {
-    action();
-    if(window.innerWidth < 768) onClose(); // Sur mobile on ferme le drawer
+    action();    // 1. Exécute l'action demandée (ex: ouvrir panneau favoris)
+    onClose();   // 2. Force la fermeture du mode "Menu étendu"
+    setIsHovered(false); // 3. Force la fin de l'état survol (pour éviter qu'il reste ouvert si la souris ne bouge pas vite)
   };
 
   return (
@@ -73,7 +73,7 @@ export const Sidebar = ({
         <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin px-2 py-4 space-y-1">
           <SidebarItem isExpanded={isExpanded} icon={<Bookmark size={22} />} label="Enregistrés" onClick={() => handleAction(() => onViewChange("saved"))} />
           <SidebarItem isExpanded={isExpanded} icon={<Clock size={22} />} label="Récents" onClick={() => handleAction(() => onViewChange("recent"))} />
-          <SidebarItem isExpanded={isExpanded} icon={<Building size={22} />} label="Mes Lieux" onClick={() => handleAction(() => onViewChange("mypois"))} />
+          <SidebarItem isExpanded={isExpanded} icon={<Building size={22} />} label="Creer un point d'interet" onClick={() => handleAction(() => onViewChange("mypois"))} />
           <SidebarItem isExpanded={isExpanded} icon={<UserSearch size={22} />} label="Trouver ma position" onClick={() => handleAction(onLocateMe)} />
           <SidebarItem isExpanded={isExpanded} icon={<MapPin size={22} />} label="Mes trajets" onClick={() => handleAction(() => onViewChange("trips"))} />
           
