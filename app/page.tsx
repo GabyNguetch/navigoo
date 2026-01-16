@@ -13,6 +13,7 @@ import { getRoute } from "@/services/routingService";
 import { useUserData } from "@/hooks/useUserData";
 import { Settings as SettingsIcon, Check, X } from "lucide-react";
 import { Loader } from "@/components/ui/Loader";
+import { MobileNavBar } from "@/components/navigation/MobileNavbar";
 
 
 const MapComponent = dynamic(() => import("@/components/map/Map"), {
@@ -123,6 +124,19 @@ export default function Home() {
     setRouteStats(null);
   };
 
+    // 2. Créer une fonction pour réinitialiser la vue (Action du bouton "Carte")
+  const handleResetToMap = () => {
+    setPanelState({ type: null }); // Ferme tout les panneaux
+    setIsMainSidebarOpen(false);   // Ferme le menu latéral si ouvert
+    
+    // Optionnel : Recentrer sur l'utilisateur
+    if (userLocation) {
+       // La MapComponent a un effet useEffect qui réagira si userLocation change ou si on le force
+       // Ici, on ferme juste les panneaux pour dégager la vue.
+    }
+  };
+
+
   const filteredPois = useMemo(() => {
     const base = [...POI_DATA, ...myPois]; // Fusion
     return base.filter((poi) => {
@@ -157,6 +171,14 @@ export default function Home() {
         onShare={() => navigator.clipboard.writeText(window.location.href)}
         onPrint={() => setTimeout(() => window.print(), 100)}
         onToggleSettings={() => setIsSettingsOpen(true)}
+      />
+
+      {/* ------ AJOUTER ICI : BARRE DE NAVIGATION MOBILE (Niveau 3.5) ------ */}
+      <MobileNavBar 
+        currentView={panelState.type === "details" || panelState.type === "directions" ? null : panelState.type}
+        onViewChange={handleViewChange}
+        onOpenSidebar={() => setIsMainSidebarOpen(true)}
+        onResetView={handleResetToMap}
       />
 
       {/* Niveau 2 (Panneaux glissants) - Mutuellement Exclusifs */}
