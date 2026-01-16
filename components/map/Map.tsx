@@ -1,15 +1,13 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
-import Map, { Marker, NavigationControl, GeolocateControl, ScaleControl, Popup, MapRef } from "react-map-gl/maplibre";
-import maplibregl, { LngLatBounds } from "maplibre-gl"; // Import de LngLatBounds
-import "maplibre-gl/dist/maplibre-gl.css";
+import { useState, useMemo, useEffect, useRef, memo } from "react";
+import Map, { Marker, NavigationControl, GeolocateControl, ScaleControl, Popup, MapRef, Source, Layer } from "react-map-gl/maplibre";
+import maplibregl, { LngLatBounds } from "maplibre-gl"; 
 import { POI, Location } from "@/types";
 import { getCategoryConfig } from "@/data/categories";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { Star, MapPin as MapPinIcon } from "lucide-react";
-import { Source, Layer } from "react-map-gl/maplibre";
 
 interface MapProps {
   apiKey: string;
@@ -18,11 +16,67 @@ interface MapProps {
   selectedPoi: POI | null;
   userLocation: Location | null;
   routeGeometry: any | null; 
-  mapStyleType: "streets-v2" | "hybrid"; // Nouveau
+  mapStyleType: "streets-v2" | "hybrid";
 }
 
-export default function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, routeGeometry, mapStyleType }: MapProps) {
+// 1. MEMOIZATION DU PIN INDIVIDUEL (Très important pour la performance DOM)
+// Cela évite de re-rendre chaque pin si la carte bouge mais que le POI ne change pas
+const MapMarker = memo(({ poi, isSelected, onClick, onHover }: { poi: POI, isSelected: boolean, onClick: (e: any) => void, onHover: (p: POI | null) => void }) => {
+  const config = getCategoryConfig(poi.poi_category);
+
+  return (
+    <Marker
+      longitude={poi.location.longitude}
+      latitude={poi.location.latitude}
+      anchor="bottom"
+      onClick={onClick}
+    >
+      <div 
+        onMouseEnter={() => onHover(poi)}
+        onMouseLeave={() => onHover(null)}
+        // Utilisation de classes Tailwind group et hardware acceleration (transform-gpu)
+        className="relative flex flex-col items-center cursor-pointer group transform-gpu"
+        style={{ zIndex: isSelected ? 50 : 10 }}
+      >
+        {isSelected ? (
+           <div className="relative">
+              {/* Animation Ping simplifiée (CSS pur souvent plus rapide que JS Framer sur mobile) */}
+              <div className="absolute inset-0 bg-red-500 rounded-full opacity-75 animate-ping"></div>
+              <div className="relative z-10 text-red-600 drop-shadow-lg scale-125 transition-transform duration-200">
+                 <MapPinIcon size={48} fill="#ef4444" className="text-red-900" />
+                 <div className="absolute top-[14px] left-[14px] w-5 h-5 bg-white rounded-full flex items-center justify-center">
+                    <div className="w-2 h-2 bg-red-600 rounded-full" />
+                 </div>
+              </div>
+           </div>
+        ) : (
+          <>
+             <div 
+               className="flex items-center justify-center w-8 h-8 rounded-full shadow-lg border-2 border-white transition-transform duration-200 group-hover:scale-125 bg-zinc-900 will-change-transform"
+               style={{ backgroundColor: config.color }}
+             >
+               <div className="text-white drop-shadow-md">
+                 {config.icon}
+               </div>
+             </div>
+             {/* Le petit triangle sous la bulle */}
+             <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] mt-[-1px]" style={{ borderTopColor: config.color }}></div>
+          </>
+        )}
+      </div>
+    </Marker>
+  );
+});
+
+MapMarker.displayName = "MapMarker";
+
+// --- COMPOSANT CARTE ---
+
+function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, routeGeometry, mapStyleType }: MapProps) {
   const mapRef = useRef<MapRef>(null);
+  
+  // Utilisation d'un ref pour éviter les re-render inutiles lors des survols
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [viewState, setViewState] = useState({
     longitude: 11.516,
@@ -32,113 +86,59 @@ export default function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, u
 
   const [hoveredPoi, setHoveredPoi] = useState<POI | null>(null);
 
-  // ------------------------------------------
-  // EFFET 1 : ZOOM UTILISATEUR
-  // ------------------------------------------
+  // Optimisation Hover avec debounce léger
+  const handleHover = (poi: POI | null) => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    if (poi) {
+        setHoveredPoi(poi);
+    } else {
+        hoverTimeoutRef.current = setTimeout(() => setHoveredPoi(null), 100);
+    }
+  };
+
+  // --- EFFETS DE ZOOM (Ginchés inchangés mais optimisés via la condition) ---
+  
   useEffect(() => {
-    // On ne centre sur l'user que si pas d'itinéraire actif
     if (userLocation && mapRef.current && !routeGeometry) {
-      mapRef.current.flyTo({
-        center: [userLocation.longitude, userLocation.latitude],
-        zoom: 15,
-        duration: 2000
-      });
+      mapRef.current.flyTo({ center: [userLocation.longitude, userLocation.latitude], zoom: 15, duration: 1200 }); // Duration réduite pour sensation de vitesse
     }
   }, [userLocation, routeGeometry]);
 
-  // ------------------------------------------
-  // EFFET 2 : ZOOM POI SÉLECTIONNÉ
-  // ------------------------------------------
   useEffect(() => {
-    // On ne centre sur le POI que si pas d'itinéraire actif
     if (selectedPoi && mapRef.current && !routeGeometry) {
-      mapRef.current.flyTo({
-        center: [selectedPoi.location.longitude, selectedPoi.location.latitude],
-        zoom: 16,
-        duration: 1500
-      });
+      mapRef.current.flyTo({ center: [selectedPoi.location.longitude, selectedPoi.location.latitude], zoom: 16, duration: 1000 });
     }
   }, [selectedPoi, routeGeometry]);
 
-  // ------------------------------------------
-  // EFFET 3 : ZOOM & FIT ITINÉRAIRE (NOUVEAU)
-  // ------------------------------------------
   useEffect(() => {
     if (routeGeometry && mapRef.current) {
         const coords = routeGeometry.coordinates;
-
-        // Créer les limites (Bounding Box) pour inclure tout le chemin
         const bounds = new LngLatBounds(coords[0], coords[0]);
-        for (const coord of coords) {
-            bounds.extend(coord as [number, number]);
-        }
-
-        // Appliquer le zoom automatique
+        for (const coord of coords) bounds.extend(coord as [number, number]);
+        
         mapRef.current.fitBounds(bounds, {
-            padding: {
-                top: 50,
-                bottom: 50,
-                right: 50,
-                // On met plus de marge à gauche car il y a la sidebar (400px + 72px sidebar ~ 500px)
-                // Sur mobile, on mettra moins.
-                left: window.innerWidth > 768 ? 480 : 50
-            },
-            duration: 2000 // Animation fluide de 2 secondes
+            padding: { top: 80, bottom: 80, right: 50, left: window.innerWidth > 768 ? 420 : 50 }, // Padding ajusté pour éviter Sidebar
+            duration: 1500 
         });
     }
   }, [routeGeometry]);
 
-  // ------------------------------------------
-  // MARQUEURS
-  // ------------------------------------------
-  const pins = useMemo(() => pois.map((poi) => {
-    const config = getCategoryConfig(poi.poi_category);
-    const isSelected = selectedPoi?.poi_id === poi.poi_id;
-
-    return (
-      <Marker
-        key={poi.poi_id}
-        longitude={poi.location.longitude}
-        latitude={poi.location.latitude}
-        anchor="bottom"
+  // --- RENDU OPTIMISÉ DES PINS ---
+  
+  const pins = useMemo(() => {
+    return pois.map((poi) => (
+      <MapMarker 
+        key={poi.poi_id} 
+        poi={poi} 
+        isSelected={selectedPoi?.poi_id === poi.poi_id}
+        onHover={handleHover}
         onClick={(e) => {
           e.originalEvent.stopPropagation();
           onSelectPoi(poi);
         }}
-      >
-        <div 
-          onMouseEnter={() => setHoveredPoi(poi)}
-          onMouseLeave={() => setHoveredPoi(null)}
-          className="relative flex flex-col items-center cursor-pointer group"
-          style={{ zIndex: isSelected ? 50 : 10 }}
-        >
-          {isSelected ? (
-             <div className="relative">
-                <div className="absolute inset-0 bg-red-500 rounded-full opacity-75 animate-ping"></div>
-                <div className="relative z-10 text-red-600 drop-shadow-lg transform transition-transform hover:scale-110">
-                   <MapPinIcon size={48} fill="#ef4444" className="text-red-900" />
-                   <div className="absolute top-[14px] left-[14px] w-5 h-5 bg-white rounded-full flex items-center justify-center">
-                      <div className="w-2 h-2 bg-red-600 rounded-full" />
-                   </div>
-                </div>
-             </div>
-          ) : (
-            <>
-               <div 
-                 className="flex items-center justify-center w-8 h-8 rounded-full shadow-lg border-2 border-white transition-transform duration-200 group-hover:scale-110 bg-zinc-900"
-                 style={{ backgroundColor: config.color }}
-               >
-                 <div className="text-white drop-shadow-md">
-                   {config.icon}
-                 </div>
-               </div>
-               <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] mt-[-1px]" style={{ borderTopColor: config.color }}></div>
-            </>
-          )}
-        </div>
-      </Marker>
-    );
-  }), [pois, selectedPoi, onSelectPoi]);
+      />
+    ));
+  }, [pois, selectedPoi?.poi_id, onSelectPoi]); // Dépendances strictes
 
   return (
     <Map
@@ -149,50 +149,59 @@ export default function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, u
       mapStyle={`https://api.maptiler.com/maps/${mapStyleType}/style.json?key=${apiKey}`}
       attributionControl={false}
       onClick={() => onSelectPoi(null)}
+      // --- PERFORMANCE BOOSTERS ---
+      mapLib={maplibregl} // Utilise la lib importée directement
+      reuseMaps={true}    // CRUCIAL: Réutilise le contexte WebGL au lieu de le détruire
+      cooperativeGestures={true} // UX: Gestion fluide du scroll
+      maxTileCacheSize={100} // Cache plus de tuiles en mémoire
     >
       <GeolocateControl position="bottom-right" />
       <NavigationControl position="bottom-right" showCompass={false} />
       <ScaleControl />
 
+      {/* ITINÉRAIRE - OPTIMISÉ via Source/Layer natif (Pas de React Nodes) */}
       {routeGeometry && (
           <Source id="route-source" type="geojson" data={routeGeometry}>
+             {/* Bordure blanche pour contraste */}
              <Layer 
-               id="route-line-outline"
+               id="route-outline"
                type="line"
                paint={{
-                 'line-color': '#1a5d99',
+                 'line-color': '#ffffff',
                  'line-width': 8,
                  'line-opacity': 0.8
                }}
+               layout={{ 'line-cap': 'round', 'line-join': 'round' }}
              />
+             {/* Ligne principale */}
              <Layer 
                id="route-line"
                type="line"
-               layout={{
-                 'line-join': 'round',
-                 'line-cap': 'round'
-               }}
                paint={{
-                 'line-color': '#9400D3',
+                 'line-color': '#9400D3', // Couleur Primary
                  'line-width': 5,
                  'line-opacity': 1
                }}
+               layout={{ 'line-cap': 'round', 'line-join': 'round' }}
              />
           </Source>
        )}
 
+      {/* PIN UTILISATEUR */}
       {userLocation && (
         <Marker longitude={userLocation.longitude} latitude={userLocation.latitude}>
-           <div className="relative flex items-center justify-center w-6 h-6">
-              <div className="absolute w-12 h-12 bg-blue-500 rounded-full opacity-30 animate-ping"></div>
-              <div className="absolute w-6 h-6 bg-blue-500/40 rounded-full border border-blue-500/50 backdrop-blur-sm shadow-[0_0_10px_rgba(59,130,246,0.6)]"></div>
-              <div className="absolute w-3.5 h-3.5 bg-blue-600 rounded-full border-2 border-white shadow-sm z-10"></div>
+           <div className="relative flex items-center justify-center w-6 h-6 transform-gpu">
+              <span className="absolute w-12 h-12 bg-blue-500 rounded-full opacity-30 animate-ping"></span>
+              <span className="absolute w-6 h-6 bg-blue-500/40 rounded-full border border-blue-500/50 backdrop-blur-sm"></span>
+              <span className="absolute w-3.5 h-3.5 bg-blue-600 rounded-full border-2 border-white shadow-sm z-10"></span>
            </div>
         </Marker>
       )}
 
+      {/* POI MARKERS */}
       {pins}
 
+      {/* TOOLTIP LEGER AU SURVOL */}
       <AnimatePresence>
         {hoveredPoi && !selectedPoi && (
           <Popup
@@ -200,20 +209,36 @@ export default function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, u
             latitude={hoveredPoi.location.latitude}
             anchor="top"
             closeButton={false}
-            offset={15}
-            className="z-50"
+            offset={12}
+            className="z-50 pointer-events-none" // pointer-events-none pour fluidité
           >
-            <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="flex gap-2 p-0 min-w-[200px]">
-               <div className="relative w-12 h-12 rounded-md overflow-hidden shrink-0 bg-gray-200">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }} 
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.1 }} // Animation très rapide
+              className="flex gap-2 p-0 min-w-[180px] shadow-xl rounded-lg bg-white overflow-hidden"
+            >
+               {/* Petite image optimisée ou placeholder */}
+               <div className="relative w-10 h-10 shrink-0 bg-zinc-100">
                   {hoveredPoi.poi_images_urls && hoveredPoi.poi_images_urls[0] && (
-                     <Image src={hoveredPoi.poi_images_urls[0]} alt="img" fill className="object-cover" sizes="50px" />
+                     <Image 
+                       src={hoveredPoi.poi_images_urls[0]} 
+                       alt="" 
+                       fill 
+                       className="object-cover" 
+                       sizes="40px" // Indication au navigateur pour charger petit format
+                       quality={50} // Qualité basse suffisante pour thumbnail
+                     />
                   )}
                </div>
-               <div className="flex flex-col justify-center">
-                 <h4 className="font-bold text-sm text-zinc-800 leading-tight">{hoveredPoi.poi_name}</h4>
-                 <div className="flex items-center gap-1 mt-0.5 text-xs text-zinc-600">
-                   <Star size={10} className="text-yellow-500 fill-current" />
+               <div className="flex flex-col justify-center py-1 pr-2">
+                 <h4 className="font-bold text-xs text-zinc-900 leading-tight line-clamp-1">{hoveredPoi.poi_name}</h4>
+                 <div className="flex items-center gap-1 text-[10px] text-zinc-500 font-medium">
+                   <Star size={9} className="text-yellow-500 fill-current" />
                    <span>{hoveredPoi.rating}</span>
+                   <span>•</span>
+                   <span>{getCategoryConfig(hoveredPoi.poi_category).label}</span>
                  </div>
                </div>
             </motion.div>
@@ -223,3 +248,5 @@ export default function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, u
     </Map>
   );
 }
+
+export default memo(MapComponent);
