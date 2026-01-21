@@ -6,9 +6,9 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\app\add-poi\page.tsx
 
 import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { 
-  ArrowLeft, Save, Loader2, Camera, MapPin, 
-  Hash, Globe, Phone, Building2, Flag, Mail, 
+import {
+  ArrowLeft, Save, Loader2, Camera, MapPin,
+  Hash, Globe, Phone, Building2, Flag, Mail,
   ScanLine, Type, Sparkles, CheckCircle2, CircleDashed,
   Target, ImagePlus, LocateFixed, Maximize, Check
 } from "lucide-react";
@@ -27,10 +27,10 @@ import Image from "next/image";
 import { clsx } from "clsx";
 
 // Clé API MapTiler (la même que dans page.tsx)
-const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9"; 
+const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9";
 
 const AMENITIES_OPTIONS = [
-  "Wi-Fi", "Parking", "Climatisé", "Terrasse", "Mobile Money", 
+  "Wi-Fi", "Parking", "Climatisé", "Terrasse", "Mobile Money",
   "Traiteur", "Sécurité", "Vue", "Handicap", "Bar", "24h/24"
 ];
 
@@ -38,11 +38,11 @@ function AddPoiContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { addMyPoi, updateMyPoi, myPois } = useUserData();
-  
+
   // States
   const [isLoading, setIsLoading] = useState(true);
   const [isMapOpen, setIsMapOpen] = useState(false); // Modal Carte
-  const [postalCode, setPostalCode] = useState(""); 
+  const [postalCode, setPostalCode] = useState("");
   const [keywordsString, setKeywordsString] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
@@ -176,7 +176,7 @@ function AddPoiContent() {
 
   return (
     <div className="h-screen w-full bg-zinc-50 dark:bg-black font-sans overflow-y-auto">
-      
+
       {/* HEADER FIXE */}
       <div className="sticky top-0 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 z-40 py-3 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 lg:px-8">
@@ -195,15 +195,15 @@ function AddPoiContent() {
                             </h1>
                         </div>
                         <p className="text-xs md:text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 mt-1">
-                            <Sparkles size={12} className="text-yellow-500 fill-yellow-500" /> 
+                            <Sparkles size={12} className="text-yellow-500 fill-yellow-500" />
                             Partagez vos meilleures découvertes et enrichissez la carte.
                         </p>
                     </div>
                 </div>
                 <div className="flex items-center justify-end">
-                    <Button 
-                        onClick={handleSubmit} 
-                        variant="primary" 
+                    <Button
+                        onClick={handleSubmit}
+                        variant="primary"
                         className="px-6 py-2 h-11 text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-transform flex items-center gap-2"
                     >
                         <Save size={18} /> {editId ? "Mettre à jour" : "Publier le lieu"}
@@ -242,40 +242,40 @@ function AddPoiContent() {
                 </div>
 
                 <div className="space-y-12">
-                    <FormInput 
-                        label="Nom du lieu" name="poi_name" 
-                        value={formData.poi_name} onChange={handleChange} 
+                    <FormInput
+                        label="Nom du lieu" name="poi_name"
+                        value={formData.poi_name} onChange={handleChange}
                         icon={<Type size={16}/>} className="h-11" placeholder="Ex: Restaurant Le Délice"
                     />
-                    
-                    <FormSelect 
-                        label="Catégorie" name="poi_category" 
+
+                    <FormSelect
+                        label="Catégorie" name="poi_category"
                         value={formData.poi_category} onChange={handleChange}
                         icon={<Hash size={16}/>}
                         options={CATEGORIES.map(c => ({ id: c.id, label: c.label }))}
                     />
 
-                    <FormInput 
+                    <FormInput
                         as="textarea" label="Courte description" name="poi_description"
-                        value={formData.poi_description} onChange={handleChange} 
+                        value={formData.poi_description} onChange={handleChange}
                         icon={<Type size={16}/>} style={{ minHeight: '80px', maxHeight: '120px' }}
                     />
 
                     <div className="grid grid-cols-2 gap-3">
-                        <FormInput 
-                            label="Téléphone" name="phone" 
+                        <FormInput
+                            label="Téléphone" name="phone"
                             value={formData.poi_contacts?.phone} onChange={handleChange}
-                            icon={<Phone size={16}/>} className="h-11" 
+                            icon={<Phone size={16}/>} className="h-11"
                         />
-                        <FormInput 
-                            label="Site Web" name="website" 
+                        <FormInput
+                            label="Site Web" name="website"
                             value={formData.poi_contacts?.website} onChange={handleChange}
                             icon={<Globe size={16}/>} className="h-11" placeholder="facultatif"
                         />
                     </div>
 
-                    <FormInput 
-                        label="Mots-clés" name="keywords" 
+                    <FormInput
+                        label="Mots-clés" name="keywords"
                         value={keywordsString} onChange={(e) => setKeywordsString(e.target.value)}
                         icon={<Hash size={16}/>} className="h-11" placeholder="tag1, tag2..."
                     />
@@ -288,7 +288,7 @@ function AddPoiContent() {
                                     className={clsx(
                                         "px-3 py-1.5 rounded-lg text-[11px] font-bold border flex items-center gap-1.5 transition-all",
                                         formData.poi_amenities?.includes(am)
-                                        ? "bg-zinc-800 text-white border-zinc-800 dark:bg-white dark:text-black shadow-sm" 
+                                        ? "bg-zinc-800 text-white border-zinc-800 dark:bg-white dark:text-black shadow-sm"
                                         : "bg-white dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50"
                                     )}
                                 >
@@ -317,7 +317,7 @@ function AddPoiContent() {
                 <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-inner group">
                     {/* Carte Miniature Statique (MapLibre avec interactivité désactivée) */}
                     <div className="absolute inset-0 grayscale-[50%] group-hover:grayscale-0 transition-all duration-500">
-                       {/* Note: Pour éviter trop de lourdeur, on peut aussi utiliser une image statique, 
+                       {/* Note: Pour éviter trop de lourdeur, on peut aussi utiliser une image statique,
                            mais ici j'utilise la Map désactivée pour la précision visuelle */}
                         <Map
                             initialViewState={{
@@ -340,12 +340,12 @@ function AddPoiContent() {
                     {/* Overlay d'Action */}
                     <div className="absolute inset-0 bg-black/10 hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
                         <div className="pointer-events-auto transform transition-transform group-hover:scale-105">
-                            <button 
+                            <button
                                 type="button"
                                 onClick={() => { setTempLocation(formData.location!); setIsMapOpen(true); }}
                                 className="bg-white text-zinc-800 px-5 py-2.5 rounded-full font-bold shadow-xl flex items-center gap-2 text-sm border-2 border-primary/20 hover:border-primary transition-all"
                             >
-                                <Maximize size={16} className="text-primary"/> 
+                                <Maximize size={16} className="text-primary"/>
                                 Choisir sur la carte
                             </button>
                         </div>
@@ -366,28 +366,28 @@ function AddPoiContent() {
                         </span>
                     </div>
 
-                    <FormInput 
+                    <FormInput
                         label="Adresse / Lieu-dit" name="address_informal"
-                        value={formData.address_informal} onChange={handleChange} 
+                        value={formData.address_informal} onChange={handleChange}
                         icon={<MapPin size={16}/>} className="h-11" placeholder="Ex: Bastos, Face ambassade..."
                     />
 
                     <div className="grid grid-cols-2 gap-3">
-                        <FormInput 
+                        <FormInput
                             label="Ville" name="address_city"
-                            value={formData.address_city} onChange={handleChange} 
+                            value={formData.address_city} onChange={handleChange}
                             icon={<Building2 size={16}/>} className="h-11"
                         />
-                        <FormInput 
+                        <FormInput
                             label="Pays" name="address_country"
-                            value={formData.address_country} onChange={handleChange} 
+                            value={formData.address_country} onChange={handleChange}
                             icon={<Flag size={16}/>} className="h-11"
                         />
                     </div>
 
-                    <FormInput 
+                    <FormInput
                         label="Code Postal" name="postalCode"
-                        value={postalCode} onChange={(e) => setPostalCode(e.target.value)} 
+                        value={postalCode} onChange={(e) => setPostalCode(e.target.value)}
                         icon={<Mail size={16}/>} className="h-11"
                     />
                 </div>
@@ -400,7 +400,7 @@ function AddPoiContent() {
       {isMapOpen && (
         <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-white dark:bg-zinc-900 w-full h-full rounded-3xl overflow-hidden relative shadow-2xl flex flex-col">
-                
+
                 {/* En-tête Modal */}
                 <div className="absolute top-4 left-4 right-4 z-10 flex justify-between pointer-events-none">
                     <div className="bg-white/90 dark:bg-zinc-800/90 backdrop-blur px-4 py-2 rounded-full shadow-lg border border-zinc-200 dark:border-zinc-700 pointer-events-auto">
@@ -409,7 +409,7 @@ function AddPoiContent() {
                             Glissez le marqueur ou cliquez pour définir
                         </h3>
                     </div>
-                    <button 
+                    <button
                         onClick={() => setIsMapOpen(false)}
                         className="bg-white text-zinc-800 p-2 rounded-full shadow-lg pointer-events-auto hover:bg-zinc-100"
                     >
@@ -432,9 +432,9 @@ function AddPoiContent() {
                         <ScaleControl position="bottom-right" />
 
                         {/* Draggable Marker */}
-                        <Marker 
-                            longitude={tempLocation.longitude} 
-                            latitude={tempLocation.latitude} 
+                        <Marker
+                            longitude={tempLocation.longitude}
+                            latitude={tempLocation.latitude}
                             draggable
                             onDragEnd={handleDragEnd}
                             anchor="bottom"
@@ -451,10 +451,10 @@ function AddPoiContent() {
                 <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 p-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
                     <div className="flex items-center gap-2 text-zinc-500 text-xs font-mono">
                        <LocateFixed size={14}/>
-                       Lat: <span className="text-zinc-800 dark:text-zinc-200 font-bold">{tempLocation.latitude.toFixed(6)}</span> 
+                       Lat: <span className="text-zinc-800 dark:text-zinc-200 font-bold">{tempLocation.latitude.toFixed(6)}</span>
                        Lon: <span className="text-zinc-800 dark:text-zinc-200 font-bold">{tempLocation.longitude.toFixed(6)}</span>
                     </div>
-                    
+
                     <div className="flex gap-3 w-full md:w-auto">
                         <Button variant="secondary" onClick={() => navigator.geolocation.getCurrentPosition(p => setTempLocation({latitude: p.coords.latitude, longitude: p.coords.longitude}))} size="md" className="flex-1 md:flex-none">
                             <LocateFixed size={18} /> Ma position
@@ -472,7 +472,7 @@ function AddPoiContent() {
   );
 }
 
-// Wrapper Suspense pour Next.js 
+// Wrapper Suspense pour Next.js
 export default function AddPoiPage() {
     return (
         <Suspense fallback={<div className="h-screen w-full bg-white dark:bg-black" />}>
@@ -507,12 +507,12 @@ const MapComponent = dynamic(() => import("@/components/map/Map"), {
   loading: () => <div className="h-screen w-screen bg-zinc-100 flex items-center justify-center font-bold text-primary">Chargement Navigoo...</div>,
 });
 
-const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9"; 
+const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9";
 
 export default function Home() {
   // Gestionnaires d'ouverture
   const [isMainSidebarOpen, setIsMainSidebarOpen] = useState(false); // Le mode "étendu" du menu
-  
+
   // Contenu "Secondaire" (Panneaux qui s'affichent à coté du dock)
   // On utilise un state commun pour garantir qu'un seul panneau s'affiche à la fois
   // Types: "details" (fiche poi) | "directions" (itinéraire) | "list-saved" | "list-recent" | "list-trips" | "list-mypois" | null
@@ -520,15 +520,15 @@ export default function Home() {
      type: "details" | "directions" | "saved" | "recent" | "trips" | "mypois" | null;
      data?: any; // Pour passer le POI selectionné ou autre
   }>({ type: null });
-  
+
   const { savedPois, recentPois, recentTrips, mapStyle, addRecentPoi, addTrip, toggleMapStyle, myPois } = useUserData();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  
+
   // États transverses
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [userLocation, setUserLocation] = useState<Location | null>(null);
-  
+
   // États Routing spécifiques
   const [routeStats, setRouteStats] = useState<any>(null);
   const [routeGeometry, setRouteGeometry] = useState<any>(null);
@@ -553,12 +553,12 @@ export default function Home() {
         setPanelState({ type: null });
         return;
     }
-    
+
     // Ajout historique
     addRecentPoi(poi);
 
     // Ouvre le panneau détails et ferme le menu étendu s'il gêne
-    setIsMainSidebarOpen(false); 
+    setIsMainSidebarOpen(false);
     setPanelState({ type: "details", data: poi });
   };
 
@@ -581,12 +581,12 @@ export default function Home() {
 
   const handleCalculateRoute = async (destination: POI, mode: TransportMode) => {
     if (!userLocation) return alert("Géolocalisation requise pour le départ.");
-    
+
     setActiveTransportMode(mode);
     setIsRouteLoading(true);
 
     const result = await getRoute(userLocation, destination.location, mode, MAPTILER_API_KEY);
-    
+
     if (result) {
         addTrip({
             id: Date.now().toString(),
@@ -621,9 +621,9 @@ export default function Home() {
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-zinc-50 dark:bg-black font-sans">
-      
+
       {/* Niveau 4 (Top) */}
-      <TopLayout 
+      <TopLayout
         onToggleSidebar={() => setIsMainSidebarOpen(!isMainSidebarOpen)}
         allPois={POI_DATA}
         selectedCategory={selectedCategory}
@@ -631,13 +631,13 @@ export default function Home() {
         onSearch={setSearchQuery}
         onSelectResult={handleSelectPoi}
         onLocateMe={() => userLocation && setUserLocation({...userLocation})}
-        recentSearches={[]} 
+        recentSearches={[]}
         recentPois={recentPois}
       />
 
       {/* Niveau 3 (Gauche) - Sidebar Navigation */}
-      <Sidebar 
-        isOpen={isMainSidebarOpen} 
+      <Sidebar
+        isOpen={isMainSidebarOpen}
         onClose={() => setIsMainSidebarOpen(false)}
         onViewChange={handleViewChange}
         onLocateMe={() => userLocation && setUserLocation({...userLocation})}
@@ -647,11 +647,11 @@ export default function Home() {
       />
 
       {/* Niveau 2 (Panneaux glissants) - Mutuellement Exclusifs */}
-      
+
       {/* A. Fiche Détails POI */}
       {panelState.type === "details" && panelState.data && (
-        <PoiDetailsSidebar 
-          poi={panelState.data} 
+        <PoiDetailsSidebar
+          poi={panelState.data}
           isOpen={true}
           onClose={handleClosePanel}
           onOpenDirections={handleOpenDirections}
@@ -660,7 +660,7 @@ export default function Home() {
 
       {/* B. Itinéraire */}
       {panelState.type === "directions" && panelState.data && (
-        <DirectionsSidebar 
+        <DirectionsSidebar
             isOpen={true}
             onClose={handleClosePanel}
             originPoi={null}
@@ -675,7 +675,7 @@ export default function Home() {
 
       {/* C. Listes (Saved, Recent, Trips...) */}
       {(panelState.type === "saved" || panelState.type === "recent" || panelState.type === "trips" || panelState.type === "mypois") && (
-          <SecondarySidebar 
+          <SecondarySidebar
              view={panelState.type}
              onClose={handleClosePanel}
              data={{ savedPois, recentPois, trips: recentTrips }}
@@ -694,7 +694,7 @@ export default function Home() {
                     <button onClick={() => setIsSettingsOpen(false)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full"><X/></button>
                  </div>
                  <div className="grid grid-cols-2 gap-4">
-                    <button 
+                    <button
                        onClick={() => { toggleMapStyle(); setIsSettingsOpen(false); }}
                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${mapStyle === 'streets-v2' ? 'border-primary bg-primary/5' : 'border-zinc-200 dark:border-zinc-700'}`}
                     >
@@ -702,7 +702,7 @@ export default function Home() {
                         <span className="font-semibold text-sm">Plan</span>
                         {mapStyle === 'streets-v2' && <Check size={16} className="text-primary"/>}
                     </button>
-                    <button 
+                    <button
                        onClick={() => { toggleMapStyle(); setIsSettingsOpen(false); }}
                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${mapStyle === 'satellite-hybrid' ? 'border-primary bg-primary/5' : 'border-zinc-200 dark:border-zinc-700'}`}
                     >
@@ -717,14 +717,14 @@ export default function Home() {
 
       {/* Niveau 1 (Map) */}
       <div className="absolute top-0 left-0 w-full h-full z-0 print:block">
-        <MapComponent 
-          apiKey={MAPTILER_API_KEY} 
-          pois={filteredPois} 
+        <MapComponent
+          apiKey={MAPTILER_API_KEY}
+          pois={filteredPois}
           selectedPoi={panelState.type === "details" || panelState.type === "directions" ? panelState.data : null}
           userLocation={userLocation}
           onSelectPoi={handleSelectPoi}
           routeGeometry={routeGeometry}
-          mapStyleType={mapStyle} 
+          mapStyleType={mapStyle}
         />
       </div>
 
@@ -786,7 +786,7 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\app\globals.css
   --color-primary-light: #b64dff;
   --color-background: #ffffff;
   --color-foreground: #171717;
-  
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -833,7 +833,7 @@ body {
   .fixed, .absolute:not(.mapboxgl-map):not(.maplibregl-map), header, aside {
     display: none !important;
   }
-  
+
   /* On s'assure que la carte prend tout */
   main {
     width: 100vw;
@@ -1002,7 +1002,7 @@ declare module 'next/cache' {
   } from 'next/dist/server/web/spec-extension/revalidate'
   export { unstable_noStore } from 'next/dist/server/web/spec-extension/unstable-no-store'
 
-  
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"default"` profile.
      * ```
@@ -1010,13 +1010,13 @@ declare module 'next/cache' {
      *   revalidate: 900 seconds (15 minutes)
      *   expire:     never
      * ```
-     * 
+     *
      * This cache may be stale on clients for 5 minutes before checking with the server.
      * If the server receives a new request after 15 minutes, start revalidating new values in the background.
      * It lives for the maximum age of the server cache. If this entry has no traffic for a while, it may serve an old value the next request.
      */
     export function cacheLife(profile: "default"): void
-    
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"seconds"` profile.
      * ```
@@ -1024,13 +1024,13 @@ declare module 'next/cache' {
      *   revalidate: 1 seconds
      *   expire:     60 seconds (1 minute)
      * ```
-     * 
+     *
      * This cache may be stale on clients for 30 seconds before checking with the server.
      * If the server receives a new request after 1 seconds, start revalidating new values in the background.
      * If this entry has no traffic for 1 minute it will expire. The next request will recompute it.
      */
     export function cacheLife(profile: "seconds"): void
-    
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"minutes"` profile.
      * ```
@@ -1038,13 +1038,13 @@ declare module 'next/cache' {
      *   revalidate: 60 seconds (1 minute)
      *   expire:     3600 seconds (1 hour)
      * ```
-     * 
+     *
      * This cache may be stale on clients for 5 minutes before checking with the server.
      * If the server receives a new request after 1 minute, start revalidating new values in the background.
      * If this entry has no traffic for 1 hour it will expire. The next request will recompute it.
      */
     export function cacheLife(profile: "minutes"): void
-    
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"hours"` profile.
      * ```
@@ -1052,13 +1052,13 @@ declare module 'next/cache' {
      *   revalidate: 3600 seconds (1 hour)
      *   expire:     86400 seconds (1 day)
      * ```
-     * 
+     *
      * This cache may be stale on clients for 5 minutes before checking with the server.
      * If the server receives a new request after 1 hour, start revalidating new values in the background.
      * If this entry has no traffic for 1 day it will expire. The next request will recompute it.
      */
     export function cacheLife(profile: "hours"): void
-    
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"days"` profile.
      * ```
@@ -1066,13 +1066,13 @@ declare module 'next/cache' {
      *   revalidate: 86400 seconds (1 day)
      *   expire:     604800 seconds (1 week)
      * ```
-     * 
+     *
      * This cache may be stale on clients for 5 minutes before checking with the server.
      * If the server receives a new request after 1 day, start revalidating new values in the background.
      * If this entry has no traffic for 1 week it will expire. The next request will recompute it.
      */
     export function cacheLife(profile: "days"): void
-    
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"weeks"` profile.
      * ```
@@ -1080,13 +1080,13 @@ declare module 'next/cache' {
      *   revalidate: 604800 seconds (1 week)
      *   expire:     2592000 seconds (1 month)
      * ```
-     * 
+     *
      * This cache may be stale on clients for 5 minutes before checking with the server.
      * If the server receives a new request after 1 week, start revalidating new values in the background.
      * If this entry has no traffic for 1 month it will expire. The next request will recompute it.
      */
     export function cacheLife(profile: "weeks"): void
-    
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"max"` profile.
      * ```
@@ -1094,13 +1094,13 @@ declare module 'next/cache' {
      *   revalidate: 2592000 seconds (1 month)
      *   expire:     31536000 seconds (365 days)
      * ```
-     * 
+     *
      * This cache may be stale on clients for 5 minutes before checking with the server.
      * If the server receives a new request after 1 month, start revalidating new values in the background.
      * If this entry has no traffic for 365 days it will expire. The next request will recompute it.
      */
     export function cacheLife(profile: "max"): void
-    
+
     /**
      * Cache this `"use cache"` using a custom timespan.
      * ```
@@ -1127,7 +1127,7 @@ declare module 'next/cache' {
        */
       expire?: number
     }): void
-  
+
 
   import { cacheTag } from 'next/dist/server/use-cache/cache-tag'
   export { cacheTag }
@@ -10847,7 +10847,7 @@ declare module 'next/cache' {
   } from 'next/dist/server/web/spec-extension/revalidate'
   export { unstable_noStore } from 'next/dist/server/web/spec-extension/unstable-no-store'
 
-  
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"default"` profile.
      * ```
@@ -10855,13 +10855,13 @@ declare module 'next/cache' {
      *   revalidate: 900 seconds (15 minutes)
      *   expire:     never
      * ```
-     * 
+     *
      * This cache may be stale on clients for 5 minutes before checking with the server.
      * If the server receives a new request after 15 minutes, start revalidating new values in the background.
      * It lives for the maximum age of the server cache. If this entry has no traffic for a while, it may serve an old value the next request.
      */
     export function cacheLife(profile: "default"): void
-    
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"seconds"` profile.
      * ```
@@ -10869,13 +10869,13 @@ declare module 'next/cache' {
      *   revalidate: 1 seconds
      *   expire:     60 seconds (1 minute)
      * ```
-     * 
+     *
      * This cache may be stale on clients for 30 seconds before checking with the server.
      * If the server receives a new request after 1 seconds, start revalidating new values in the background.
      * If this entry has no traffic for 1 minute it will expire. The next request will recompute it.
      */
     export function cacheLife(profile: "seconds"): void
-    
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"minutes"` profile.
      * ```
@@ -10883,13 +10883,13 @@ declare module 'next/cache' {
      *   revalidate: 60 seconds (1 minute)
      *   expire:     3600 seconds (1 hour)
      * ```
-     * 
+     *
      * This cache may be stale on clients for 5 minutes before checking with the server.
      * If the server receives a new request after 1 minute, start revalidating new values in the background.
      * If this entry has no traffic for 1 hour it will expire. The next request will recompute it.
      */
     export function cacheLife(profile: "minutes"): void
-    
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"hours"` profile.
      * ```
@@ -10897,13 +10897,13 @@ declare module 'next/cache' {
      *   revalidate: 3600 seconds (1 hour)
      *   expire:     86400 seconds (1 day)
      * ```
-     * 
+     *
      * This cache may be stale on clients for 5 minutes before checking with the server.
      * If the server receives a new request after 1 hour, start revalidating new values in the background.
      * If this entry has no traffic for 1 day it will expire. The next request will recompute it.
      */
     export function cacheLife(profile: "hours"): void
-    
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"days"` profile.
      * ```
@@ -10911,13 +10911,13 @@ declare module 'next/cache' {
      *   revalidate: 86400 seconds (1 day)
      *   expire:     604800 seconds (1 week)
      * ```
-     * 
+     *
      * This cache may be stale on clients for 5 minutes before checking with the server.
      * If the server receives a new request after 1 day, start revalidating new values in the background.
      * If this entry has no traffic for 1 week it will expire. The next request will recompute it.
      */
     export function cacheLife(profile: "days"): void
-    
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"weeks"` profile.
      * ```
@@ -10925,13 +10925,13 @@ declare module 'next/cache' {
      *   revalidate: 604800 seconds (1 week)
      *   expire:     2592000 seconds (1 month)
      * ```
-     * 
+     *
      * This cache may be stale on clients for 5 minutes before checking with the server.
      * If the server receives a new request after 1 week, start revalidating new values in the background.
      * If this entry has no traffic for 1 month it will expire. The next request will recompute it.
      */
     export function cacheLife(profile: "weeks"): void
-    
+
     /**
      * Cache this `"use cache"` for a timespan defined by the `"max"` profile.
      * ```
@@ -10939,13 +10939,13 @@ declare module 'next/cache' {
      *   revalidate: 2592000 seconds (1 month)
      *   expire:     31536000 seconds (365 days)
      * ```
-     * 
+     *
      * This cache may be stale on clients for 5 minutes before checking with the server.
      * If the server receives a new request after 1 month, start revalidating new values in the background.
      * If this entry has no traffic for 365 days it will expire. The next request will recompute it.
      */
     export function cacheLife(profile: "max"): void
-    
+
     /**
      * Cache this `"use cache"` using a custom timespan.
      * ```
@@ -10972,7 +10972,7 @@ declare module 'next/cache' {
        */
       expire?: number
     }): void
-  
+
 
   import { cacheTag } from 'next/dist/server/use-cache/cache-tag'
   export { cacheTag }
@@ -11142,7 +11142,7 @@ export interface POI {
   poi_category: string; // Ex: "Tourne-dos", "Kiosque"
   poi_description: string;
   poi_amenities: string[]; // split from TEXT
-  
+
   // Géographie (GEOGRAPHY Point)
   location: {
     latitude: number;
@@ -11158,7 +11158,7 @@ export interface POI {
   review_count: number;
   poi_images_urls: string[]; // split from TEXT
   popularity_score: number;
-  
+
   // Contact JSON
   poi_contacts?: {
     phone?: string;
@@ -11251,7 +11251,7 @@ export const POI_DATA: POI[] = [
   {
     poi_id: "4",
     poi_name: "Bois Sainte Anastasie",
-    poi_category: "Ferme", 
+    poi_category: "Ferme",
     poi_description: "Oasis de calme en plein centre-ville. Rivière, arbres et restaurant.",
     poi_amenities: ["Restaurant", "Jardin"],
     location: { latitude: 3.8760, longitude: 11.5200 },
@@ -12429,7 +12429,7 @@ export const POI_DATA: POI[] = [
     popularity_score: 85,
     poi_images_urls: ["https://images.unsplash.com/photo-1605333144866-e3d8f8be0f96?q=80&w=800"],
   },
-  
+
   // --- SPÉCIALITÉS LOCALES & VILLAGES ---
   {
     poi_id: "86",
@@ -15378,7 +15378,7 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\data\categories.tsx
 ================================================================================
 
 import React from "react";
-import { 
+import {
   UtensilsCrossed, BedDouble, Bus, Landmark, // Classiques
   Soup, Coffee, Flame, Fish, Home, Beer, // Locaux 1
   Music4, Mic2, Sandwich, Wine, Croissant, Users, Speaker, Waves, // Locaux 2
@@ -15485,7 +15485,7 @@ export const FormInput = (props: FormInputProps) => {
 
   const containerStyles = "relative flex items-center group";
   const iconStyles = "absolute left-4 text-zinc-400 group-focus-within:text-primary transition-colors";
-  
+
   const inputStyles = clsx(
     "w-full pl-12 pr-4 py-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100",
     "outline-none transition-all font-medium placeholder:text-zinc-400/70",
@@ -15615,7 +15615,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export const Button = ({ className, variant = "primary", size = "md", ...props }: ButtonProps) => {
   const baseStyles = "inline-flex items-center justify-center rounded-full font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed";
-  
+
   const variants = {
     primary: "bg-primary text-white hover:bg-primary-dark shadow-md",
     secondary: "bg-zinc-100 text-zinc-900 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100",
@@ -15687,7 +15687,7 @@ interface MapProps {
   onSelectPoi: (poi: POI | null) => void;
   selectedPoi: POI | null;
   userLocation: Location | null;
-  routeGeometry: any | null; 
+  routeGeometry: any | null;
   mapStyleType: "streets-v2" | "hybrid"; // Nouveau
 }
 
@@ -15776,7 +15776,7 @@ export default function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, u
           onSelectPoi(poi);
         }}
       >
-        <div 
+        <div
           onMouseEnter={() => setHoveredPoi(poi)}
           onMouseLeave={() => setHoveredPoi(null)}
           className="relative flex flex-col items-center cursor-pointer group"
@@ -15794,7 +15794,7 @@ export default function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, u
              </div>
           ) : (
             <>
-               <div 
+               <div
                  className="flex items-center justify-center w-8 h-8 rounded-full shadow-lg border-2 border-white transition-transform duration-200 group-hover:scale-110 bg-zinc-900"
                  style={{ backgroundColor: config.color }}
                >
@@ -15826,7 +15826,7 @@ export default function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, u
 
       {routeGeometry && (
           <Source id="route-source" type="geojson" data={routeGeometry}>
-             <Layer 
+             <Layer
                id="route-line-outline"
                type="line"
                paint={{
@@ -15835,7 +15835,7 @@ export default function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, u
                  'line-opacity': 0.8
                }}
              />
-             <Layer 
+             <Layer
                id="route-line"
                type="line"
                layout={{
@@ -15918,15 +15918,15 @@ export const SidebarItem = ({ icon, label, isExpanded, onClick, isActive }: Side
       className={clsx(
         "flex items-center w-full p-3 transition-colors rounded-lg group relative",
         // En mode fermé, on centre. En ouvert, aligné à gauche.
-        isExpanded ? "justify-start px-4 gap-4" : "justify-center px-0", 
-        isActive 
-          ? "bg-primary/10 text-primary" 
+        isExpanded ? "justify-start px-4 gap-4" : "justify-center px-0",
+        isActive
+          ? "bg-primary/10 text-primary"
           : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-primary"
       )}
     >
       {/* Icone : taille fixe */}
       <span className={clsx(
-        "shrink-0 transition-transform duration-200", 
+        "shrink-0 transition-transform duration-200",
         isActive ? "scale-110" : "group-hover:scale-110"
       )}>
         {icon}
@@ -15965,15 +15965,15 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\components\sidebar\Sidebar.tsx
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { SidebarItem } from "./SidebarItem";
-import { 
-  Bookmark, Clock, Share2, Printer, MapPin, 
-  Settings, HelpCircle, Shield, Globe, 
+import {
+  Bookmark, Clock, Share2, Printer, MapPin,
+  Settings, HelpCircle, Shield, Globe,
   Building, UserSearch, PanelLeftClose, MapPinHouse
 } from "lucide-react";
 import { clsx } from "clsx";
 
 interface SidebarProps {
-  isOpen: boolean; 
+  isOpen: boolean;
   onClose: () => void;
   // Actions
   onViewChange: (view: "saved" | "recent" | "trips" | "mypois") => void;
@@ -15983,10 +15983,10 @@ interface SidebarProps {
   onToggleSettings: () => void;
 }
 
-export const Sidebar = ({ 
-    isOpen, 
-    onClose, 
-    onViewChange, 
+export const Sidebar = ({
+    isOpen,
+    onClose,
+    onViewChange,
     onLocateMe,
     onShare,
     onPrint,
@@ -16011,7 +16011,7 @@ export const Sidebar = ({
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         className={clsx(
           "fixed top-0 left-0 h-full bg-white dark:bg-black/95 backdrop-blur-md shadow-2xl z-[60] flex flex-col border-r border-zinc-200 dark:border-zinc-800 overflow-hidden",
-          !isOpen && "hidden md:flex" 
+          !isOpen && "hidden md:flex"
         )}
       >
         {/* HEADER LOGO */}
@@ -16040,12 +16040,12 @@ export const Sidebar = ({
           <SidebarItem isExpanded={isExpanded} icon={<Building size={22} />} label="Creer un point d'interet" onClick={() => handleAction(() => onViewChange("mypois"))} />
           <SidebarItem isExpanded={isExpanded} icon={<UserSearch size={22} />} label="Trouver ma position" onClick={() => handleAction(onLocateMe)} />
           <SidebarItem isExpanded={isExpanded} icon={<MapPin size={22} />} label="Mes trajets" onClick={() => handleAction(() => onViewChange("trips"))} />
-          
+
           <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2 mx-2" />
 
           <SidebarItem isExpanded={isExpanded} icon={<Share2 size={22} />} label="Partager la carte" onClick={() => handleAction(onShare)} />
           <SidebarItem isExpanded={isExpanded} icon={<Printer size={22} />} label="Imprimer la carte" onClick={() => handleAction(onPrint)} />
-          
+
           <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2 mx-2" />
 
           <SidebarItem isExpanded={isExpanded} icon={<Settings size={22} />} label="Paramètres & Style" onClick={() => handleAction(onToggleSettings)} />
@@ -16057,7 +16057,7 @@ export const Sidebar = ({
              <Globe size={20} className="text-zinc-400 hover:text-primary cursor-pointer" />
         </div>
       </motion.div>
-      
+
       {/* Mobile Backdrop */}
       {isOpen && <div className="fixed inset-0 bg-black/50 z-[55] md:hidden" onClick={onClose} />}
     </>
@@ -16111,7 +16111,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
         ) : (
             <div className="w-full h-full flex items-center justify-center text-zinc-400 bg-zinc-100">Aucune image</div>
         )}
-        
+
         {/* Close Button */}
         <button onClick={onClose} className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-md transition-colors z-20">
           <X size={20} />
@@ -16119,7 +16119,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
 
         {/* OWNER EDIT BUTTON */}
         {isOwner && (
-            <button 
+            <button
                 onClick={handleEdit}
                 className="absolute bottom-4 right-4 bg-white text-black px-4 py-2 rounded-full shadow-lg font-bold text-sm flex items-center gap-2 hover:scale-105 transition-transform"
             >
@@ -16130,7 +16130,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
 
       {/* CONTENU */}
       <div className="p-6 space-y-6 pb-20">
-        
+
         {/* TITRE & REVIEW */}
         <div>
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 leading-tight">{poi.poi_name}</h1>
@@ -16191,7 +16191,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
             <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                 <MessageSquare size={18} /> Avis et commentaires
             </h3>
-            
+
             <div className="space-y-4">
                 {/* Simulation Commentaire 1 */}
                 <div className="flex gap-3">
@@ -16229,7 +16229,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
 };
 
 const ActionButton = ({ icon, label, active, onClick, disabled }: any) => (
-  <button 
+  <button
     onClick={onClick}
     disabled={disabled}
     className={`flex flex-col items-center gap-2 group ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
@@ -16309,33 +16309,33 @@ export const DirectionsSidebar = ({
     >
       {/* --- HEADER --- */}
       <div className="bg-primary px-4 py-4 shadow-md text-white z-10">
-        
+
         {/* Navigation Modes */}
         <div className="flex justify-between items-center mb-4 px-2">
-            <ModeButton 
-              icon={<Car size={20} />} 
-              mode="driving" 
-              active={activeMode === "driving"} 
-              onClick={() => onCalculateRoute("driving")} 
+            <ModeButton
+              icon={<Car size={20} />}
+              mode="driving"
+              active={activeMode === "driving"}
+              onClick={() => onCalculateRoute("driving")}
             />
             {/* On ne montre Moto/Vélo que symboliquement pour le design Navigoo, API "cycling" utilisé */}
-            <ModeButton 
-              icon={<Bike size={20} />} 
-              mode="cycling" 
-              active={activeMode === "cycling"} 
-              onClick={() => onCalculateRoute("cycling")} 
+            <ModeButton
+              icon={<Bike size={20} />}
+              mode="cycling"
+              active={activeMode === "cycling"}
+              onClick={() => onCalculateRoute("cycling")}
             />
-            
+
             {/* Marche à pied (si dispo ou si active) */}
             {(!routeStats || routeStats.distance < 5000 || activeMode === "walking") && (
-              <ModeButton 
-                icon={<PersonStanding size={20} />} 
-                mode="walking" 
-                active={activeMode === "walking"} 
-                onClick={() => onCalculateRoute("walking")} 
+              <ModeButton
+                icon={<PersonStanding size={20} />}
+                mode="walking"
+                active={activeMode === "walking"}
+                onClick={() => onCalculateRoute("walking")}
               />
             )}
-            
+
             <button onClick={onClose} className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors ml-auto">
                 <X size={20} />
             </button>
@@ -16343,7 +16343,7 @@ export const DirectionsSidebar = ({
 
         {/* Input Fields Box */}
         <div className="bg-white dark:bg-zinc-800 rounded-lg p-3 shadow-inner flex gap-3 text-zinc-800 dark:text-zinc-200">
-           
+
            {/* Visual Indicators (Dot Line) */}
            <div className="flex flex-col items-center pt-2 gap-1 w-6">
               <CircleDot size={14} className="text-blue-500" />
@@ -16372,7 +16372,7 @@ export const DirectionsSidebar = ({
 
       {/* --- RESULTS BODY --- */}
       <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-black p-2">
-        
+
         {isLoadingRoute ? (
            <div className="flex flex-col items-center justify-center h-40 gap-3 text-zinc-500">
                <Loader2 size={32} className="animate-spin text-primary" />
@@ -16399,7 +16399,7 @@ export const DirectionsSidebar = ({
                           {activeMode === "cycling" && <Bike size={24} />}
                       </div>
                    </div>
-                   
+
                    <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800">
                       <button className="w-full bg-primary text-white py-2 rounded-full font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:bg-primary-hover active:scale-95 transition-all">
                           <Navigation size={18} fill="currentColor" />
@@ -16431,7 +16431,7 @@ export const DirectionsSidebar = ({
 };
 
 const ModeButton = ({ icon, active, onClick }: any) => (
-  <button 
+  <button
      onClick={onClick}
      className={clsx(
        "p-2 rounded-full transition-all flex flex-col items-center gap-1 min-w-[60px]",
@@ -16519,14 +16519,14 @@ export const SecondarySidebar = ({ view, onClose, data, onSelectPoi }: Secondary
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        
+
         {/* === SECTION "MES POIS" === */}
         {view === "mypois" && (
             <div className="space-y-4">
-                
+
                 {/* Bouton Création Toujours Visible */}
-                <button 
-                    onClick={() => router.push("/add-poi")} 
+                <button
+                    onClick={() => router.push("/add-poi")}
                     className="w-full py-4 border-2 border-dashed border-primary/30 rounded-xl flex items-center justify-center gap-3 hover:bg-primary/5 hover:border-primary transition-all group text-zinc-500 dark:text-zinc-400"
                 >
                     <div className="p-2 bg-white dark:bg-zinc-800 rounded-full shadow-sm group-hover:scale-110 transition-transform">
@@ -16542,8 +16542,8 @@ export const SecondarySidebar = ({ view, onClose, data, onSelectPoi }: Secondary
                 {myPois.length > 0 ? (
                     <div className="space-y-3">
                         {myPois.map(poi => (
-                            <div 
-                                key={poi.poi_id} 
+                            <div
+                                key={poi.poi_id}
                                 onClick={() => onSelectPoi(poi)} // Clic sur un "MyPOI" ouvre la sidebar détail
                                 className="relative flex gap-3 p-3 rounded-xl bg-white dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 hover:border-primary cursor-pointer shadow-sm hover:shadow-md transition-all group"
                             >
@@ -16646,22 +16646,22 @@ interface SearchInputProps {
   recentPois: POI[];
 }
 
-export const SearchInput = ({ 
-  onMenuClick, 
-  className, 
-  pois, 
+export const SearchInput = ({
+  onMenuClick,
+  className,
+  pois,
   onLocateMe,
-  onSearch, 
+  onSearch,
   onSelectResult,
-  recentSearches, 
-  recentPois 
+  recentSearches,
+  recentPois
 }: SearchInputProps) => {
   const [isFocused, setIsFocused] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Filtrer les POIs pour l'autocomplétion (max 5 suggestions)
-  const suggestions = query.length > 0 
+  const suggestions = query.length > 0
     ? pois.filter(p => p.poi_name.toLowerCase().includes(query.toLowerCase())).slice(0, 5)
     : [];
 
@@ -16680,14 +16680,14 @@ export const SearchInput = ({
 
   return (
     <div className={clsx("relative z-50", className)}>
-            <form 
+            <form
         onSubmit={handleSearchSubmit}
         className={clsx(
           "flex items-center bg-white dark:bg-zinc-800 h-11 border border-zinc-200 dark:border-zinc-700 transition-shadow",
           isFocused ? "rounded-t-[24px] rounded-b-none shadow-lg border-b-0" : "rounded-full shadow-sm hover:shadow-md"
         )}
       >
-        <button 
+        <button
           type="button"
           onClick={onMenuClick}
           className="pl-3 pr-2 text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-white"
@@ -16695,9 +16695,9 @@ export const SearchInput = ({
           {isFocused ? <Search size={20} /> : <Menu size={20} />}
         </button>
 
-        <input 
+        <input
           ref={inputRef}
-          type="text" 
+          type="text"
           placeholder="Rechercher ici..."
           className="flex-1 bg-transparent border-none outline-none text-[15px] text-zinc-900 dark:text-zinc-100 px-2 truncate font-normal"
           value={query}
@@ -16710,20 +16710,20 @@ export const SearchInput = ({
 
         <div className="flex items-center gap-1 pr-1.5">
           {query && (
-            <button 
-              type="button" 
-              onClick={() => { setQuery(""); onSearch(""); }} 
+            <button
+              type="button"
+              onClick={() => { setQuery(""); onSearch(""); }}
               className="p-2 text-zinc-500 hover:text-black"
             >
               <X size={18} />
             </button>
           )}
-          
+
           <div className="h-6 w-px bg-zinc-300 dark:bg-zinc-600 mx-1"></div>
-          
+
           {/* BOUTON LOCALISATION (Flèche Violette) */}
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={onLocateMe}
             className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-full group transition-colors"
             title="Me localiser"
@@ -16738,22 +16738,22 @@ export const SearchInput = ({
       {/* --- MENU DÉROULANT --- */}
       {isFocused && (
         <>
-          <div 
-            className="fixed inset-0 bg-transparent z-[-1]" 
-            onClick={() => setIsFocused(false)} 
+          <div
+            className="fixed inset-0 bg-transparent z-[-1]"
+            onClick={() => setIsFocused(false)}
           />
           <div className="absolute top-full left-0 w-full bg-white dark:bg-zinc-800 rounded-b-[24px] shadow-lg border-t-0 border border-zinc-200 dark:border-zinc-700 pb-2 overflow-hidden">
-             
+
              {/* CAS 1 : SUGGESTIONS AUTOCOMPLÉTION (Recherche active) */}
              {query.length > 0 && (
                 <div className="pt-2">
                   {suggestions.length > 0 ? (
                     suggestions.map(poi => (
-                      <SuggestionItem 
+                      <SuggestionItem
                         key={poi.poi_id}
-                        icon={<MapPin size={18} />} 
-                        title={poi.poi_name} 
-                        subtitle={poi.address_city} 
+                        icon={<MapPin size={18} />}
+                        title={poi.poi_name}
+                        subtitle={poi.address_city}
                         onClick={() => handleSelectPoi(poi)}
                         isLocation
                       />
@@ -16768,23 +16768,23 @@ export const SearchInput = ({
              {query.length === 0 && (
                 <div className="pt-1">
                   <div className="px-4 py-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Récents</div>
-                  
+
                   {/* 3 Dernières Recherches (String) */}
                   {recentSearches.map((term, i) => (
-                    <SuggestionItem 
+                    <SuggestionItem
                       key={`hist-${i}`}
-                      icon={<History size={18} />} 
-                      title={term} 
+                      icon={<History size={18} />}
+                      title={term}
                       onClick={() => { setQuery(term); onSearch(term); setIsFocused(false); }}
                     />
                   ))}
 
                   {/* 2 Derniers POIs Vus (Objets) */}
                   {recentPois.map((poi) => (
-                    <SuggestionItem 
+                    <SuggestionItem
                       key={`recent-poi-${poi.poi_id}`}
-                      icon={<Navigation2 size={18} className="text-primary" />} 
-                      title={poi.poi_name} 
+                      icon={<Navigation2 size={18} className="text-primary" />}
+                      title={poi.poi_name}
                       subtitle={`${poi.poi_category} • Consulté récemment`}
                       onClick={() => handleSelectPoi(poi)}
                     />
@@ -16800,7 +16800,7 @@ export const SearchInput = ({
 
 // Item générique de la liste
 const SuggestionItem = ({ icon, title, subtitle, onClick, isLocation }: any) => (
-  <div 
+  <div
     onClick={onClick}
     className="flex items-center gap-4 py-3 px-4 hover:bg-zinc-50 dark:hover:bg-zinc-700 cursor-pointer transition-colors"
   >
@@ -16877,8 +16877,8 @@ interface TopLayoutProps {
   recentPois: POI[];
 }
 
-export const TopLayout = ({ 
-  onToggleSidebar, 
+export const TopLayout = ({
+  onToggleSidebar,
   allPois,
   selectedCategory,
   onSelectCategory,
@@ -16891,10 +16891,10 @@ export const TopLayout = ({
 
   return (
     <div className="absolute top-0 ml-18 left-0 w-full z-40 bg-transparent p-2 pointer-events-none flex items-start gap-2">
-      
+
       {/* Bloc Recherche */}
       <div className="pointer-events-auto min-w-[340px] max-w-[420px] shrink-0">
-        <SearchInput 
+        <SearchInput
           onMenuClick={onToggleSidebar}
           pois={allPois}
           onSearch={onSearch}
@@ -16908,9 +16908,9 @@ export const TopLayout = ({
       {/* 2. Bloc Catégories + Profil */}
       <div className="flex-1 flex items-center gap-2 min-w-0 pointer-events-auto pl-2">
         <div className="flex-1 min-w-0">
-           <CategoryBar 
-             selected={selectedCategory} 
-             onSelect={onSelectCategory} 
+           <CategoryBar
+             selected={selectedCategory}
+             onSelect={onSelectCategory}
            />
         </div>
 
@@ -17000,7 +17000,7 @@ export const useUserData = () => {
   const [savedPois, setSavedPois] = useState<POI[]>([]);
   const [recentPois, setRecentPois] = useState<POI[]>([]);
   const [recentTrips, setRecentTrips] = useState<Trip[]>([]);
-  const [myPois, setMyPois] = useState<POI[]>([]); 
+  const [myPois, setMyPois] = useState<POI[]>([]);
   const [mapStyle, setMapStyle] = useState<MapStyle>("streets-v2");
 
   // Chargement initial
@@ -24465,6 +24465,3 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\package-lock.json
     }
   }
 }
-
-
-

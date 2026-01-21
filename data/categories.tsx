@@ -1,5 +1,5 @@
 import React from "react";
-import { 
+import {
   UtensilsCrossed, BedDouble, Bus, Landmark, // Classiques
   Soup, Coffee, Flame, Fish, Home, Beer, // Locaux 1
   Music4, Mic2, Sandwich, Wine, Croissant, Users, Speaker, Waves, // Locaux 2

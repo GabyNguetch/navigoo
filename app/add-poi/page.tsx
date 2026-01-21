@@ -2,9 +2,9 @@
 
 import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { 
-  ArrowLeft, Save, Loader2, Camera, MapPin, 
-  Hash, Globe, Phone, Building2, Flag, Mail, 
+import {
+  ArrowLeft, Save, Loader2, Camera, MapPin,
+  Hash, Globe, Phone, Building2, Flag, Mail,
   ScanLine, Type, Sparkles, CheckCircle2, CircleDashed,
   Target, ImagePlus, LocateFixed, Maximize, Check
 } from "lucide-react";
@@ -23,10 +23,10 @@ import Image from "next/image";
 import { clsx } from "clsx";
 
 // Clé API MapTiler (la même que dans page.tsx)
-const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9"; 
+const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9";
 
 const AMENITIES_OPTIONS = [
-  "Wi-Fi", "Parking", "Climatisé", "Terrasse", "Mobile Money", 
+  "Wi-Fi", "Parking", "Climatisé", "Terrasse", "Mobile Money",
   "Traiteur", "Sécurité", "Vue", "Handicap", "Bar", "24h/24"
 ];
 
@@ -34,11 +34,11 @@ function AddPoiContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { addMyPoi, updateMyPoi, myPois } = useUserData();
-  
+
   // States
   const [isLoading, setIsLoading] = useState(true);
   const [isMapOpen, setIsMapOpen] = useState(false); // Modal Carte
-  const [postalCode, setPostalCode] = useState(""); 
+  const [postalCode, setPostalCode] = useState("");
   const [keywordsString, setKeywordsString] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
@@ -170,7 +170,7 @@ function AddPoiContent() {
 
   return (
     <div className="h-screen w-full bg-zinc-50 dark:bg-black font-sans overflow-y-auto">
-      
+
       {/* HEADER FIXE */}
       <div className="sticky top-0 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 z-40 py-3 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 lg:px-8">
@@ -189,15 +189,15 @@ function AddPoiContent() {
                             </h1>
                         </div>
                         <p className="text-xs md:text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 mt-1">
-                            <Sparkles size={12} className="text-yellow-500 fill-yellow-500" /> 
+                            <Sparkles size={12} className="text-yellow-500 fill-yellow-500" />
                             Partagez vos meilleures découvertes et enrichissez la carte.
                         </p>
                     </div>
                 </div>
                 <div className="flex items-center justify-end">
-                    <Button 
-                        onClick={handleSubmit} 
-                        variant="primary" 
+                    <Button
+                        onClick={handleSubmit}
+                        variant="primary"
                         className="px-6 py-2 h-11 text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-transform flex items-center gap-2"
                     >
                         <Save size={18} /> {editId ? "Mettre à jour" : "Publier le lieu"}
@@ -236,40 +236,40 @@ function AddPoiContent() {
                 </div>
 
                 <div className="space-y-12">
-                    <FormInput 
-                        label="Nom du lieu" name="poi_name" 
-                        value={formData.poi_name} onChange={handleChange} 
+                    <FormInput
+                        label="Nom du lieu" name="poi_name"
+                        value={formData.poi_name} onChange={handleChange}
                         icon={<Type size={16}/>} className="h-11" placeholder="Ex: Restaurant Le Délice"
                     />
-                    
-                    <FormSelect 
-                        label="Catégorie" name="poi_category" 
+
+                    <FormSelect
+                        label="Catégorie" name="poi_category"
                         value={formData.poi_category} onChange={handleChange}
                         icon={<Hash size={16}/>}
                         options={CATEGORIES.map(c => ({ id: c.id, label: c.label }))}
                     />
 
-                    <FormInput 
+                    <FormInput
                         as="textarea" label="Courte description" name="poi_description"
-                        value={formData.poi_description} onChange={handleChange} 
+                        value={formData.poi_description} onChange={handleChange}
                         icon={<Type size={16}/>} style={{ minHeight: '80px', maxHeight: '120px' }}
                     />
 
                     <div className="grid grid-cols-2 gap-3">
-                        <FormInput 
-                            label="Téléphone" name="phone" 
+                        <FormInput
+                            label="Téléphone" name="phone"
                             value={formData.poi_contacts?.phone} onChange={handleChange}
-                            icon={<Phone size={16}/>} className="h-11" 
+                            icon={<Phone size={16}/>} className="h-11"
                         />
-                        <FormInput 
-                            label="Site Web" name="website" 
+                        <FormInput
+                            label="Site Web" name="website"
                             value={formData.poi_contacts?.website} onChange={handleChange}
                             icon={<Globe size={16}/>} className="h-11" placeholder="facultatif"
                         />
                     </div>
 
-                    <FormInput 
-                        label="Mots-clés" name="keywords" 
+                    <FormInput
+                        label="Mots-clés" name="keywords"
                         value={keywordsString} onChange={(e) => setKeywordsString(e.target.value)}
                         icon={<Hash size={16}/>} className="h-11" placeholder="tag1, tag2..."
                     />
@@ -282,7 +282,7 @@ function AddPoiContent() {
                                     className={clsx(
                                         "px-3 py-1.5 rounded-lg text-[11px] font-bold border flex items-center gap-1.5 transition-all",
                                         formData.poi_amenities?.includes(am)
-                                        ? "bg-zinc-800 text-white border-zinc-800 dark:bg-white dark:text-black shadow-sm" 
+                                        ? "bg-zinc-800 text-white border-zinc-800 dark:bg-white dark:text-black shadow-sm"
                                         : "bg-white dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50"
                                     )}
                                 >
@@ -311,7 +311,7 @@ function AddPoiContent() {
                 <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-inner group">
                     {/* Carte Miniature Statique (MapLibre avec interactivité désactivée) */}
                     <div className="absolute inset-0 grayscale-[50%] group-hover:grayscale-0 transition-all duration-500">
-                       {/* Note: Pour éviter trop de lourdeur, on peut aussi utiliser une image statique, 
+                       {/* Note: Pour éviter trop de lourdeur, on peut aussi utiliser une image statique,
                            mais ici j'utilise la Map désactivée pour la précision visuelle */}
                         <Map
                             initialViewState={{
@@ -334,12 +334,12 @@ function AddPoiContent() {
                     {/* Overlay d'Action */}
                     <div className="absolute inset-0 bg-black/10 hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
                         <div className="pointer-events-auto transform transition-transform group-hover:scale-105">
-                            <button 
+                            <button
                                 type="button"
                                 onClick={() => { setTempLocation(formData.location!); setIsMapOpen(true); }}
                                 className="bg-white text-zinc-800 px-5 py-2.5 rounded-full font-bold shadow-xl flex items-center gap-2 text-sm border-2 border-primary/20 hover:border-primary transition-all"
                             >
-                                <Maximize size={16} className="text-primary"/> 
+                                <Maximize size={16} className="text-primary"/>
                                 Choisir sur la carte
                             </button>
                         </div>
@@ -360,28 +360,28 @@ function AddPoiContent() {
                         </span>
                     </div>
 
-                    <FormInput 
+                    <FormInput
                         label="Adresse / Lieu-dit" name="address_informal"
-                        value={formData.address_informal} onChange={handleChange} 
+                        value={formData.address_informal} onChange={handleChange}
                         icon={<MapPin size={16}/>} className="h-11" placeholder="Ex: Bastos, Face ambassade..."
                     />
 
                     <div className="grid grid-cols-2 gap-3">
-                        <FormInput 
+                        <FormInput
                             label="Ville" name="address_city"
-                            value={formData.address_city} onChange={handleChange} 
+                            value={formData.address_city} onChange={handleChange}
                             icon={<Building2 size={16}/>} className="h-11"
                         />
-                        <FormInput 
+                        <FormInput
                             label="Pays" name="address_country"
-                            value={formData.address_country} onChange={handleChange} 
+                            value={formData.address_country} onChange={handleChange}
                             icon={<Flag size={16}/>} className="h-11"
                         />
                     </div>
 
-                    <FormInput 
+                    <FormInput
                         label="Code Postal" name="postalCode"
-                        value={postalCode} onChange={(e) => setPostalCode(e.target.value)} 
+                        value={postalCode} onChange={(e) => setPostalCode(e.target.value)}
                         icon={<Mail size={16}/>} className="h-11"
                     />
                 </div>
@@ -394,7 +394,7 @@ function AddPoiContent() {
       {isMapOpen && (
         <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-white dark:bg-zinc-900 w-full h-full rounded-3xl overflow-hidden relative shadow-2xl flex flex-col">
-                
+
                 {/* En-tête Modal */}
                 <div className="absolute top-4 left-4 right-4 z-10 flex justify-between pointer-events-none">
                     <div className="bg-white/90 dark:bg-zinc-800/90 backdrop-blur px-4 py-2 rounded-full shadow-lg border border-zinc-200 dark:border-zinc-700 pointer-events-auto">
@@ -403,7 +403,7 @@ function AddPoiContent() {
                             Glissez le marqueur ou cliquez pour définir
                         </h3>
                     </div>
-                    <button 
+                    <button
                         onClick={() => setIsMapOpen(false)}
                         className="bg-white text-zinc-800 p-2 rounded-full shadow-lg pointer-events-auto hover:bg-zinc-100"
                     >
@@ -426,9 +426,9 @@ function AddPoiContent() {
                         <ScaleControl position="bottom-right" />
 
                         {/* Draggable Marker */}
-                        <Marker 
-                            longitude={tempLocation.longitude} 
-                            latitude={tempLocation.latitude} 
+                        <Marker
+                            longitude={tempLocation.longitude}
+                            latitude={tempLocation.latitude}
                             draggable
                             onDragEnd={handleDragEnd}
                             anchor="bottom"
@@ -445,10 +445,10 @@ function AddPoiContent() {
                 <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 p-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
                     <div className="flex items-center gap-2 text-zinc-500 text-xs font-mono">
                        <LocateFixed size={14}/>
-                       Lat: <span className="text-zinc-800 dark:text-zinc-200 font-bold">{tempLocation.latitude.toFixed(6)}</span> 
+                       Lat: <span className="text-zinc-800 dark:text-zinc-200 font-bold">{tempLocation.latitude.toFixed(6)}</span>
                        Lon: <span className="text-zinc-800 dark:text-zinc-200 font-bold">{tempLocation.longitude.toFixed(6)}</span>
                     </div>
-                    
+
                     <div className="flex gap-3 w-full md:w-auto">
                         <Button variant="secondary" onClick={() => navigator.geolocation.getCurrentPosition(p => setTempLocation({latitude: p.coords.latitude, longitude: p.coords.longitude}))} size="md" className="flex-1 md:flex-none">
                             <LocateFixed size={18} /> Ma position
@@ -466,7 +466,7 @@ function AddPoiContent() {
   );
 }
 
-// Wrapper Suspense pour Next.js 
+// Wrapper Suspense pour Next.js
 export default function AddPoiPage() {
     return (
         <Suspense fallback={<div className="h-screen w-full bg-white dark:bg-black" />}>

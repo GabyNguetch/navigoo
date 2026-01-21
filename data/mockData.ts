@@ -50,7 +50,7 @@ export const POI_DATA: POI[] = [
   {
     poi_id: "4",
     poi_name: "Bois Sainte Anastasie",
-    poi_category: "Ferme", 
+    poi_category: "Ferme",
     poi_description: "Oasis de calme en plein centre-ville. Rivière, arbres et restaurant.",
     poi_amenities: ["Restaurant", "Jardin"],
     location: { latitude: 3.8760, longitude: 11.5200 },
@@ -1228,7 +1228,7 @@ export const POI_DATA: POI[] = [
     popularity_score: 85,
     poi_images_urls: ["https://images.unsplash.com/photo-1605333144866-e3d8f8be0f96?q=80&w=800"],
   },
-  
+
   // --- SPÉCIALITÉS LOCALES & VILLAGES ---
   {
     poi_id: "86",
@@ -4594,7 +4594,3 @@ export const POI_DATA: POI[] = [
   }
 
 ];
-
-
-
-

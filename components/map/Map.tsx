@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, memo } from "react";
 import Map, { Marker, NavigationControl, GeolocateControl, ScaleControl, Popup, MapRef, Source, Layer } from "react-map-gl/maplibre";
-import maplibregl, { LngLatBounds } from "maplibre-gl"; 
+import maplibregl, { LngLatBounds } from "maplibre-gl";
 import { POI, Location } from "@/types";
 import { getCategoryConfig } from "@/data/categories";
 import { motion, AnimatePresence } from "framer-motion";
@@ -15,7 +15,7 @@ interface MapProps {
   onSelectPoi: (poi: POI | null) => void;
   selectedPoi: POI | null;
   userLocation: Location | null;
-  routeGeometry: any | null; 
+  routeGeometry: any | null;
   mapStyleType: "streets-v2" | "hybrid";
 }
 
@@ -31,7 +31,7 @@ const MapMarker = memo(({ poi, isSelected, onClick, onHover }: { poi: POI, isSel
       anchor="bottom"
       onClick={onClick}
     >
-      <div 
+      <div
         onMouseEnter={() => onHover(poi)}
         onMouseLeave={() => onHover(null)}
         // Utilisation de classes Tailwind group et hardware acceleration (transform-gpu)
@@ -51,7 +51,7 @@ const MapMarker = memo(({ poi, isSelected, onClick, onHover }: { poi: POI, isSel
            </div>
         ) : (
           <>
-             <div 
+             <div
                className="flex items-center justify-center w-8 h-8 rounded-full shadow-lg border-2 border-white transition-transform duration-200 group-hover:scale-125 bg-zinc-900 will-change-transform"
                style={{ backgroundColor: config.color }}
              >
@@ -74,7 +74,7 @@ MapMarker.displayName = "MapMarker";
 
 function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, routeGeometry, mapStyleType }: MapProps) {
   const mapRef = useRef<MapRef>(null);
-  
+
   // Utilisation d'un ref pour éviter les re-render inutiles lors des survols
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -97,7 +97,7 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
   };
 
   // --- EFFETS DE ZOOM (Ginchés inchangés mais optimisés via la condition) ---
-  
+
   useEffect(() => {
     if (userLocation && mapRef.current && !routeGeometry) {
       mapRef.current.flyTo({ center: [userLocation.longitude, userLocation.latitude], zoom: 15, duration: 1200 }); // Duration réduite pour sensation de vitesse
@@ -115,21 +115,21 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
         const coords = routeGeometry.coordinates;
         const bounds = new LngLatBounds(coords[0], coords[0]);
         for (const coord of coords) bounds.extend(coord as [number, number]);
-        
+
         mapRef.current.fitBounds(bounds, {
             padding: { top: 80, bottom: 80, right: 50, left: window.innerWidth > 768 ? 420 : 50 }, // Padding ajusté pour éviter Sidebar
-            duration: 1500 
+            duration: 1500
         });
     }
   }, [routeGeometry]);
 
   // --- RENDU OPTIMISÉ DES PINS ---
-  
+
   const pins = useMemo(() => {
     return pois.map((poi) => (
-      <MapMarker 
-        key={poi.poi_id} 
-        poi={poi} 
+      <MapMarker
+        key={poi.poi_id}
+        poi={poi}
         isSelected={selectedPoi?.poi_id === poi.poi_id}
         onHover={handleHover}
         onClick={(e) => {
@@ -163,7 +163,7 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
       {routeGeometry && (
           <Source id="route-source" type="geojson" data={routeGeometry}>
              {/* Bordure blanche pour contraste */}
-             <Layer 
+             <Layer
                id="route-outline"
                type="line"
                paint={{
@@ -174,7 +174,7 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
              />
              {/* Ligne principale */}
-             <Layer 
+             <Layer
                id="route-line"
                type="line"
                paint={{
@@ -212,8 +212,8 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
             offset={12}
             className="z-50 pointer-events-none" // pointer-events-none pour fluidité
           >
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }} 
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.1 }} // Animation très rapide
@@ -222,11 +222,11 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
                {/* Petite image optimisée ou placeholder */}
                <div className="relative w-10 h-10 shrink-0 bg-zinc-100">
                   {hoveredPoi.poi_images_urls && hoveredPoi.poi_images_urls[0] && (
-                     <Image 
-                       src={hoveredPoi.poi_images_urls[0]} 
-                       alt="" 
-                       fill 
-                       className="object-cover" 
+                     <Image
+                       src={hoveredPoi.poi_images_urls[0]}
+                       alt=""
+                       fill
+                       className="object-cover"
                        sizes="40px" // Indication au navigateur pour charger petit format
                        quality={50} // Qualité basse suffisante pour thumbnail
                      />

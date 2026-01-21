@@ -52,33 +52,33 @@ export const DirectionsSidebar = ({
     >
       {/* --- HEADER --- */}
       <div className="bg-primary px-4 py-4 shadow-md text-white z-10">
-        
+
         {/* Navigation Modes */}
         <div className="flex justify-between items-center mb-4 px-2">
-            <ModeButton 
-              icon={<Car size={20} />} 
-              mode="driving" 
-              active={activeMode === "driving"} 
-              onClick={() => onCalculateRoute("driving")} 
+            <ModeButton
+              icon={<Car size={20} />}
+              mode="driving"
+              active={activeMode === "driving"}
+              onClick={() => onCalculateRoute("driving")}
             />
             {/* On ne montre Moto/Vélo que symboliquement pour le design Navigoo, API "cycling" utilisé */}
-            <ModeButton 
-              icon={<Bike size={20} />} 
-              mode="cycling" 
-              active={activeMode === "cycling"} 
-              onClick={() => onCalculateRoute("cycling")} 
+            <ModeButton
+              icon={<Bike size={20} />}
+              mode="cycling"
+              active={activeMode === "cycling"}
+              onClick={() => onCalculateRoute("cycling")}
             />
-            
+
             {/* Marche à pied (si dispo ou si active) */}
             {(!routeStats || routeStats.distance < 5000 || activeMode === "walking") && (
-              <ModeButton 
-                icon={<PersonStanding size={20} />} 
-                mode="walking" 
-                active={activeMode === "walking"} 
-                onClick={() => onCalculateRoute("walking")} 
+              <ModeButton
+                icon={<PersonStanding size={20} />}
+                mode="walking"
+                active={activeMode === "walking"}
+                onClick={() => onCalculateRoute("walking")}
               />
             )}
-            
+
             <button onClick={onClose} className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors ml-auto">
                 <X size={20} />
             </button>
@@ -86,7 +86,7 @@ export const DirectionsSidebar = ({
 
         {/* Input Fields Box */}
         <div className="bg-white dark:bg-zinc-800 rounded-lg p-3 shadow-inner flex gap-3 text-zinc-800 dark:text-zinc-200">
-           
+
            {/* Visual Indicators (Dot Line) */}
            <div className="flex flex-col items-center pt-2 gap-1 w-6">
               <CircleDot size={14} className="text-blue-500" />
@@ -115,7 +115,7 @@ export const DirectionsSidebar = ({
 
       {/* --- RESULTS BODY --- */}
       <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-black p-2">
-        
+
         {isLoadingRoute ? (
            <div className="flex flex-col items-center justify-center h-40 gap-3 text-zinc-500">
                <Loader2 size={32} className="animate-spin text-primary" />
@@ -142,7 +142,7 @@ export const DirectionsSidebar = ({
                           {activeMode === "cycling" && <Bike size={24} />}
                       </div>
                    </div>
-                   
+
                    <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800">
                       <button className="w-full bg-primary text-white py-2 rounded-full font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:bg-primary-hover active:scale-95 transition-all">
                           <Navigation size={18} fill="currentColor" />
@@ -174,7 +174,7 @@ export const DirectionsSidebar = ({
 };
 
 const ModeButton = ({ icon, active, onClick }: any) => (
-  <button 
+  <button
      onClick={onClick}
      className={clsx(
        "p-2 rounded-full transition-all flex flex-col items-center gap-1 min-w-[60px]",

@@ -14,7 +14,7 @@ export interface POI {
   poi_category: string; // Ex: "Tourne-dos", "Kiosque"
   poi_description: string;
   poi_amenities: string[]; // split from TEXT
-  
+
   // Géographie (GEOGRAPHY Point)
   location: {
     latitude: number;
@@ -32,7 +32,7 @@ export interface POI {
   poi_images_urls: string[]; // split from TEXT
   popularity_score: number;
   poi_keywords?: string[]; // <--- AJOUTER CETTE LIGNE (tu l'utilises aussi dans add-poi)
-  
+
   // Contact JSON
   poi_contacts?: {
     phone?: string;
@@ -62,7 +62,3 @@ export interface Trip {
 }
 
 export type MapStyle = "streets-v2" | "hybrid";
-
-
-
-

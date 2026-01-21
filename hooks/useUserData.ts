@@ -7,7 +7,7 @@ export const useUserData = () => {
   const [savedPois, setSavedPois] = useState<POI[]>([]);
   const [recentPois, setRecentPois] = useState<POI[]>([]);
   const [recentTrips, setRecentTrips] = useState<Trip[]>([]);
-  const [myPois, setMyPois] = useState<POI[]>([]); 
+  const [myPois, setMyPois] = useState<POI[]>([]);
   const [mapStyle, setMapStyle] = useState<MapStyle>("streets-v2");
 
   // Chargement initial

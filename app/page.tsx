@@ -10,6 +10,7 @@ import { SecondarySidebar } from "@/components/sidebar/SecondarySidebar";
 import { POI_DATA } from "@/data/mockData";
 import { POI, Location, TransportMode } from "@/types";
 import { getRoute } from "@/services/routingService";
+import { apiService } from "@/services/apiService";
 import { useUserData } from "@/hooks/useUserData";
 import { Settings as SettingsIcon, Check, X } from "lucide-react";
 import { Loader } from "@/components/ui/Loader";
@@ -21,12 +22,12 @@ const MapComponent = dynamic(() => import("@/components/map/Map"), {
   loading: () => <Loader />,
 });
 
-const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9"; 
+const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9";
 
 export default function Home() {
   // Gestionnaires d'ouverture
   const [isMainSidebarOpen, setIsMainSidebarOpen] = useState(false); // Le mode "étendu" du menu
-  
+
   // Contenu "Secondaire" (Panneaux qui s'affichent à coté du dock)
   // On utilise un state commun pour garantir qu'un seul panneau s'affiche à la fois
   // Types: "details" (fiche poi) | "directions" (itinéraire) | "list-saved" | "list-recent" | "list-trips" | "list-mypois" | null
@@ -34,15 +35,16 @@ export default function Home() {
      type: "details" | "directions" | "saved" | "recent" | "trips" | "mypois" | null;
      data?: any; // Pour passer le POI selectionné ou autre
   }>({ type: null });
-  
+
   const { savedPois, recentPois, recentTrips, mapStyle, addRecentPoi, addTrip, toggleMapStyle, myPois } = useUserData();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  
+  const [pois, setPois] = useState<POI[]>([]);
+
   // États transverses
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [userLocation, setUserLocation] = useState<Location | null>(null);
-  
+
   // États Routing spécifiques
   const [routeStats, setRouteStats] = useState<any>(null);
   const [routeGeometry, setRouteGeometry] = useState<any>(null);
@@ -56,6 +58,14 @@ export default function Home() {
             err => console.warn(err)
         );
      }
+
+     // Fetch real POIs
+     apiService.getAllPois()
+       .then(setPois)
+       .catch(err => {
+         console.warn("Could not fetch POIs from API, using mock data.", err);
+         setPois(POI_DATA);
+       });
   }, []);
 
   // --- GESTIONNAIRES D'AFFICHAGE ---
@@ -67,12 +77,12 @@ export default function Home() {
         setPanelState({ type: null });
         return;
     }
-    
+
     // Ajout historique
     addRecentPoi(poi);
 
     // Ouvre le panneau détails et ferme le menu étendu s'il gêne
-    setIsMainSidebarOpen(false); 
+    setIsMainSidebarOpen(false);
     setPanelState({ type: "details", data: poi });
   };
 
@@ -95,12 +105,12 @@ export default function Home() {
 
   const handleCalculateRoute = async (destination: POI, mode: TransportMode) => {
     if (!userLocation) return alert("Géolocalisation requise pour le départ.");
-    
+
     setActiveTransportMode(mode);
     setIsRouteLoading(true);
 
     const result = await getRoute(userLocation, destination.location, mode, MAPTILER_API_KEY);
-    
+
     if (result) {
         addTrip({
             id: Date.now().toString(),
@@ -128,7 +138,7 @@ export default function Home() {
   const handleResetToMap = () => {
     setPanelState({ type: null }); // Ferme tout les panneaux
     setIsMainSidebarOpen(false);   // Ferme le menu latéral si ouvert
-    
+
     // Optionnel : Recentrer sur l'utilisateur
     if (userLocation) {
        // La MapComponent a un effet useEffect qui réagira si userLocation change ou si on le force
@@ -138,7 +148,7 @@ export default function Home() {
 
 
   const filteredPois = useMemo(() => {
-    const base = [...POI_DATA, ...myPois]; // Fusion
+    const base = pois.length > 0 ? [...pois, ...myPois] : [...POI_DATA, ...myPois]; // Fusion
     return base.filter((poi) => {
       const cat = selectedCategory ? poi.poi_category === selectedCategory : true;
       const search = searchQuery ? poi.poi_name.toLowerCase().includes(searchQuery.toLowerCase()) : true;
@@ -148,9 +158,9 @@ export default function Home() {
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-zinc-50 dark:bg-black font-sans">
-      
+
       {/* Niveau 4 (Top) */}
-      <TopLayout 
+      <TopLayout
         onToggleSidebar={() => setIsMainSidebarOpen(!isMainSidebarOpen)}
         allPois={POI_DATA}
         selectedCategory={selectedCategory}
@@ -158,13 +168,13 @@ export default function Home() {
         onSearch={setSearchQuery}
         onSelectResult={handleSelectPoi}
         onLocateMe={() => userLocation && setUserLocation({...userLocation})}
-        recentSearches={[]} 
+        recentSearches={[]}
         recentPois={recentPois}
       />
 
       {/* Niveau 3 (Gauche) - Sidebar Navigation */}
-      <Sidebar 
-        isOpen={isMainSidebarOpen} 
+      <Sidebar
+        isOpen={isMainSidebarOpen}
         onClose={() => setIsMainSidebarOpen(false)}
         onViewChange={handleViewChange}
         onLocateMe={() => userLocation && setUserLocation({...userLocation})}
@@ -174,7 +184,7 @@ export default function Home() {
       />
 
       {/* ------ AJOUTER ICI : BARRE DE NAVIGATION MOBILE (Niveau 3.5) ------ */}
-      <MobileNavBar 
+      <MobileNavBar
         currentView={panelState.type === "details" || panelState.type === "directions" ? null : panelState.type}
         onViewChange={handleViewChange}
         onOpenSidebar={() => setIsMainSidebarOpen(true)}
@@ -182,11 +192,11 @@ export default function Home() {
       />
 
       {/* Niveau 2 (Panneaux glissants) - Mutuellement Exclusifs */}
-      
+
       {/* A. Fiche Détails POI */}
       {panelState.type === "details" && panelState.data && (
-        <PoiDetailsSidebar 
-          poi={panelState.data} 
+        <PoiDetailsSidebar
+          poi={panelState.data}
           isOpen={true}
           onClose={handleClosePanel}
           onOpenDirections={handleOpenDirections}
@@ -195,7 +205,7 @@ export default function Home() {
 
       {/* B. Itinéraire */}
       {panelState.type === "directions" && panelState.data && (
-        <DirectionsSidebar 
+        <DirectionsSidebar
             isOpen={true}
             onClose={handleClosePanel}
             originPoi={null}
@@ -210,7 +220,7 @@ export default function Home() {
 
       {/* C. Listes (Saved, Recent, Trips...) */}
       {(panelState.type === "saved" || panelState.type === "recent" || panelState.type === "trips" || panelState.type === "mypois") && (
-          <SecondarySidebar 
+          <SecondarySidebar
              view={panelState.type}
              onClose={handleClosePanel}
              data={{ savedPois, recentPois, trips: recentTrips }}
@@ -229,7 +239,7 @@ export default function Home() {
                     <button onClick={() => setIsSettingsOpen(false)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full"><X/></button>
                  </div>
                  <div className="grid grid-cols-2 gap-4">
-                    <button 
+                    <button
                        onClick={() => { toggleMapStyle(); setIsSettingsOpen(false); }}
                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${mapStyle === 'streets-v2' ? 'border-primary bg-primary/5' : 'border-zinc-200 dark:border-zinc-700'}`}
                     >
@@ -237,7 +247,7 @@ export default function Home() {
                         <span className="font-semibold text-sm">Plan</span>
                         {mapStyle === 'streets-v2' && <Check size={16} className="text-primary"/>}
                     </button>
-                    <button 
+                    <button
                        onClick={() => { toggleMapStyle(); setIsSettingsOpen(false); }}
                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${mapStyle === 'hybrid' ? 'border-primary bg-primary/5' : 'border-zinc-200 dark:border-zinc-700'}`}
                     >
@@ -252,14 +262,14 @@ export default function Home() {
 
       {/* Niveau 1 (Map) */}
       <div className="absolute top-0 left-0 w-full h-full z-0 print:block">
-        <MapComponent 
-          apiKey={MAPTILER_API_KEY} 
-          pois={filteredPois} 
+        <MapComponent
+          apiKey={MAPTILER_API_KEY}
+          pois={filteredPois}
           selectedPoi={panelState.type === "details" || panelState.type === "directions" ? panelState.data : null}
           userLocation={userLocation}
           onSelectPoi={handleSelectPoi}
           routeGeometry={routeGeometry}
-          mapStyleType={mapStyle} 
+          mapStyleType={mapStyle}
         />
       </div>
 

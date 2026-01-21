@@ -40,7 +40,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
         ) : (
             <div className="w-full h-full flex items-center justify-center text-zinc-400 bg-zinc-100">Aucune image</div>
         )}
-        
+
         {/* Close Button */}
         <button onClick={onClose} className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-md transition-colors z-20">
           <X size={20} />
@@ -48,7 +48,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
 
         {/* OWNER EDIT BUTTON */}
         {isOwner && (
-            <button 
+            <button
                 onClick={handleEdit}
                 className="absolute bottom-4 right-4 bg-white text-black px-4 py-2 rounded-full shadow-lg font-bold text-sm flex items-center gap-2 hover:scale-105 transition-transform"
             >
@@ -59,7 +59,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
 
       {/* CONTENU */}
       <div className="p-6 space-y-6 pb-20">
-        
+
         {/* TITRE & REVIEW */}
         <div>
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 leading-tight">{poi.poi_name}</h1>
@@ -120,7 +120,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
             <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                 <MessageSquare size={18} /> Avis et commentaires
             </h3>
-            
+
             <div className="space-y-4">
                 {/* Simulation Commentaire 1 */}
                 <div className="flex gap-3">
@@ -158,7 +158,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
 };
 
 const ActionButton = ({ icon, label, active, onClick, disabled }: any) => (
-  <button 
+  <button
     onClick={onClick}
     disabled={disabled}
     className={`flex flex-col items-center gap-2 group ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}

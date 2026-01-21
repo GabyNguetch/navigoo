@@ -16,8 +16,8 @@ interface TopLayoutProps {
   recentPois: POI[];
 }
 
-export const TopLayout = ({ 
-  onToggleSidebar, 
+export const TopLayout = ({
+  onToggleSidebar,
   allPois,
   selectedCategory,
   onSelectCategory,
@@ -30,10 +30,10 @@ export const TopLayout = ({
 
   return (
     <div className="absolute top-0 ml-18 left-0 w-full z-40 bg-transparent p-2 pointer-events-none flex items-start gap-2">
-      
+
       {/* Bloc Recherche */}
       <div className="pointer-events-auto min-w-[340px] max-w-[420px] shrink-0">
-        <SearchInput 
+        <SearchInput
           onMenuClick={onToggleSidebar}
           pois={allPois}
           onSearch={onSearch}
@@ -47,9 +47,9 @@ export const TopLayout = ({
       {/* 2. Bloc Catégories + Profil */}
       <div className="flex-1 flex items-center gap-2 min-w-0 pointer-events-auto pl-2">
         <div className="flex-1 min-w-0">
-           <CategoryBar 
-             selected={selectedCategory} 
-             onSelect={onSelectCategory} 
+           <CategoryBar
+             selected={selectedCategory}
+             onSelect={onSelectCategory}
            />
         </div>
 

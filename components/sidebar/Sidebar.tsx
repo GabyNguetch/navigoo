@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { SidebarItem } from "./SidebarItem";
-import { 
-  Bookmark, Clock, Share2, Printer, MapPin, 
-  Settings, HelpCircle, Shield, Globe, 
-  Building, UserSearch, PanelLeftClose, MapPinHouse
+import {
+  Bookmark, Clock, Share2, Printer, MapPin,
+  Settings, HelpCircle, Shield, Globe,
+  Building, UserSearch, PanelLeftClose, MapPinHouse,
+  BookOpen, Mic
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
 
 interface SidebarProps {
-  isOpen: boolean; 
+  isOpen: boolean;
   onClose: () => void;
   // Actions
   onViewChange: (view: "saved" | "recent" | "trips" | "mypois") => void;
@@ -19,10 +21,10 @@ interface SidebarProps {
   onToggleSettings: () => void;
 }
 
-export const Sidebar = ({ 
-    isOpen, 
-    onClose, 
-    onViewChange, 
+export const Sidebar = ({
+    isOpen,
+    onClose,
+    onViewChange,
     onLocateMe,
     onShare,
     onPrint,
@@ -30,6 +32,7 @@ export const Sidebar = ({
 }: SidebarProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const isExpanded = isHovered || isOpen;
+  const router = useRouter();
 
   const handleAction = (action: () => void) => {
     action();    // 1. Exécute l'action demandée (ex: ouvrir panneau favoris)
@@ -47,7 +50,7 @@ export const Sidebar = ({
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         className={clsx(
           "fixed top-0 left-0 h-full bg-white dark:bg-black/95 backdrop-blur-md shadow-2xl z-[60] flex flex-col border-r border-zinc-200 dark:border-zinc-800 overflow-hidden",
-          !isOpen && "hidden md:flex" 
+          !isOpen && "hidden md:flex"
         )}
       >
         {/* HEADER LOGO */}
@@ -76,12 +79,17 @@ export const Sidebar = ({
           <SidebarItem isExpanded={isExpanded} icon={<Building size={22} />} label="Creer un point d'interet" onClick={() => handleAction(() => onViewChange("mypois"))} />
           <SidebarItem isExpanded={isExpanded} icon={<UserSearch size={22} />} label="Trouver ma position" onClick={() => handleAction(onLocateMe)} />
           <SidebarItem isExpanded={isExpanded} icon={<MapPin size={22} />} label="Mes trajets" onClick={() => handleAction(() => onViewChange("trips"))} />
-          
+
+          <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2 mx-2" />
+
+          <SidebarItem isExpanded={isExpanded} icon={<BookOpen size={22} />} label="Blogs (Blocs)" onClick={() => handleAction(() => router.push("/blogs"))} />
+          <SidebarItem isExpanded={isExpanded} icon={<Mic size={22} />} label="Podcasts" onClick={() => handleAction(() => router.push("/podcasts"))} />
+
           <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2 mx-2" />
 
           <SidebarItem isExpanded={isExpanded} icon={<Share2 size={22} />} label="Partager la carte" onClick={() => handleAction(onShare)} />
           <SidebarItem isExpanded={isExpanded} icon={<Printer size={22} />} label="Imprimer la carte" onClick={() => handleAction(onPrint)} />
-          
+
           <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2 mx-2" />
 
           <SidebarItem isExpanded={isExpanded} icon={<Settings size={22} />} label="Paramètres & Style" onClick={() => handleAction(onToggleSettings)} />
@@ -93,7 +101,7 @@ export const Sidebar = ({
              <Globe size={20} className="text-zinc-400 hover:text-primary cursor-pointer" />
         </div>
       </motion.div>
-      
+
       {/* Mobile Backdrop */}
       {isOpen && <div className="fixed inset-0 bg-black/50 z-[55] md:hidden" onClick={onClose} />}
     </>

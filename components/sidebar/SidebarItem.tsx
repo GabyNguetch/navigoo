@@ -17,15 +17,15 @@ export const SidebarItem = ({ icon, label, isExpanded, onClick, isActive }: Side
       className={clsx(
         "flex items-center w-full p-3 transition-colors rounded-lg group relative",
         // En mode fermé, on centre. En ouvert, aligné à gauche.
-        isExpanded ? "justify-start px-4 gap-4" : "justify-center px-0", 
-        isActive 
-          ? "bg-primary/10 text-primary" 
+        isExpanded ? "justify-start px-4 gap-4" : "justify-center px-0",
+        isActive
+          ? "bg-primary/10 text-primary"
           : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-primary"
       )}
     >
       {/* Icone : taille fixe */}
       <span className={clsx(
-        "shrink-0 transition-transform duration-200", 
+        "shrink-0 transition-transform duration-200",
         isActive ? "scale-110" : "group-hover:scale-110"
       )}>
         {icon}
