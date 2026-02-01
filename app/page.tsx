@@ -14,6 +14,7 @@ import { useUserData } from "@/hooks/useUserData";
 import { Settings as SettingsIcon, Check, X, AlertTriangle } from "lucide-react";
 import { Loader } from "@/components/ui/Loader";
 import { MobileNavBar } from "@/components/navigation/MobileNavbar";
+import { authService } from "@/services/authService";
 
 // Import Map Dynamique sans SSR
 const MapComponent = dynamic(() => import("@/components/map/Map"), {
@@ -122,14 +123,18 @@ export default function Home() {
      return () => { mounted = false; };
   }, []); // Run once on mount
 
-  // Rafraichir "Mes POIs" si l'utilisateur ouvre le panneau
+  // Rafraichir "Mes POIs" depuis le Backend quand on ouvre le panneau
   useEffect(() => {
     if (panelState.type === "mypois") {
-        // TODO: Remplacer par le vrai ID user quand l'auth sera là
-        const demoUserId = "123e4567-e89b-12d3-a456-426614174000";
-        loadUserPois(demoUserId); 
+        // Récupération de la session réelle
+        const user = authService.getSession(); 
+        if (user?.userId) {
+            loadUserPois(user.userId); 
+        } else {
+            console.warn("Utilisateur non connecté, impossible de charger 'Mes POIs'");
+        }
     }
-  }, [panelState.type]);
+  }, [panelState.type, loadUserPois]); // Ajouter loadUserPois en dépendance
 
   // ============================================
   // HANDLERS INTERFACE

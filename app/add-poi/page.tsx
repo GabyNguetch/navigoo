@@ -21,6 +21,7 @@ import { FormInput } from "@/components/ui/form/FormInput";
 import { FormSelect } from "@/components/ui/form/FormSelect";
 import Image from "next/image";
 import { clsx } from "clsx";
+import { poiService } from "@/services/poiService";
 
 // Clé API MapTiler (la même que dans page.tsx)
 const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9"; 
@@ -146,25 +147,39 @@ function AddPoiContent() {
     }));
     setIsMapOpen(false);
   };
+// app/add-poi/page.tsx (Section handleSubmit corrigée)
 
-  // Soumission
-  const handleSubmit = (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.poi_name || !formData.poi_category) return alert("Nom et Catégorie requis.");
+    
+    // Validation basique
+    if (!formData.poi_name || !formData.poi_category) {
+        return alert("Veuillez renseigner au moins le nom et la catégorie.");
+    }
 
-    const finalPoi: POI = {
-        ...formData as POI,
-        poi_id: editId || Date.now().toString(),
-        poi_keywords: keywordsString.split(",").map(s => s.trim()).filter(Boolean),
-        rating: formData.rating || 4.5,
-        review_count: formData.review_count || 0,
-        popularity_score: 10
-    };
+    setIsLoading(true);
 
-    if (editId) updateMyPoi(finalPoi);
-    else addMyPoi(finalPoi);
-    router.push("/");
-  };
+    try {
+        if (editId) {
+            // Logique de mise à jour (PUT)
+            await poiService.updatePoi(editId, formData);
+            alert("Lieu mis à jour avec succès !");
+        } else {
+            // Logique de création RÉELLE (POST)
+            await poiService.createPoi(formData);
+            alert("Nouveau point d'intérêt publié sur Navigoo !");
+        }
+        
+        // Redirection vers la carte principale pour voir le nouveau point
+        router.push("/");
+        router.refresh();
+    } catch (err: any) {
+        console.error("Erreur Backend:", err);
+        alert(`Erreur lors de l'enregistrement : ${err.message}`);
+    } finally {
+        setIsLoading(false);
+    }
+};
 
   if (isLoading) return <div className="h-screen w-full bg-zinc-50 dark:bg-black flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40}/></div>;
 

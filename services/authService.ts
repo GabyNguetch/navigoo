@@ -1,115 +1,112 @@
-import { AppUserDTO } from "@/types";
+import { AppUser } from "@/types";
 
-// L'URL du backend définie dans .env.local ou par défaut
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-
-// Fonction helper pour logger les détails
-const logTraffic = (method: string, url: string, payload: any, response: any) => {
-    console.group(`🚀 API REQUEST: [${method}] ${url}`);
-    if (payload) {
-        console.log("%cRequest Payload:", "color: orange; font-weight: bold;", JSON.stringify(payload, null, 2));
-    } else {
-        console.log("%cNo Payload", "color: gray");
-    }
-    console.log("%cResponse Data:", "color: green; font-weight: bold;", response);
-    console.groupEnd();
-};
+const API_BASE_URL = "https://poi-navigoo.pynfi.com";
+const DEFAULT_ORG_ID = "83ce5943-d920-454f-908d-3248a73aafdf"; 
 
 class AuthService {
+  /**
+   * Inscrit un nouvel utilisateur selon le DTO Java
+   */
+  async register(userData: Partial<AppUser>): Promise<AppUser> {
+    const endpoint = `${API_BASE_URL}/api/users`;
 
-  // --- INSCRIPTION (REGISTER) ---
-  // Route: POST /api/users
-  async register(userData: Partial<any>): Promise<any> {
-    const endpoint = `${API_URL}/api/users`;
+    // Validation Password (doit matcher la regex Java)
+    const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (userData.password && !pwdRegex.test(userData.password)) {
+      throw new Error("Le mot de passe doit contenir: 8 chars min, 1 Maj, 1 Min, 1 Chiffre, 1 Spécial (@$!%*?&)");
+    }
 
-    // Structure exacte demandée par le README Backend
+    // Validation Phone (doit matcher la regex Java: ^[+]?[0-9]{10,15}$)
+    if (userData.phone) {
+      const phoneRegex = /^[+]?[0-9]{10,15}$/;
+      if (!phoneRegex.test(userData.phone)) {
+        throw new Error("Le téléphone doit contenir entre 10 et 15 chiffres (+ optionnel au début)");
+      }
+    }
+
+    // Validation Username (doit matcher: ^[a-zA-Z0-9_.-]+$)
+    if (userData.username) {
+      const usernameRegex = /^[a-zA-Z0-9_.-]+$/;
+      if (!usernameRegex.test(userData.username)) {
+        throw new Error("Le nom d'utilisateur ne peut contenir que des lettres, chiffres, points, tirets et underscores");
+      }
+      if (userData.username.length < 3 || userData.username.length > 50) {
+        throw new Error("Le nom d'utilisateur doit contenir entre 3 et 50 caractères");
+      }
+    }
+
     const payload = {
-        organizationId: "83ce5943-d920-454f-908d-3248a73aafdf", // Organisation par défaut
-        username: userData.username,
-        email: userData.email,
-        phone: userData.phone,     // Exemple README: "+237670000000"
-        password: userData.password,
-        role: "USER",              // Rôle par défaut
-        isActive: true
-        // Note: pas de 'createdAt', 'userId' -> géré par le backend
+      organizationId: DEFAULT_ORG_ID,
+      username: userData.username,
+      email: userData.email,
+      phone: userData.phone || null, // Envoyer null si vide
+      password: userData.password,
+      role: "USER",
+      isActive: true
     };
 
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    console.log("📤 Register Payload:", payload);
 
-      let responseData;
-      const text = await res.text();
-      try { responseData = JSON.parse(text); } catch { responseData = text; }
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-      // LOG DANS LA CONSOLE
-      logTraffic("POST", endpoint, payload, responseData);
-
-      if (!res.ok) {
-          // Gestion basique d'erreurs (ex: username déjà pris)
-          throw new Error(responseData.message || `Erreur ${res.status}: Inscription impossible.`);
-      }
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error("❌ API Error:", errorText);
       
-      return responseData;
-    } catch (error) {
-      console.error("Erreur Auth Register:", error);
-      throw error;
+      try {
+        const errorJson = JSON.parse(errorText);
+        throw new Error(errorJson.message || "Erreur lors de l'inscription");
+      } catch (e) {
+        throw new Error(`Erreur serveur (${res.status}): ${errorText}`);
+      }
     }
+
+    const newUser = await res.json();
+    return newUser;
   }
 
-  // --- CONNEXION (LOGIN) ---
-  // Actuellement, nous utilisons "check-email" pour simuler une connexion car l'endpoint login n'est pas explicite dans le README.
-  // Idéalement: POST /api/auth/login
-  async login(credentials: { email: string, password: string }): Promise<any> {
+  async login(credentials: { email: string, password: string }): Promise<AppUser> {
+    const checkRes = await fetch(`${API_BASE_URL}/api/users/check-email/${encodeURIComponent(credentials.email)}`);
+    const exists = await checkRes.json();
+
+    if (!exists) {
+      throw new Error("Cet email n'existe pas.");
+    }
+
+    const userRes = await fetch(`${API_BASE_URL}/api/users/email/${encodeURIComponent(credentials.email)}`);
     
-    // Utilisation de l'endpoint Check Email pour vérifier l'existence (Simulation)
-    const endpoint = `${API_URL}/api/users/check-email/${encodeURIComponent(credentials.email)}`;
-    // Note: Pour une vraie sécurité, il faudra remplacer par POST /api/login plus tard.
+    if (!userRes.ok) {
+       throw new Error("Impossible de récupérer le profil utilisateur.");
+    }
 
-    try {
-      const res = await fetch(endpoint, {
-        method: "GET", 
-        headers: { "Content-Type": "application/json" }
-      });
+    const user: AppUser = await userRes.json();
+    this.saveSession(user);
+    return user;
+  }
 
-      // Le backend renvoie "true" ou "false" (boolean) selon la doc "Additional Endpoints"
-      const userExists = await res.json();
-      
-      // On simule une réponse de succès si l'user existe
-      // DANS UN VRAI LOGIN : C'est ici qu'on reçoit le token JWT
-      const responseData = userExists 
-        ? { status: "success", message: "User found (Login Simulated)", user: credentials.email }
-        : { status: "error", message: "Utilisateur inconnu ou mot de passe incorrect." };
-
-      // LOG EXPLICITE
-      logTraffic("GET (Check Email Login)", endpoint, { email: credentials.email }, responseData);
-
-      if (!res.ok || !userExists) {
-          throw new Error("Identifiants incorrects ou compte inexistant.");
-      }
-      
-      // Stocker l'état "connecté" dans le navigateur
-      if (typeof window !== 'undefined') {
-          localStorage.setItem("navigoo_user", JSON.stringify({ email: credentials.email })); 
-      }
-      
-      return responseData;
-    } catch (error) {
-       console.error("Erreur Auth Login:", error);
-       throw error;
+  saveSession(user: AppUser) {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("navigoo_user", JSON.stringify(user));
     }
   }
 
-  // --- LOGOUT ---
+  getSession(): AppUser | null {
+    if (typeof window !== 'undefined') {
+      const u = localStorage.getItem("navigoo_user");
+      return u ? JSON.parse(u) : null;
+    }
+    return null;
+  }
+
   logout() {
-      if (typeof window !== 'undefined') {
-          localStorage.removeItem("navigoo_user");
-          // On force un rechargement pour mettre à jour l'UI (Navbar) ou on utilise un Context
-          window.location.href = "/";
-      }
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem("navigoo_user");
+      window.location.href = "/signin";
+    }
   }
 }
 

@@ -24,8 +24,17 @@ export default function RegisterPage() {
     password: ""
   });
 
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    
+    // Nettoyage du téléphone : garder seulement +, chiffres
+    if (name === "phone") {
+      const cleaned = value.replace(/[^\d+]/g, "");
+      setFormData({ ...formData, [name]: cleaned });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,13 +44,17 @@ export default function RegisterPage() {
 
     try {
       await authService.register(formData);
+      alert("Compte créé avec succès ! Connectez-vous.");
       router.push("/signin");
+      
     } catch (err: any) {
-      setError(typeof err === 'string' ? err : err.message || "Une erreur est survenue");
+      console.error(err);
+      setError(err.message || "Erreur inconnue");
     } finally {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen w-full bg-white dark:bg-black flex">
@@ -53,6 +66,7 @@ export default function RegisterPage() {
           src="/images/image1.png" 
           alt="Join us"
           fill
+          sizes="50vw"
           className="object-cover dark:hidden"
           priority
         />
@@ -61,6 +75,7 @@ export default function RegisterPage() {
           src="/images/image2.png" 
           alt="Join us"
           fill
+          sizes="50vw"
           className="object-cover hidden dark:block"
           priority
         />
