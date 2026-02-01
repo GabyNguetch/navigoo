@@ -1,68 +1,79 @@
-// Basé sur le schéma SQL "point_of_interest"
+// Basé sur PointOfInterestDTO du Backend
 export interface OperationTimePlan {
   [day: string]: { open: string; close: string; closed?: boolean };
 }
+
 export interface Location {
   latitude: number;
   longitude: number;
 }
 
 export interface POI {
-  // Mapping direct avec la DB
-  poi_id: string; // UUID
-  poi_name: string;
-  poi_category: string; // Ex: "Tourne-dos", "Kiosque"
-  poi_description: string;
-  poi_amenities: string[]; // split from TEXT
+  // Backend IDs sont des UUID
+  poi_id: string; 
+  organization_id?: string;
+  town_id?: string;
+  created_by_user_id?: string;
   
-  // Géographie (GEOGRAPHY Point)
+  // Infos Base
+  poi_name: string;
+  poi_description?: string;
+  poi_amenities?: string[]; 
+  
+  // Le backend renvoie souvent des Enum (majuscules)
+  poi_category: string; 
+  poi_type?: string;
+
+  // Géographie
   location: {
     latitude: number;
     longitude: number;
   };
 
   // Adresses
-  address_informal?: string; // Ex: "Mvog-Betsi, face station"
+  address_informal?: string;
   address_city: string;
-  address_country?: string; // <--- AJOUTER CETTE LIGNE
+  address_street_name?: string; 
+  address_country?: string;
 
-  // Stats & Infos
-  rating: number; // vient de la table aggrégée review ou calculé
+  // Médias
+  poi_images_urls: string[]; 
+  poi_logo?: string;
+
+  // Stats
+  rating: number; 
   review_count: number;
-  poi_images_urls: string[]; // split from TEXT
   popularity_score: number;
-  poi_keywords?: string[]; // <--- AJOUTER CETTE LIGNE (tu l'utilises aussi dans add-poi)
   
-  // Contact JSON
+  is_active?: boolean;
+  
+  // Contacts
   poi_contacts?: {
     phone?: string;
     website?: string;
     email?: string;
   };
-
-  // Operation Time Plan JSON
+  
+  poi_keywords?: string[];
   operation_time_plan?: OperationTimePlan;
 }
 
+// Routes
 export interface RouteStats {
-  distance: number; // en mètres
-  duration: number; // en secondes
-  geometry: any; // GeoJSON geometry
+  distance: number; 
+  duration: number;
+  geometry: any;
 }
 
-export type TransportMode = "driving" | "walking" | "cycling"; // MapTiler modes
+export type TransportMode = "driving" | "walking" | "cycling"; 
 
 export interface Trip {
   id: string;
   departName: string;
   arriveName: string;
-  date: string; // ISO String
+  date: string; 
   distance: number;
   duration: number;
 }
 
 export type MapStyle = "streets-v2" | "hybrid";
-
-
-
-

@@ -2,14 +2,15 @@ import { Search, Menu, X, ArrowRight, History, MapPin, Navigation2 } from "lucid
 import { useState, useRef, useEffect } from "react";
 import clsx from "clsx";
 import { POI } from "@/types";
+import { poiService } from "@/services/poiService";
 
 interface SearchInputProps {
   onMenuClick: () => void;
   className?: string;
-  pois: POI[]; // Tous les POIs pour l'autocomplete
+  pois: POI[]; // Peut servir de cache ou fallback, mais la recherche principale est via API
   onSearch: (query: string) => void;
   onSelectResult: (poi: POI) => void;
-  onLocateMe: () => void; // Nouvelle prop
+  onLocateMe: () => void;
   recentSearches: string[];
   recentPois: POI[];
 }
@@ -26,12 +27,37 @@ export const SearchInput = ({
 }: SearchInputProps) => {
   const [isFocused, setIsFocused] = useState(false);
   const [query, setQuery] = useState("");
+  
+  // State pour les résultats de l'API (Live Search)
+  const [suggestions, setSuggestions] = useState<POI[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Filtrer les POIs pour l'autocomplétion (max 5 suggestions)
-  const suggestions = query.length > 0 
-    ? pois.filter(p => p.poi_name.toLowerCase().includes(query.toLowerCase())).slice(0, 5)
-    : [];
+  // --- LIVE SEARCH AVEC DEBOUNCE SUR LE BACKEND ---
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (query.trim().length === 0) {
+        setSuggestions([]);
+        return;
+      }
+
+      try {
+        // Appel au endpoint GET /api/pois/name/{name}
+        const results = await poiService.searchPoisByName(query);
+        // On limite à 5 résultats pour l'affichage dropdown
+        setSuggestions(results ? results.slice(0, 5) : []);
+      } catch (error) {
+        console.error("Erreur recherche backend:", error);
+        setSuggestions([]); 
+        // Optionnel : Fallback sur le filtre client si le backend échoue
+        // setSuggestions(pois.filter(p => p.poi_name.toLowerCase().includes(query.toLowerCase())).slice(0, 5));
+      }
+    };
+
+    // Délai de 300ms pour éviter de spammer l'API à chaque lettre
+    const timeoutId = setTimeout(fetchSuggestions, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [query]);
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -72,6 +98,7 @@ export const SearchInput = ({
           onFocus={() => setIsFocused(true)}
           onChange={(e) => {
             setQuery(e.target.value);
+            // Si on efface tout, on déclenche une recherche vide pour reset la vue parente si besoin
             if (e.target.value === "") onSearch("");
           }}
         />
@@ -80,7 +107,7 @@ export const SearchInput = ({
           {query && (
             <button 
               type="button" 
-              onClick={() => { setQuery(""); onSearch(""); }} 
+              onClick={() => { setQuery(""); onSearch(""); setSuggestions([]); }} 
               className="p-2 text-zinc-500 hover:text-black"
             >
               <X size={18} />
@@ -112,7 +139,7 @@ export const SearchInput = ({
           />
           <div className="absolute top-full left-0 w-full bg-white dark:bg-zinc-800 rounded-b-[24px] shadow-lg border-t-0 border border-zinc-200 dark:border-zinc-700 pb-2 overflow-hidden">
              
-             {/* CAS 1 : SUGGESTIONS AUTOCOMPLÉTION (Recherche active) */}
+             {/* CAS 1 : SUGGESTIONS AUTOCOMPLÉTION (Recherche active via BACKEND) */}
              {query.length > 0 && (
                 <div className="pt-2">
                   {suggestions.length > 0 ? (
