@@ -26,6 +26,14 @@ const nextConfig: NextConfig = {
       }
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: '/remote-api/:path*',
+        destination: 'https://poi-navigoo.pynfi.com/:path*',
+      },
+    ];
+  },
 };
 
 export default nextConfig;
