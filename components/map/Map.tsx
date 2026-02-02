@@ -17,6 +17,7 @@ interface MapProps {
   userLocation: Location | null;
   routeGeometry: any | null; 
   mapStyleType: "streets-v2" | "hybrid";
+  onMapEmptyClick: (lng: number, lat: number) => void; // Nouvelle action
 }
 
 // 1. MEMOIZATION DU PIN INDIVIDUEL (Très important pour la performance DOM)

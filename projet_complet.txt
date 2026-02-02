@@ -151,40 +151,44 @@ function AddPoiContent() {
     }));
     setIsMapOpen(false);
   };
-// app/add-poi/page.tsx (Section handleSubmit corrigée)
-
 const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation basique
     if (!formData.poi_name || !formData.poi_category) {
-        return alert("Veuillez renseigner au moins le nom et la catégorie.");
+        alert("Veuillez renseigner au moins le nom et la catégorie.");
+        return;
     }
 
     setIsLoading(true);
 
     try {
+        // Préparer les données avec keywords convertis
+        const dataToSubmit = {
+            ...formData,
+            poi_keywords: keywordsString 
+                ? keywordsString.split(',').map(k => k.trim()).filter(k => k.length > 0)
+                : [],
+            address_state_province: "Adamaoua" // Province de Ngaoundéré
+        };
+
         if (editId) {
-            // Logique de mise à jour (PUT)
-            await poiService.updatePoi(editId, formData);
+            await poiService.updatePoi(editId, dataToSubmit);
             alert("Lieu mis à jour avec succès !");
         } else {
-            // Logique de création RÉELLE (POST)
-            await poiService.createPoi(formData);
+            await poiService.createPoi(dataToSubmit);
             alert("Nouveau point d'intérêt publié sur Navigoo !");
         }
         
-        // Redirection vers la carte principale pour voir le nouveau point
         router.push("/");
         router.refresh();
     } catch (err: any) {
-        console.error("Erreur Backend:", err);
+        console.error("❌ Erreur Backend:", err);
         alert(`Erreur lors de l'enregistrement : ${err.message}`);
     } finally {
         setIsLoading(false);
     }
 };
-
   if (isLoading) return <div className="h-screen w-full bg-zinc-50 dark:bg-black flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40}/></div>;
 
   return (
@@ -1880,7 +1884,6 @@ body {
 FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\types\index.ts
 ================================================================================
 
-// Basé sur PointOfInterestDTO du Backend
 export interface OperationTimePlan {
   [day: string]: { open: string; close: string; closed?: boolean };
 }
@@ -1892,20 +1895,17 @@ export interface Location {
   longitude: number;
 }
 
-// Basé sur AppUserDTO
 export interface AppUser {
-  userId: string; // UUID
-  organizationId: string; // UUID (Obligatoire)
+  userId: string;
+  organizationId: string;
   username: string;
   email: string;
   phone?: string;
-  password?: string; // Write-only en général
+  password?: string;
   role: UserRole;
   isActive: boolean;
   createdAt?: string;
 }
-
-// types/index.ts
 
 export interface POI {
   poi_id: string; 
@@ -1928,10 +1928,12 @@ export interface POI {
   address_city: string;
   address_informal?: string;
   address_country?: string;
+  address_state_province?: string;
 
   poi_images_urls: string[]; 
+  poi_amenities?: string[];
+  poi_keywords?: string[];
   
-  // Rendons ces champs optionnels avec des valeurs par défaut pour éviter les plantages
   rating: number; 
   review_count: number;
   popularity_score: number;
@@ -1944,7 +1946,23 @@ export interface POI {
   };
 }
 
-// Routes
+export interface CreatePoiDTO {
+  poi_name: string;
+  organization_id: string;
+  created_by_user_id: string;
+  poi_type: string;
+  poi_category: string;
+  poi_description?: string;
+  latitude: number;
+  longitude: number;
+  address_city?: string;
+  address_country: string;
+  address_state_province?: string;
+  is_active: boolean;
+  poi_amenities?: string[];
+  poi_keywords?: string[];
+}
+
 export interface RouteStats {
   distance: number; 
   duration: number;
@@ -1964,33 +1982,17 @@ export interface Trip {
 
 export type MapStyle = "streets-v2" | "hybrid";
 
-export interface CreatePoiDTO {
-  poi_name: string;
-  organization_id: string;
-  created_by_user_id: string;
-  poi_type: string;     // Ex: "RESTAURANT"
-  poi_category: string; // Ex: "FOOD_DRINK"
-  poi_description?: string;
-  latitude: number;
-  longitude: number;
-  address_city?: string;
-  address_country: string;
-  is_active: boolean;
-  // Pas de listes complexes ici pour la création
-}
-
-export interface POI extends CreatePoiDTO {
-  poi_id: string;
-  poi_images_urls: string[]; 
-  poi_amenities?: string[]; 
-  rating: number;
-  review_count: number;
-  popularity_score: number;
-  poi_contacts?: { phone?: string; website?: string };
-}
-
-export type PoiCategory = "FOOD_DRINK" | "ACCOMMODATION" | "SHOPPING_RETAIL" | "TRANSPORTATION" | "HEALTH_WELLNESS" | "LEISURE_CULTURE" | "PUBLIC_ADMIN_SERVICES" | "FINANCE" | "EDUCATION" | "WORSHIP_SPIRITUALITY";
-
+export type PoiCategory = 
+  | "FOOD_DRINK" 
+  | "ACCOMMODATION" 
+  | "SHOPPING_RETAIL" 
+  | "TRANSPORTATION" 
+  | "HEALTH_WELLNESS" 
+  | "LEISURE_CULTURE" 
+  | "PUBLIC_ADMIN_SERVICES" 
+  | "FINANCE" 
+  | "EDUCATION" 
+  | "WORSHIP_SPIRITUALITY";
 
 
 ================================================================================
@@ -6606,10 +6608,9 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\data\categories.tsx
 
 import React from "react";
 import { 
-  UtensilsCrossed, BedDouble, Bus, Landmark, // Classiques
-  Soup, Coffee, Flame, Fish, Home, Beer, // Locaux 1
-  Music4, Mic2, Sandwich, Wine, Croissant, Users, Speaker, Waves, // Locaux 2
-  Church, Store, Tractor // Nouveaux (Eglise, Marché, Ferme)
+  UtensilsCrossed, BedDouble, Bus, Landmark,
+  Coffee, ShoppingBag, HeartPulse, Building2, 
+  Wallet, GraduationCap, Church, Trees
 } from "lucide-react";
 
 export interface CategoryDef {
@@ -6619,34 +6620,22 @@ export interface CategoryDef {
   color: string;
 }
 
+// IDs mis à jour pour correspondre au POI_CATEGORY du Backend Java
 export const CATEGORIES: CategoryDef[] = [
-  // --- Classiques Universels ---
-  { id: "Restaurant", label: "Restaurants", icon: <UtensilsCrossed size={16} />, color: "#FF8C00" }, // Orange Foncé
-  { id: "Hotel", label: "Hôtels", icon: <BedDouble size={16} />, color: "#1E90FF" }, // Bleu roi
-  { id: "Transport", label: "Transports", icon: <Bus size={16} />, color: "#00CED1" }, // Cyan
-  { id: "Culture", label: "Musées/Culture", icon: <Landmark size={16} />, color: "#8A2BE2" }, // Violet
-  { id: "Eglise", label: "Lieux de Culte", icon: <Church size={16} />, color: "#4B0082" }, // Indigo
-  { id: "Marche", label: "Marchés", icon: <Store size={16} />, color: "#2E8B57" }, // Vert Mer
-  { id: "Ferme", label: "Nature & Ferme", icon: <Tractor size={16} />, color: "#556B2F" }, // Olive
-
-  // --- Spécialités Camerounaises (Gastronomie & Vie) ---
-  { id: "Tourne-dos", label: "Tourne-dos", icon: <Soup size={16} />, color: "#DAA520" }, // Jaune Moutarde
-  { id: "Kiosque", label: "Kiosque BHB", icon: <Coffee size={16} />, color: "#8B4513" }, // Marron Café
-  { id: "Soya", label: "Point Soya", icon: <Flame size={16} />, color: "#FF0000" }, // Rouge Feu
-  { id: "Boukarou", label: "Boukarou", icon: <Fish size={16} />, color: "#20B2AA" }, // Vert Lagon
-  { id: "Circuit", label: "Circuit", icon: <Home size={16} />, color: "#32CD32" }, // Citron vert
-  { id: "Cave", label: "Vente Emportée", icon: <Beer size={16} />, color: "#FFD700" }, // Or (Bière)
-  { id: "Snack", label: "Snack-Bar", icon: <Music4 size={16} />, color: "#FF1493" }, // Rose Vif
-  { id: "Cabaret", label: "Cabaret Live", icon: <Mic2 size={16} />, color: "#C71585" }, // Violet Moyen
-  { id: "FastFood", label: "Chawarmerie", icon: <Sandwich size={16} />, color: "#FFA500" }, // Orange
-  { id: "Lounge", label: "Lounge/Rooftop", icon: <Wine size={16} />, color: "#800080" }, // Pourpre
-  { id: "Boulangerie", label: "Boulangerie", icon: <Croissant size={16} />, color: "#D2691E" }, // Chocolat
-  { id: "Foyer", label: "Foyer/Tontine", icon: <Users size={16} />, color: "#708090" }, // Gris Ardoise
-  { id: "Club", label: "Boîte de Nuit", icon: <Speaker size={16} />, color: "#000000" }, // Noir
-  { id: "Piscine", label: "Piscine/Détente", icon: <Waves size={16} />, color: "#00BFFF" }, // Bleu Clair
+  { id: "FOOD_DRINK", label: "Restauration", icon: <UtensilsCrossed size={16} />, color: "#FF8C00" },
+  { id: "ACCOMMODATION", label: "Hébergement", icon: <BedDouble size={16} />, color: "#1E90FF" },
+  { id: "SHOPPING_RETAIL", label: "Boutiques", icon: <ShoppingBag size={16} />, color: "#2E8B57" },
+  { id: "TRANSPORTATION", label: "Transports", icon: <Bus size={16} />, color: "#00CED1" },
+  { id: "HEALTH_WELLNESS", label: "Santé", icon: <HeartPulse size={16} />, color: "#e11d48" },
+  { id: "LEISURE_CULTURE", label: "Loisirs & Culture", icon: <Landmark size={16} />, color: "#8A2BE2" },
+  { id: "PUBLIC_ADMIN_SERVICES", label: "Services Publics", icon: <Building2 size={16} />, color: "#64748b" },
+  { id: "FINANCE", label: "Banques", icon: <Wallet size={16} />, color: "#DAA520" },
+  { id: "EDUCATION", label: "Éducation", icon: <GraduationCap size={16} />, color: "#1e293b" },
+  { id: "WORSHIP_SPIRITUALITY", label: "Spiritualité", icon: <Church size={16} />, color: "#4B0082" }
 ];
 
-export const getCategoryConfig = (id: string) => CATEGORIES.find(c => c.id === id) || CATEGORIES[0];
+export const getCategoryConfig = (id: string) => 
+    CATEGORIES.find(c => c.id === id) || { id: "OTHER", label: "Autre", icon: <Trees size={16}/>, color: "#94a3b8" };
 
 
 ================================================================================
@@ -7128,30 +7117,32 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
   }, [routeGeometry]);
 
   // --- RENDU OPTIMISÉ DES PINS ---
-  
+// --- RENDU OPTIMISÉ DES PINS ---
   const pins = useMemo(() => {
     return pois.map((poi) => {
-      // SÉCURITÉ : Vérifier que les coordonnées existent avant de tenter le rendu
+      // SÉCURITÉ : Vérifier que les coordonnées existent
       const lat = poi.location?.latitude ?? poi.latitude;
       const lng = poi.location?.longitude ?? poi.longitude;
 
-      if (lat === undefined || lng === undefined) {
-        console.warn(`POI invalide détecté (ID: ${poi.poi_id}): coordonnées manquantes.`);
+      if (lat === undefined || lng === undefined || lat === 0) {
         return null;
       }
- 
-      <MapMarker 
-        key={poi.poi_id} 
-        poi={poi} 
-        isSelected={selectedPoi?.poi_id === poi.poi_id}
-        onHover={handleHover}
-        onClick={(e) => {
-          e.originalEvent.stopPropagation();
-          onSelectPoi(poi);
-        }}
-      />
-    });
-  }, [pois, selectedPoi?.poi_id, onSelectPoi]); // Dépendances strictes
+      
+      // AJOUT DU RETURN CI-DESSOUS (C'était l'erreur)
+      return (
+        <MapMarker 
+          key={poi.poi_id} 
+          poi={poi} 
+          isSelected={selectedPoi?.poi_id === poi.poi_id}
+          onHover={handleHover}
+          onClick={(e) => {
+            e.originalEvent.stopPropagation();
+            onSelectPoi(poi);
+          }}
+        />
+      );
+    }).filter(Boolean); // On retire les nulls
+  }, [pois, selectedPoi?.poi_id, onSelectPoi]);
 
   return (
     <Map
@@ -7232,19 +7223,21 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
               transition={{ duration: 0.1 }} // Animation très rapide
               className="flex gap-2 p-0 min-w-[180px] shadow-xl rounded-lg bg-white overflow-hidden"
             >
-               {/* Petite image optimisée ou placeholder */}
-               <div className="relative w-10 h-10 shrink-0 bg-zinc-100">
-                  {hoveredPoi.poi_images_urls && hoveredPoi.poi_images_urls[0] && (
-                     <Image 
-                       src={hoveredPoi.poi_images_urls[0]} 
-                       alt="" 
-                       fill 
-                       className="object-cover" 
-                       sizes="40px" // Indication au navigateur pour charger petit format
-                       quality={50} // Qualité basse suffisante pour thumbnail
-                     />
-                  )}
-               </div>
+              <div className="relative w-10 h-10 shrink-0 bg-zinc-100 flex items-center justify-center overflow-hidden">
+                {hoveredPoi.poi_images_urls && hoveredPoi.poi_images_urls[0] && 
+                !hoveredPoi.poi_images_urls[0].includes("example.com") ? ( // Sécurité temporaire si example.com reste bloqué
+                  <Image 
+                    src={hoveredPoi.poi_images_urls[0]} 
+                    alt=""
+                    fill 
+                    className="object-cover" 
+                    sizes="40px"
+                    quality={50}
+                  />
+                ) : (
+                  <MapPinIcon size={16} className="text-zinc-300" /> // Icone par défaut si pas d'image
+                )}
+              </div>
                <div className="flex flex-col justify-center py-1 pr-2">
                  <h4 className="font-bold text-xs text-zinc-900 leading-tight line-clamp-1">{hoveredPoi.poi_name}</h4>
                  <div className="flex items-center gap-1 text-[10px] text-zinc-500 font-medium">
@@ -9408,17 +9401,17 @@ const mapPoiFromBackend = (data: any): POI => {
   
   return {
     ...data,
-    // On s'assure que location existe, soit via le backend, soit en le créant 
-    // à partir de latitude/longitude à la racine.
     location: data.location || {
       latitude: data.latitude ?? 0,
       longitude: data.longitude ?? 0
     },
-    // Sécurité : initialise les listes si le backend renvoie null
     poi_images_urls: data.poi_images_urls || [],
     poi_amenities: data.poi_amenities || [],
     poi_keywords: data.poi_keywords || [],
-    poi_contacts: data.poi_contacts || { phone: "", website: "" }
+    poi_contacts: data.poi_contacts || { phone: "", website: "" },
+    rating: data.rating ?? 0,
+    review_count: data.review_count ?? 0,
+    popularity_score: data.popularity_score ?? 0
   };
 };
 
@@ -9456,7 +9449,7 @@ class PoiService {
   }
 
   // ==========================================
-  // LECTURE (GET) - Toutes corrigées avec mapPoiFromBackend
+  // LECTURE (GET)
   // ==========================================
 
   async getAllPois(): Promise<POI[]> {
@@ -9518,39 +9511,82 @@ class PoiService {
   // ==========================================
   // ÉCRITURE (POST / PUT / DELETE)
   // ==========================================
-
+  
   async createPoi(formData: any): Promise<POI> {
     const user = authService.getSession();
-    if (!user) throw new Error("Session expirée. Veuillez vous reconnecter.");
+    if (!user) throw new Error("Session expirée.");
 
-    // Mapping pour transformer les catégories UI en Enums Backend
-    const categoryMapping: Record<string, { cat: string; type: string }> = {
-      "Restaurant": { cat: "FOOD_DRINK", type: "RESTAURANT" },
-      "Hotel": { cat: "ACCOMMODATION", type: "HOTEL" },
-      "Transport": { cat: "TRANSPORTATION", type: "GARE_ROUTIERE" },
-      "Culture": { cat: "LEISURE_CULTURE", type: "MUSEE" },
-      "Eglise": { cat: "WORSHIP_SPIRITUALITY", type: "MOSQUEE" },
-      "Marche": { cat: "SHOPPING_RETAIL", type: "MARCHE" },
-      "Ferme": { cat: "LEISURE_CULTURE", type: "SITE_TOURISTIQUE" },
-      "Soya": { cat: "FOOD_DRINK", type: "SNACK_FAST_FOOD" },
+    // MAPPING des types POI selon catégorie
+    const getValidPoiType = (category: string, type: string) => {
+        if (type && type !== "OTHER") return type; 
+        switch(category) {
+            case "FOOD_DRINK": return "RESTAURANT";
+            case "ACCOMMODATION": return "HOTEL";
+            case "WORSHIP_SPIRITUALITY": return "AUTRE_LIEU_CULTE";
+            case "LEISURE_CULTURE": return "SITE_TOURISTIQUE";
+            case "PUBLIC_ADMIN_SERVICES": return "MAIRIE";
+            default: return "SITE_TOURISTIQUE";
+        }
     };
 
-    const mapping = categoryMapping[formData.poi_category] || { cat: "FOOD_DRINK", type: "RESTAURANT" };
+    // Convertir Base64 image en URL si nécessaire
+    let imageUrl = "";
+    if (formData.poi_images_urls && formData.poi_images_urls[0]) {
+      const img = formData.poi_images_urls[0];
+      // Si c'est une vraie URL, on la garde, sinon c'est du Base64 qu'on ignore pour l'instant
+      if (img.startsWith("http")) {
+        imageUrl = img;
+      }
+    }
 
+    // Construction du payload MINIMAL VALIDE
     const payload = {
       organization_id: user.organizationId,
+      town_id: null,
       created_by_user_id: user.userId,
       poi_name: formData.poi_name,
-      poi_type: mapping.type,
-      poi_category: mapping.cat,
-      latitude: formData.location.latitude,
-      longitude: formData.location.longitude,
-      address_city: formData.address_city || "Yaoundé",
-      address_country: formData.address_country || "Cameroun",
+      poi_type: getValidPoiType(formData.poi_category, formData.poi_type),
+      poi_category: formData.poi_category || "LEISURE_CULTURE",
+      
+      // Champs obligatoires
+      poi_long_name: formData.poi_name,
+      poi_short_name: formData.poi_name.substring(0, Math.min(15, formData.poi_name.length)),
+      poi_friendly_name: formData.poi_name,
       poi_description: formData.poi_description || "",
-      is_active: true,
-      ...(formData.address_informal && { address_street_name: formData.address_informal }),
+      
+      // Logo Base64 minimal valide (image 1x1 transparente)
+      poi_logo: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", 
+
+      latitude: formData.location?.latitude ?? 3.86667,
+      longitude: formData.location?.longitude ?? 11.51667,
+      
+      // Adresse
+      address_street_number: "1",
+      address_street_name: formData.address_informal || "",
+      address_city: formData.address_city || "Yaoundé",
+      address_state_province: formData.address_state_province || "Centre",
+      address_postal_code: formData.postalCode || "0000",
+      address_country: formData.address_country || "Cameroun",
+      address_informal: formData.address_informal || "",
+      
+      website_url: formData.poi_contacts?.website || "",
+      
+      // Objets et Tableaux (DOIVENT être présents)
+      operation_time_plan: {}, 
+      poi_contacts: {
+          phone: formData.poi_contacts?.phone || "",
+          email: formData.poi_contacts?.email || ""
+      },
+      poi_images_urls: imageUrl ? [imageUrl] : [],
+      poi_amenities: formData.poi_amenities || [],
+      poi_keywords: formData.poi_keywords || [],
+      poi_type_tags: [],
+      
+      popularity_score: 0.0,
+      is_active: true
     };
+
+    console.log("🚀 Envoi au Backend (Payload Complet) :", payload);
 
     const result = await this.request<any>("/api/pois", {
       method: "POST",
@@ -10222,18 +10258,32 @@ export default eslintConfig;
 FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\next.config.ts
 ================================================================================
 
+// next.config.ts
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-    typescript: {
+  typescript: {
     ignoreBuildErrors: true,
   },
   images: {
+    // Liste des domaines autorisés pour les images externes
     remotePatterns: [
       {
         protocol: "https",
         hostname: "images.unsplash.com",
       },
+      {
+        protocol: "https",
+        hostname: "example.com", // Ajouté pour corriger l'erreur actuelle
+      },
+      {
+        protocol: "https", // Cas où le backend héberge lui-même des images
+        hostname: "**.pynfi.com", 
+      },
+      {
+        protocol: "http",
+        hostname: "localhost",
+      }
     ],
   },
 };

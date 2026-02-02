@@ -1,10 +1,13 @@
+"use client";
+
 import { SearchInput } from "./SearchInput";
 import { CategoryBar } from "./CategoryBar";
-import { Grip, UserCircle2, LogIn } from "lucide-react";
-import { POI } from "@/types";
+import { Grip, UserCircle2, LogIn, LayoutDashboard } from "lucide-react";
+import { POI, AppUser } from "@/types";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import clsx from "clsx";
+import { authService } from "@/services/authService";
+import { clsx } from "clsx";
 
 interface TopLayoutProps {
   onToggleSidebar: () => void;
@@ -18,8 +21,8 @@ interface TopLayoutProps {
   recentPois: POI[];
 }
 
-export const TopLayout = ({ 
-  onToggleSidebar, 
+export const TopLayout = ({
+  onToggleSidebar,
   allPois,
   selectedCategory,
   onSelectCategory,
@@ -27,26 +30,31 @@ export const TopLayout = ({
   onLocateMe,
   onSelectResult,
   recentSearches,
-  recentPois
+  recentPois,
 }: TopLayoutProps) => {
-
   const router = useRouter();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<AppUser | null>(null);
 
-  // Vérification basique de l'authentification (à adapter avec ton vrai context si besoin)
   useEffect(() => {
-    // Exemple : on vérifie si un token ou des infos user existent dans le localStorage
-    const user = localStorage.getItem("navigoo_user"); 
-    // OU pour simuler : const user = "ok";
-    setIsAuthenticated(!!user);
+    // Récupération réelle de la session via le service
+    const session = authService.getSession();
+    setUser(session);
   }, []);
 
+  const handleProfileClick = () => {
+    if (user?.role === "SUPER_ADMIN") {
+      router.push("/admin");
+    } else {
+      router.push("/profile");
+    }
+  };
+
   return (
-    <div className="absolute top-0 ml-18 left-0 w-full z-40 bg-transparent p-2 pointer-events-none flex items-start gap-2">
+    <div className="absolute top-0 left-0 w-full z-40 p-2 md:p-4 pointer-events-none flex flex-col md:flex-row items-start gap-3">
       
-      {/* Bloc Recherche */}
-      <div className="pointer-events-auto min-w-[340px] max-w-[420px] shrink-0">
-        <SearchInput 
+      {/* 1. BLOC RECHERCHE - Largeur fixe sur PC, Full sur mobile */}
+      <div className="ml-16 pointer-events-auto w-full md:w-[380px] lg:w-[320px] shrink-0">
+        <SearchInput
           onMenuClick={onToggleSidebar}
           pois={allPois}
           onSearch={onSearch}
@@ -54,57 +62,80 @@ export const TopLayout = ({
           onLocateMe={onLocateMe}
           recentSearches={recentSearches}
           recentPois={recentPois}
+          className="shadow-xl"
         />
       </div>
 
-      {/* 2. Bloc Catégories + Section Auth */}
-      <div className="flex-1 flex items-center gap-2 min-w-0 pointer-events-auto pl-2">
-        <div className="flex-1 min-w-0">
-           <CategoryBar 
-             selected={selectedCategory} 
-             onSelect={onSelectCategory} 
-           />
+      {/* 2. BLOC CATÉGORIES ET AUTH - S'adapte au reste de l'espace */}
+      <div className="flex-1 flex items-center justify-between gap-2 w-full pointer-events-auto overflow-hidden">
+        
+        {/* Barre de Catégories : Visible principalement sur Desktop/Tablet */}
+        <div className="flex-1 hidden sm:block min-w-0">
+          <CategoryBar
+            selected={selectedCategory}
+            onSelect={onSelectCategory}
+          />
         </div>
 
-        {/* --- SECTION AUTHENTIFICATION & PROFIL --- */}
-        <div className="flex items-center gap-2 pl-2 pr-2">
-           
-           {isAuthenticated ? (
-             /* === CAS CONNECTÉ === */
-             <>
-               <button className="p-2.5 rounded-full bg-white shadow-sm border border-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:border-zinc-700 hidden sm:block transition-colors">
-                 <Grip size={20} className="text-zinc-600" />
-               </button>
-               
-               <div 
-                 onClick={() => {
-                    // Optionnel: Logout ou aller vers profil
-                    // localStorage.removeItem("navigoo_user");
-                    // window.location.reload();
-                 }}
-                 className="relative cursor-pointer ml-1 w-10 h-10 rounded-full border-2 border-white bg-primary/10 flex items-center justify-center shadow-md hover:scale-105 transition-transform"
-               >
-                  {/* Tu pourras remplacer UserCircle2 par l'image de l'user s'il en a une */}
-                  <UserCircle2 size={42} className="text-zinc-600 dark:text-zinc-300" />
-               </div>
-             </>
-           ) : (
-             /* === CAS DÉCONNECTÉ (Bouton Animé) === */
-             <button
-                onClick={() => router.push("/signin")}
-                className={clsx(
-                  "flex items-center gap-2 px-5 py-2.5 rounded-full",
-                  "bg-primary text-white font-bold text-sm",
-                  "shadow-lg shadow-primary/30 border border-primary/50",
-                  "transform hover:scale-105 active:scale-95 transition-all duration-300",
-                  "animate-[pulse_3s_ease-in-out_infinite]" // Petite animation pulse subtile
-                )}
-             >
-                <LogIn size={18} className="stroke-[3]" />
-                <span className="whitespace-nowrap hidden sm:inline">Se connecter</span>
-             </button>
-           )}
+        {/* SECTION UTILISATEUR / ACTIONS */}
+        <div className="flex items-center gap-2 ml-auto pr-1 md:pr-0">
+          
+          {user ? (
+            /* --- CAS CONNECTÉ --- */
+            <div className="flex items-center gap-2 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md p-1.5 rounded-full border border-zinc-200 dark:border-zinc-800 shadow-lg">
+              
+              {/* Bouton Raccourci Admin (Optionnel) */}
+              {user.role === "SUPER_ADMIN" && (
+                <button 
+                  onClick={() => router.push("/admin")}
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-600 dark:text-zinc-400 hidden lg:block"
+                  title="Panel Admin"
+                >
+                  <LayoutDashboard size={20} />
+                </button>
+              )}
 
+              {/* Grip / Menu Applications (Style Google) */}
+              <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-600 dark:text-zinc-400 hidden md:block">
+                <Grip size={20} />
+              </button>
+
+              {/* Avatar et Lien Profil */}
+              <button
+                onClick={handleProfileClick}
+                className={clsx(
+                  "relative group flex items-center justify-center",
+                  "w-9 h-9 rounded-full overflow-hidden transition-all duration-300",
+                  "border-2 border-primary/20 hover:border-primary active:scale-95 shadow-inner"
+                )}
+              >
+                <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
+                  <UserCircle2 size={38} className="text-primary/70 group-hover:scale-110 transition-transform" />
+                </div>
+                {/* On peut ajouter l'initiale de l'utilisateur par dessus si pas de photo */}
+                <span className="relative z-10 text-[10px] font-black text-primary pointer-events-none">
+                   {user.username.charAt(0).toUpperCase()}
+                </span>
+              </button>
+            </div>
+          ) : (
+            /* --- CAS DÉCONNECTÉ --- */
+            <button
+              onClick={() => router.push("/signin")}
+              className={clsx(
+                "group relative flex items-center gap-2 px-6 py-2.5 rounded-full overflow-hidden",
+                "bg-primary text-white font-bold text-sm",
+                "shadow-lg shadow-primary/30",
+                "transition-all duration-300 hover:shadow-primary/50 hover:scale-[1.03] active:scale-95"
+              )}
+            >
+              {/* Effet Brillance / Hover */}
+              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+              
+              <LogIn size={18} className="stroke-[3]" />
+              <span className="whitespace-nowrap">Connexion</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

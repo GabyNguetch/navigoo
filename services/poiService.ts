@@ -239,6 +239,21 @@ class PoiService {
   async updatePopularityScore(poiId: string, score: number): Promise<void> {
     return this.request<void>(`/api/pois/${poiId}/popularity?score=${score}`, { method: "PATCH" });
   }
+
+  // Ajoute cette méthode pour une recherche globale
+  async searchGlobal(query: string): Promise<POI[]> {
+    // Cette méthode tente de chercher par nom, puis par ville, puis fusionne les tags
+    // Idéalement, le backend devrait avoir un endpoint /search?q=...
+    const [byName, byCity] = await Promise.all([
+      this.searchPoisByName(query),
+      this.getPoisByCity(query)
+    ]);
+    
+    // Fusion unique par ID
+    const combined = [...byName, ...byCity];
+    return Array.from(new Map(combined.map(item => [item.poi_id, item])).values());
+  }
+
 }
 
 export const poiService = new PoiService();

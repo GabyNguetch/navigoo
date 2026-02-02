@@ -15,6 +15,7 @@ import { Settings as SettingsIcon, Check, X, AlertTriangle } from "lucide-react"
 import { Loader } from "@/components/ui/Loader";
 import { MobileNavBar } from "@/components/navigation/MobileNavbar";
 import { authService } from "@/services/authService";
+import { reverseGeocode } from "@/services/geocodingService";
 
 // Import Map Dynamique sans SSR
 const MapComponent = dynamic(() => import("@/components/map/Map"), {
@@ -201,6 +202,20 @@ export default function Home() {
     setIsMainSidebarOpen(false);   
   };
 
+  const handleMapClick = async (lng: number, lat: number) => {
+    // Si on a cliqué sur le vide (géré par le composant Map qui appelle handleSelectPoi(null))
+    setIsRouteLoading(true); // On affiche un petit loader visuel
+    const externalPoi = await reverseGeocode(lat, lng);
+    
+    if (externalPoi) {
+        setPanelState({ 
+            type: "details", 
+            data: externalPoi as POI 
+        });
+    }
+    setIsRouteLoading(false);
+};
+
   // Filtrage Local (Client-Side) pour réactivité instantanée
   const filteredPois = useMemo(() => {
     return allPois.filter((poi) => {
@@ -342,6 +357,7 @@ export default function Home() {
           onSelectPoi={handleSelectPoi}
           routeGeometry={routeGeometry}
           mapStyleType={mapStyle} 
+          onMapEmptyClick={handleMapClick} // La prop demandée
         />
       </div>
 
