@@ -25,8 +25,15 @@ export default function SignInPage() {
     setIsLoading(true);
     setError(null);
     try {
-      await authService.login(formData);
-      router.push("/");
+      const user = await authService.login(formData);
+      
+      // Redirection intelligente selon le rôle
+      if (user.role === "SUPER_ADMIN") {
+        router.push("/admin");
+      } else {
+        router.push("/profile");
+      }
+      
     } catch (err: any) {
       setError(typeof err === 'string' ? err : "Email ou mot de passe incorrect");
     } finally {

@@ -70,6 +70,21 @@ class AuthService {
   }
 
   async login(credentials: { email: string, password: string }): Promise<AppUser> {
+
+    // --- DÉBUT COMPTE STATIQUE ADMIN ---
+    if (credentials.email === "admin@navigoo.com" && credentials.password === "Admin@Navigoo2026") {
+        const adminUser: AppUser = {
+            userId: "00000000-0000-0000-0000-000000000000",
+            organizationId: "83ce5943-d920-454f-908d-3248a73aafdf", // ID par défaut de votre système
+            username: "Administrateur",
+            email: "admin@navigoo.com",
+            role: "SUPER_ADMIN", // Très important pour le routage
+            isActive: true,
+            createdAt: new Date().toISOString()
+        };
+        this.saveSession(adminUser);
+        return adminUser;
+    }
     const checkRes = await fetch(`${API_BASE_URL}/api/users/check-email/${encodeURIComponent(credentials.email)}`);
     const exists = await checkRes.json();
 
