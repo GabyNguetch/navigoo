@@ -127,30 +127,32 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
   }, [routeGeometry]);
 
   // --- RENDU OPTIMISÉ DES PINS ---
-  
+// --- RENDU OPTIMISÉ DES PINS ---
   const pins = useMemo(() => {
     return pois.map((poi) => {
-      // SÉCURITÉ : Vérifier que les coordonnées existent avant de tenter le rendu
+      // SÉCURITÉ : Vérifier que les coordonnées existent
       const lat = poi.location?.latitude ?? poi.latitude;
       const lng = poi.location?.longitude ?? poi.longitude;
 
-      if (lat === undefined || lng === undefined) {
-        console.warn(`POI invalide détecté (ID: ${poi.poi_id}): coordonnées manquantes.`);
+      if (lat === undefined || lng === undefined || lat === 0) {
         return null;
       }
- 
-      <MapMarker 
-        key={poi.poi_id} 
-        poi={poi} 
-        isSelected={selectedPoi?.poi_id === poi.poi_id}
-        onHover={handleHover}
-        onClick={(e) => {
-          e.originalEvent.stopPropagation();
-          onSelectPoi(poi);
-        }}
-      />
-    });
-  }, [pois, selectedPoi?.poi_id, onSelectPoi]); // Dépendances strictes
+      
+      // AJOUT DU RETURN CI-DESSOUS (C'était l'erreur)
+      return (
+        <MapMarker 
+          key={poi.poi_id} 
+          poi={poi} 
+          isSelected={selectedPoi?.poi_id === poi.poi_id}
+          onHover={handleHover}
+          onClick={(e) => {
+            e.originalEvent.stopPropagation();
+            onSelectPoi(poi);
+          }}
+        />
+      );
+    }).filter(Boolean); // On retire les nulls
+  }, [pois, selectedPoi?.poi_id, onSelectPoi]);
 
   return (
     <Map
@@ -231,19 +233,21 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
               transition={{ duration: 0.1 }} // Animation très rapide
               className="flex gap-2 p-0 min-w-[180px] shadow-xl rounded-lg bg-white overflow-hidden"
             >
-               {/* Petite image optimisée ou placeholder */}
-               <div className="relative w-10 h-10 shrink-0 bg-zinc-100">
-                  {hoveredPoi.poi_images_urls && hoveredPoi.poi_images_urls[0] && (
-                     <Image 
-                       src={hoveredPoi.poi_images_urls[0]} 
-                       alt="" 
-                       fill 
-                       className="object-cover" 
-                       sizes="40px" // Indication au navigateur pour charger petit format
-                       quality={50} // Qualité basse suffisante pour thumbnail
-                     />
-                  )}
-               </div>
+              <div className="relative w-10 h-10 shrink-0 bg-zinc-100 flex items-center justify-center overflow-hidden">
+                {hoveredPoi.poi_images_urls && hoveredPoi.poi_images_urls[0] && 
+                !hoveredPoi.poi_images_urls[0].includes("example.com") ? ( // Sécurité temporaire si example.com reste bloqué
+                  <Image 
+                    src={hoveredPoi.poi_images_urls[0]} 
+                    alt=""
+                    fill 
+                    className="object-cover" 
+                    sizes="40px"
+                    quality={50}
+                  />
+                ) : (
+                  <MapPinIcon size={16} className="text-zinc-300" /> // Icone par défaut si pas d'image
+                )}
+              </div>
                <div className="flex flex-col justify-center py-1 pr-2">
                  <h4 className="font-bold text-xs text-zinc-900 leading-tight line-clamp-1">{hoveredPoi.poi_name}</h4>
                  <div className="flex items-center gap-1 text-[10px] text-zinc-500 font-medium">

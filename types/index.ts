@@ -1,4 +1,3 @@
-// Basé sur PointOfInterestDTO du Backend
 export interface OperationTimePlan {
   [day: string]: { open: string; close: string; closed?: boolean };
 }
@@ -10,20 +9,17 @@ export interface Location {
   longitude: number;
 }
 
-// Basé sur AppUserDTO
 export interface AppUser {
-  userId: string; // UUID
-  organizationId: string; // UUID (Obligatoire)
+  userId: string;
+  organizationId: string;
   username: string;
   email: string;
   phone?: string;
-  password?: string; // Write-only en général
+  password?: string;
   role: UserRole;
   isActive: boolean;
   createdAt?: string;
 }
-
-// types/index.ts
 
 export interface POI {
   poi_id: string; 
@@ -46,10 +42,12 @@ export interface POI {
   address_city: string;
   address_informal?: string;
   address_country?: string;
+  address_state_province?: string;
 
   poi_images_urls: string[]; 
+  poi_amenities?: string[];
+  poi_keywords?: string[];
   
-  // Rendons ces champs optionnels avec des valeurs par défaut pour éviter les plantages
   rating: number; 
   review_count: number;
   popularity_score: number;
@@ -62,7 +60,23 @@ export interface POI {
   };
 }
 
-// Routes
+export interface CreatePoiDTO {
+  poi_name: string;
+  organization_id: string;
+  created_by_user_id: string;
+  poi_type: string;
+  poi_category: string;
+  poi_description?: string;
+  latitude: number;
+  longitude: number;
+  address_city?: string;
+  address_country: string;
+  address_state_province?: string;
+  is_active: boolean;
+  poi_amenities?: string[];
+  poi_keywords?: string[];
+}
+
 export interface RouteStats {
   distance: number; 
   duration: number;
@@ -82,29 +96,14 @@ export interface Trip {
 
 export type MapStyle = "streets-v2" | "hybrid";
 
-export interface CreatePoiDTO {
-  poi_name: string;
-  organization_id: string;
-  created_by_user_id: string;
-  poi_type: string;     // Ex: "RESTAURANT"
-  poi_category: string; // Ex: "FOOD_DRINK"
-  poi_description?: string;
-  latitude: number;
-  longitude: number;
-  address_city?: string;
-  address_country: string;
-  is_active: boolean;
-  // Pas de listes complexes ici pour la création
-}
-
-export interface POI extends CreatePoiDTO {
-  poi_id: string;
-  poi_images_urls: string[]; 
-  poi_amenities?: string[]; 
-  rating: number;
-  review_count: number;
-  popularity_score: number;
-  poi_contacts?: { phone?: string; website?: string };
-}
-
-export type PoiCategory = "FOOD_DRINK" | "ACCOMMODATION" | "SHOPPING_RETAIL" | "TRANSPORTATION" | "HEALTH_WELLNESS" | "LEISURE_CULTURE" | "PUBLIC_ADMIN_SERVICES" | "FINANCE" | "EDUCATION" | "WORSHIP_SPIRITUALITY";
+export type PoiCategory = 
+  | "FOOD_DRINK" 
+  | "ACCOMMODATION" 
+  | "SHOPPING_RETAIL" 
+  | "TRANSPORTATION" 
+  | "HEALTH_WELLNESS" 
+  | "LEISURE_CULTURE" 
+  | "PUBLIC_ADMIN_SERVICES" 
+  | "FINANCE" 
+  | "EDUCATION" 
+  | "WORSHIP_SPIRITUALITY";

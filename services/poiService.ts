@@ -12,17 +12,17 @@ const mapPoiFromBackend = (data: any): POI => {
   
   return {
     ...data,
-    // On s'assure que location existe, soit via le backend, soit en le créant 
-    // à partir de latitude/longitude à la racine.
     location: data.location || {
       latitude: data.latitude ?? 0,
       longitude: data.longitude ?? 0
     },
-    // Sécurité : initialise les listes si le backend renvoie null
     poi_images_urls: data.poi_images_urls || [],
     poi_amenities: data.poi_amenities || [],
     poi_keywords: data.poi_keywords || [],
-    poi_contacts: data.poi_contacts || { phone: "", website: "" }
+    poi_contacts: data.poi_contacts || { phone: "", website: "" },
+    rating: data.rating ?? 0,
+    review_count: data.review_count ?? 0,
+    popularity_score: data.popularity_score ?? 0
   };
 };
 
@@ -60,7 +60,7 @@ class PoiService {
   }
 
   // ==========================================
-  // LECTURE (GET) - Toutes corrigées avec mapPoiFromBackend
+  // LECTURE (GET)
   // ==========================================
 
   async getAllPois(): Promise<POI[]> {
@@ -122,39 +122,82 @@ class PoiService {
   // ==========================================
   // ÉCRITURE (POST / PUT / DELETE)
   // ==========================================
-
+  
   async createPoi(formData: any): Promise<POI> {
     const user = authService.getSession();
-    if (!user) throw new Error("Session expirée. Veuillez vous reconnecter.");
+    if (!user) throw new Error("Session expirée.");
 
-    // Mapping pour transformer les catégories UI en Enums Backend
-    const categoryMapping: Record<string, { cat: string; type: string }> = {
-      "Restaurant": { cat: "FOOD_DRINK", type: "RESTAURANT" },
-      "Hotel": { cat: "ACCOMMODATION", type: "HOTEL" },
-      "Transport": { cat: "TRANSPORTATION", type: "GARE_ROUTIERE" },
-      "Culture": { cat: "LEISURE_CULTURE", type: "MUSEE" },
-      "Eglise": { cat: "WORSHIP_SPIRITUALITY", type: "MOSQUEE" },
-      "Marche": { cat: "SHOPPING_RETAIL", type: "MARCHE" },
-      "Ferme": { cat: "LEISURE_CULTURE", type: "SITE_TOURISTIQUE" },
-      "Soya": { cat: "FOOD_DRINK", type: "SNACK_FAST_FOOD" },
+    // MAPPING des types POI selon catégorie
+    const getValidPoiType = (category: string, type: string) => {
+        if (type && type !== "OTHER") return type; 
+        switch(category) {
+            case "FOOD_DRINK": return "RESTAURANT";
+            case "ACCOMMODATION": return "HOTEL";
+            case "WORSHIP_SPIRITUALITY": return "AUTRE_LIEU_CULTE";
+            case "LEISURE_CULTURE": return "SITE_TOURISTIQUE";
+            case "PUBLIC_ADMIN_SERVICES": return "MAIRIE";
+            default: return "SITE_TOURISTIQUE";
+        }
     };
 
-    const mapping = categoryMapping[formData.poi_category] || { cat: "FOOD_DRINK", type: "RESTAURANT" };
+    // Convertir Base64 image en URL si nécessaire
+    let imageUrl = "";
+    if (formData.poi_images_urls && formData.poi_images_urls[0]) {
+      const img = formData.poi_images_urls[0];
+      // Si c'est une vraie URL, on la garde, sinon c'est du Base64 qu'on ignore pour l'instant
+      if (img.startsWith("http")) {
+        imageUrl = img;
+      }
+    }
 
+    // Construction du payload MINIMAL VALIDE
     const payload = {
       organization_id: user.organizationId,
+      town_id: null,
       created_by_user_id: user.userId,
       poi_name: formData.poi_name,
-      poi_type: mapping.type,
-      poi_category: mapping.cat,
-      latitude: formData.location.latitude,
-      longitude: formData.location.longitude,
-      address_city: formData.address_city || "Yaoundé",
-      address_country: formData.address_country || "Cameroun",
+      poi_type: getValidPoiType(formData.poi_category, formData.poi_type),
+      poi_category: formData.poi_category || "LEISURE_CULTURE",
+      
+      // Champs obligatoires
+      poi_long_name: formData.poi_name,
+      poi_short_name: formData.poi_name.substring(0, Math.min(15, formData.poi_name.length)),
+      poi_friendly_name: formData.poi_name,
       poi_description: formData.poi_description || "",
-      is_active: true,
-      ...(formData.address_informal && { address_street_name: formData.address_informal }),
+      
+      // Logo Base64 minimal valide (image 1x1 transparente)
+      poi_logo: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", 
+
+      latitude: formData.location?.latitude ?? 3.86667,
+      longitude: formData.location?.longitude ?? 11.51667,
+      
+      // Adresse
+      address_street_number: "1",
+      address_street_name: formData.address_informal || "",
+      address_city: formData.address_city || "Yaoundé",
+      address_state_province: formData.address_state_province || "Centre",
+      address_postal_code: formData.postalCode || "0000",
+      address_country: formData.address_country || "Cameroun",
+      address_informal: formData.address_informal || "",
+      
+      website_url: formData.poi_contacts?.website || "",
+      
+      // Objets et Tableaux (DOIVENT être présents)
+      operation_time_plan: {}, 
+      poi_contacts: {
+          phone: formData.poi_contacts?.phone || "",
+          email: formData.poi_contacts?.email || ""
+      },
+      poi_images_urls: imageUrl ? [imageUrl] : [],
+      poi_amenities: formData.poi_amenities || [],
+      poi_keywords: formData.poi_keywords || [],
+      poi_type_tags: [],
+      
+      popularity_score: 0.0,
+      is_active: true
     };
+
+    console.log("🚀 Envoi au Backend (Payload Complet) :", payload);
 
     const result = await this.request<any>("/api/pois", {
       method: "POST",

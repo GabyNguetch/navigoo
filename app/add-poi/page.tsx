@@ -147,40 +147,44 @@ function AddPoiContent() {
     }));
     setIsMapOpen(false);
   };
-// app/add-poi/page.tsx (Section handleSubmit corrigée)
-
 const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation basique
     if (!formData.poi_name || !formData.poi_category) {
-        return alert("Veuillez renseigner au moins le nom et la catégorie.");
+        alert("Veuillez renseigner au moins le nom et la catégorie.");
+        return;
     }
 
     setIsLoading(true);
 
     try {
+        // Préparer les données avec keywords convertis
+        const dataToSubmit = {
+            ...formData,
+            poi_keywords: keywordsString 
+                ? keywordsString.split(',').map(k => k.trim()).filter(k => k.length > 0)
+                : [],
+            address_state_province: "Adamaoua" // Province de Ngaoundéré
+        };
+
         if (editId) {
-            // Logique de mise à jour (PUT)
-            await poiService.updatePoi(editId, formData);
+            await poiService.updatePoi(editId, dataToSubmit);
             alert("Lieu mis à jour avec succès !");
         } else {
-            // Logique de création RÉELLE (POST)
-            await poiService.createPoi(formData);
+            await poiService.createPoi(dataToSubmit);
             alert("Nouveau point d'intérêt publié sur Navigoo !");
         }
         
-        // Redirection vers la carte principale pour voir le nouveau point
         router.push("/");
         router.refresh();
     } catch (err: any) {
-        console.error("Erreur Backend:", err);
+        console.error("❌ Erreur Backend:", err);
         alert(`Erreur lors de l'enregistrement : ${err.message}`);
     } finally {
         setIsLoading(false);
     }
 };
-
   if (isLoading) return <div className="h-screen w-full bg-zinc-50 dark:bg-black flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40}/></div>;
 
   return (
