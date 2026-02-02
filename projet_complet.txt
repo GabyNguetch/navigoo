@@ -8430,6 +8430,8 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\components\sidebar\POIDetailsSidebar
 ================================================================================
 
 // components/sidebar/POIDetailsSidebar.tsx
+"use client";
+
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
@@ -8439,8 +8441,10 @@ import { getCategoryConfig } from "@/data/categories";
 import { useRouter } from "next/navigation";
 import { useUserData } from "@/hooks/useUserData";
 import { Button } from "@/components/ui/Button";
-import { ReviewsSection } from "@/components/reviews/ReviewsSection";
+import { ReviewsSection } from "../reviews/ReviewsSection";
 import { reviewService } from "@/services/reviewService";
+import { BlogModal } from "@/components/content/BlogModal";
+import { PodcastModal } from "@/components/content/PodcastModal";
 
 interface PoiDetailsProps {
   poi: POI;
@@ -8455,6 +8459,10 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
   const { myPois } = useUserData();
   
   const [stats, setStats] = useState<{ averageRating: number; reviewCount: number } | null>(null);
+  
+  // États pour les modals de contenu
+  const [isBlogModalOpen, setIsBlogModalOpen] = useState(false);
+  const [isPodcastModalOpen, setIsPodcastModalOpen] = useState(false);
 
   // Vérifier si le POI appartient à l'utilisateur
   const isOwner = myPois.some(p => p.poi_id === poi.poi_id);
@@ -8481,10 +8489,6 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
     router.push(`/add-poi?id=${poi.poi_id}`);
   };
 
-  const handleCreateContent = (type: 'blog' | 'podcast') => {
-    router.push(`/add-content?type=${type}&poiId=${poi.poi_id}`);
-  };
-
   const handleReviewSubmitted = async () => {
     // Recharger les stats après soumission d'un avis
     try {
@@ -8496,139 +8500,160 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
   };
 
   return (
-    <motion.div
-      initial={{ x: "-100%" }}
-      animate={{ x: isOpen ? "0%" : "-100%" }}
-      exit={{ x: "-100%" }}
-      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className="fixed top-0 left-0 md:left-[72px] h-full w-full md:w-[420px] bg-white dark:bg-zinc-900 shadow-2xl z-[55] flex flex-col border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent"
-    >
-      {/* HEADER IMAGE HERO */}
-      <div className="relative w-full h-56 shrink-0 bg-zinc-200">
-        {poi.poi_images_urls && poi.poi_images_urls[0] ? (
-            <Image src={poi.poi_images_urls[0]} alt={poi.poi_name} fill className="object-cover"/>
-        ) : (
-            <div className="w-full h-full flex items-center justify-center text-zinc-400 bg-zinc-100">Aucune image</div>
-        )}
-        
-        {/* Close Button */}
-        <button onClick={onClose} className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-md transition-colors z-20">
-          <X size={20} />
-        </button>
+    <>
+      <motion.div
+        initial={{ x: "-100%" }}
+        animate={{ x: isOpen ? "0%" : "-100%" }}
+        exit={{ x: "-100%" }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        className="fixed top-0 left-0 md:left-[72px] h-full w-full md:w-[420px] bg-white dark:bg-zinc-900 shadow-2xl z-[55] flex flex-col border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent"
+      >
+        {/* HEADER IMAGE HERO */}
+        <div className="relative w-full h-56 shrink-0 bg-zinc-200">
+          {poi.poi_images_urls && poi.poi_images_urls[0] ? (
+              <Image src={poi.poi_images_urls[0]} alt={poi.poi_name} fill className="object-cover"/>
+          ) : (
+              <div className="w-full h-full flex items-center justify-center text-zinc-400 bg-zinc-100">Aucune image</div>
+          )}
+          
+          {/* Close Button */}
+          <button onClick={onClose} className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full backdrop-blur-md transition-colors z-20">
+            <X size={20} />
+          </button>
 
-        {/* OWNER EDIT BUTTON */}
-        {isOwner && (
-            <button 
-                onClick={handleEdit}
-                className="absolute bottom-4 right-4 bg-white text-black px-4 py-2 rounded-full shadow-lg font-bold text-sm flex items-center gap-2 hover:scale-105 transition-transform"
-            >
-                <Edit size={16} /> Modifier
-            </button>
-        )}
-      </div>
-
-      {/* CONTENU */}
-      <div className="p-6 space-y-6 pb-20">
-        
-        {/* TITRE & STATS */}
-        <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 leading-tight">{poi.poi_name}</h1>
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-            {stats ? (
-              <>
-                <span className="font-black text-sm bg-green-600 text-white px-2 py-0.5 rounded">{stats.averageRating.toFixed(1)}</span>
-                <div className="flex text-yellow-500">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star key={star} size={14} fill={star <= Math.round(stats.averageRating) ? "currentColor" : "none"} />
-                  ))}
-                </div>
-                <span className="text-zinc-500 text-sm underline">({stats.reviewCount} avis)</span>
-              </>
-            ) : (
-              <>
-                <span className="font-black text-sm bg-zinc-600 text-white px-2 py-0.5 rounded">{poi.rating || "N/A"}</span>
-                <span className="text-zinc-500 text-sm">Chargement...</span>
-              </>
-            )}
-            <span className="text-zinc-300">•</span>
-            <span className="text-primary text-sm font-semibold flex items-center gap-1">
-                {categoryConfig.icon} {categoryConfig.label}
-            </span>
-          </div>
+          {/* OWNER EDIT BUTTON */}
+          {isOwner && (
+              <button 
+                  onClick={handleEdit}
+                  className="absolute bottom-4 right-4 bg-white text-black px-4 py-2 rounded-full shadow-lg font-bold text-sm flex items-center gap-2 hover:scale-105 transition-transform"
+              >
+                  <Edit size={16} /> Modifier
+              </button>
+          )}
         </div>
 
-        {/* ACTIONS CIRCULAIRES */}
-        <div className="flex justify-between px-2 py-2">
-          <ActionButton icon={<Navigation size={22} className="-rotate-45 ml-1 mt-1" />} label="Y aller" active onClick={onOpenDirections} />
-          <ActionButton icon={<Bookmark size={22} />} label="Sauver" onClick={() => {}}/>
-          <ActionButton icon={<Share2 size={22} />} label="Partager" onClick={() => {}}/>
-          <ActionButton icon={<Globe size={22} />} label="Site web" onClick={() => {}} disabled={!poi.poi_contacts?.website} />
-        </div>
-
-        <div className="h-px bg-zinc-100 dark:bg-zinc-800 w-full" />
-
-        {/* DESCRIPTION */}
-        <div className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
-          <p>{poi.poi_description || "Aucune description disponible."}</p>
-        </div>
-
-        {/* AMENITIES */}
-        {poi.poi_amenities && poi.poi_amenities.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-                {poi.poi_amenities.map(am => (
-                    <span key={am} className="text-xs px-3 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-full font-medium border border-zinc-200 dark:border-zinc-700">
-                        {am}
-                    </span>
-                ))}
+        {/* CONTENU */}
+        <div className="p-6 space-y-6 pb-20">
+          
+          {/* TITRE & STATS */}
+          <div>
+            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 leading-tight">{poi.poi_name}</h1>
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              {stats ? (
+                <>
+                  <span className="font-black text-sm bg-green-600 text-white px-2 py-0.5 rounded">{stats.averageRating.toFixed(1)}</span>
+                  <div className="flex text-yellow-500">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star key={star} size={14} fill={star <= Math.round(stats.averageRating) ? "currentColor" : "none"} />
+                    ))}
+                  </div>
+                  <span className="text-zinc-500 text-sm underline">({stats.reviewCount} avis)</span>
+                </>
+              ) : (
+                <>
+                  <span className="font-black text-sm bg-zinc-600 text-white px-2 py-0.5 rounded">{poi.rating || "N/A"}</span>
+                  <span className="text-zinc-500 text-sm">Chargement...</span>
+                </>
+              )}
+              <span className="text-zinc-300">•</span>
+              <span className="text-primary text-sm font-semibold flex items-center gap-1">
+                  {categoryConfig.icon} {categoryConfig.label}
+              </span>
             </div>
-        )}
-
-        <div className="h-px bg-zinc-100 dark:bg-zinc-800 w-full" />
-
-        {/* INFO PRATIQUES */}
-        <div className="space-y-4">
-          <InfoRow icon={<MapPin className="text-zinc-400" size={20} />} text={poi.address_informal || `${poi.address_city}, ${poi.address_country || "Cameroun"}`} />
-          <InfoRow icon={<Clock className="text-zinc-400" size={20} />} text="Ouvert maintenant (ferme à 22h)" isActive />
-          <InfoRow icon={<Smartphone className="text-zinc-400" size={20} />} text={poi.poi_contacts?.phone || "Non renseigné"} />
-        </div>
-
-        <div className="h-px bg-zinc-100 dark:bg-zinc-800 w-full" />
-
-        {/* CRÉER DU CONTENU (Blog/Podcast) */}
-        <div>
-          <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
-            📝 Créer du contenu
-          </h3>
-          <div className="flex gap-3">
-            <Button 
-              onClick={() => handleCreateContent('blog')}
-              variant="outline"
-              size="sm"
-              className="flex-1 gap-2"
-            >
-              <FileText size={16}/> Blog
-            </Button>
-            <Button 
-              onClick={() => handleCreateContent('podcast')}
-              variant="outline"
-              size="sm"
-              className="flex-1 gap-2"
-            >
-              <Mic size={16}/> Podcast
-            </Button>
           </div>
+
+          {/* ACTIONS CIRCULAIRES */}
+          <div className="flex justify-between px-2 py-2">
+            <ActionButton icon={<Navigation size={22} className="-rotate-45 ml-1 mt-1" />} label="Y aller" active onClick={onOpenDirections} />
+            <ActionButton icon={<Bookmark size={22} />} label="Sauver" onClick={() => {}}/>
+            <ActionButton icon={<Share2 size={22} />} label="Partager" onClick={() => {}}/>
+            <ActionButton icon={<Globe size={22} />} label="Site web" onClick={() => {}} disabled={!poi.poi_contacts?.website} />
+          </div>
+
+          <div className="h-px bg-zinc-100 dark:bg-zinc-800 w-full" />
+
+          {/* DESCRIPTION */}
+          <div className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
+            <p>{poi.poi_description || "Aucune description disponible."}</p>
+          </div>
+
+          {/* AMENITIES */}
+          {poi.poi_amenities && poi.poi_amenities.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                  {poi.poi_amenities.map(am => (
+                      <span key={am} className="text-xs px-3 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-full font-medium border border-zinc-200 dark:border-zinc-700">
+                          {am}
+                      </span>
+                  ))}
+              </div>
+          )}
+
+          <div className="h-px bg-zinc-100 dark:bg-zinc-800 w-full" />
+
+          {/* INFO PRATIQUES */}
+          <div className="space-y-4">
+            <InfoRow icon={<MapPin className="text-zinc-400" size={20} />} text={poi.address_informal || `${poi.address_city}, ${poi.address_country || "Cameroun"}`} />
+            <InfoRow icon={<Clock className="text-zinc-400" size={20} />} text="Ouvert maintenant (ferme à 22h)" isActive />
+            <InfoRow icon={<Smartphone className="text-zinc-400" size={20} />} text={poi.poi_contacts?.phone || "Non renseigné"} />
+          </div>
+
+          <div className="h-px bg-zinc-100 dark:bg-zinc-800 w-full" />
+
+          {/* CRÉER DU CONTENU (Blog/Podcast) - MODALS */}
+          <div>
+            <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+              📝 Créer du contenu
+            </h3>
+            <div className="flex gap-3">
+              <Button 
+                onClick={() => setIsBlogModalOpen(true)}
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-2"
+              >
+                <FileText size={16}/> Blog
+              </Button>
+              <Button 
+                onClick={() => setIsPodcastModalOpen(true)}
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-2"
+              >
+                <Mic size={16}/> Podcast
+              </Button>
+            </div>
+          </div>
+
+          <div className="h-px bg-zinc-100 dark:bg-zinc-800 w-full" />
+
+          {/* SECTION AVIS - Intégration complète */}
+          <ReviewsSection 
+            poiId={poi.poi_id} 
+            onReviewSubmitted={handleReviewSubmitted}
+          />
+
         </div>
+      </motion.div>
 
-        <div className="h-px bg-zinc-100 dark:bg-zinc-800 w-full" />
+      {/* MODALS */}
+      <BlogModal 
+        isOpen={isBlogModalOpen}
+        onClose={() => setIsBlogModalOpen(false)}
+        selectedPoi={poi}
+        onSuccess={() => {
+          console.log("✅ Blog créé avec succès");
+        }}
+      />
 
-        {/* SECTION AVIS - Intégration complète */}
-        <ReviewsSection 
-          poiId={poi.poi_id} 
-          onReviewSubmitted={handleReviewSubmitted}
-        />
-
-      </div>
-    </motion.div>
+      <PodcastModal 
+        isOpen={isPodcastModalOpen}
+        onClose={() => setIsPodcastModalOpen(false)}
+        selectedPoi={poi}
+        onSuccess={() => {
+          console.log("✅ Podcast créé avec succès");
+        }}
+      />
+    </>
   );
 };
 
@@ -10484,38 +10509,48 @@ export const ReviewsSection = ({ poiId, onReviewSubmitted }: ReviewsSectionProps
   }, [poiId]);
 
   const loadReviews = async () => {
+  try {
+    setIsLoading(true);
+    
+    // 1. Charger les avis individuels (Généralement plus stable)
     try {
-      setIsLoading(true);
-      console.log("🔄 [ReviewsSection] Chargement des avis pour POI:", poiId);
+      const reviewsData = await reviewService.getReviewsByPoi(poiId);
+      setReviews(Array.isArray(reviewsData) ? reviewsData : []);
+    } catch (e) {
+      console.warn("⚠️ Impossible de charger la liste des avis");
+      setReviews([]);
+    }
 
-      const [reviewsData, statsData] = await Promise.all([
-        reviewService.getReviewsByPoi(poiId),
-        reviewService.getPoiStats(poiId),
-      ]);
+    // 2. Charger les statistiques (Celui qui cause la 500)
+    try {
+      const statsData = await reviewService.getPoiStats(poiId);
+      // On vérifie si statsData contient des données valides
+      if (statsData && typeof statsData.averageRating === 'number') {
+        setStats(statsData);
+      } else {
+        throw new Error("Stats invalides");
+      }
+    } catch (e) {
+      console.log("ℹ️ Pas encore de statistiques pour ce POI. Utilisation des valeurs par défaut.");
+      // Fallback manuel pour éviter le crash du composant
+      setStats({ averageRating: 0, reviewCount: 0 });
+    }
 
-      console.log("✅ [ReviewsSection] Avis chargés:", reviewsData.length);
-      console.log("📊 [ReviewsSection] Stats:", statsData);
-
-      setReviews(reviewsData);
-      setStats(statsData);
-
-      // Vérifier si l'utilisateur a déjà laissé un avis
-      if (currentUser) {
+    // 3. Vérifier si l'utilisateur a déjà posté
+    if (currentUser) {
+      try {
         const hasReviewed = await reviewService.hasUserReviewed(currentUser.userId, poiId);
         setUserHasReviewed(hasReviewed);
-
-        if (hasReviewed) {
-          const existingReview = await reviewService.getUserReviewForPoi(currentUser.userId, poiId);
-          setUserReview(existingReview);
-        }
+      } catch (e) {
+        setUserHasReviewed(false);
       }
-    } catch (error) {
-      console.error("❌ [ReviewsSection] Erreur chargement:", error);
-    } finally {
-      setIsLoading(false);
     }
-  };
-
+  } catch (error) {
+    console.error("❌ Erreur critique lors du chargement des reviews:", error);
+  } finally {
+    setIsLoading(false);
+  }
+};
   const handleSubmitReview = async () => {
     if (!currentUser) {
       alert("Vous devez être connecté pour laisser un avis");
@@ -10805,6 +10840,650 @@ const ReviewCard = ({ review, onLike, onDislike }: {
         </div>
       </div>
     </div>
+  );
+};
+
+
+================================================================================
+FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\components\content\BlogModal.tsx
+================================================================================
+
+"use client";
+
+import { useState, useEffect } from "react";
+import { X, FileText, Save, Loader2, ImagePlus, Type, AlignLeft } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { FormInput } from "@/components/ui/form/FormInput";
+import { motion, AnimatePresence } from "framer-motion";
+import { authService } from "@/services/authService";
+import { contentService } from "@/services/contentService";
+import { POI } from "@/types";
+
+interface BlogModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedPoi?: POI | null;
+  onSuccess?: () => void;
+}
+
+export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModalProps) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [availablePois, setAvailablePois] = useState<POI[]>([]);
+  const [formData, setFormData] = useState({
+    poi_id: "",
+    title: "",
+    description: "",
+    content: "",
+    cover_image_url: "",
+  });
+
+  const user = authService.getSession();
+
+  useEffect(() => {
+    if (isOpen) {
+      loadUserPois();
+      if (selectedPoi) {
+        setFormData(prev => ({ ...prev, poi_id: selectedPoi.poi_id }));
+      }
+    }
+  }, [isOpen, selectedPoi]);
+
+  const loadUserPois = async () => {
+    if (!user?.userId) return;
+    
+    try {
+      const response = await fetch(`https://poi-navigoo.pynfi.com/api/pois/user/${user.userId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setAvailablePois(data || []);
+      }
+    } catch (error) {
+      console.error("Erreur chargement POIs:", error);
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!user?.userId) {
+      alert("Vous devez être connecté");
+      return;
+    }
+
+    if (!formData.poi_id || !formData.title || !formData.content) {
+      alert("Veuillez remplir tous les champs obligatoires");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const blogData = {
+        user_id: user.userId,
+        poi_id: formData.poi_id,
+        title: formData.title,
+        description: formData.description || "",
+        cover_image_url: formData.cover_image_url || "",
+        content: formData.content,
+      };
+
+      await contentService.createBlog(blogData);
+      
+      alert("✅ Blog créé avec succès !");
+      
+      // Reset form
+      setFormData({
+        poi_id: "",
+        title: "",
+        description: "",
+        content: "",
+        cover_image_url: "",
+      });
+
+      if (onSuccess) onSuccess();
+      onClose();
+    } catch (error: any) {
+      console.error("Erreur création blog:", error);
+      alert(`❌ Erreur: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isLoading) {
+      setFormData({
+        poi_id: "",
+        title: "",
+        description: "",
+        content: "",
+        cover_image_url: "",
+      });
+      onClose();
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+            onClick={handleClose}
+          />
+
+          {/* Modal */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: "spring", duration: 0.3 }}
+            className="fixed inset-0 z-[101] flex items-center justify-center p-4"
+          >
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-blue-50 to-violet-50 dark:from-blue-950/30 dark:to-violet-950/30">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-500 rounded-2xl">
+                    <FileText size={28} className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black text-zinc-900 dark:text-white">
+                      Créer un Blog
+                    </h2>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                      Partagez votre expérience sur un lieu
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleClose}
+                  disabled={isLoading}
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  <X size={24} className="text-zinc-600 dark:text-zinc-400" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+                
+                {/* POI Selection */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
+                    Point d'intérêt * {selectedPoi && <span className="text-primary">(Pré-sélectionné)</span>}
+                  </label>
+                  <select
+                    name="poi_id"
+                    value={formData.poi_id}
+                    onChange={handleChange}
+                    required
+                    disabled={!!selectedPoi}
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-60"
+                  >
+                    <option value="">-- Sélectionner un POI --</option>
+                    {availablePois.map(poi => (
+                      <option key={poi.poi_id} value={poi.poi_id}>
+                        {poi.poi_name} ({poi.address_city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Title */}
+                <FormInput
+                  label="Titre du blog *"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleChange}
+                  icon={<Type size={18} />}
+                  placeholder="Ex: Mon expérience au Restaurant Le Délice"
+                  required
+                />
+
+                {/* Description */}
+                <FormInput
+                  label="Description courte"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  icon={<AlignLeft size={18} />}
+                  placeholder="Résumé en quelques mots (optionnel)"
+                />
+
+                {/* Cover Image URL */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
+                    URL Image de couverture
+                  </label>
+                  <div className="relative">
+                    <ImagePlus className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input
+                      type="url"
+                      name="cover_image_url"
+                      value={formData.cover_image_url}
+                      onChange={handleChange}
+                      placeholder="https://example.com/image.jpg (optionnel)"
+                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
+                    Contenu de l'article *
+                  </label>
+                  <textarea
+                    name="content"
+                    value={formData.content}
+                    onChange={handleChange}
+                    required
+                    rows={12}
+                    placeholder="Rédigez votre article ici... Partagez votre expérience, vos impressions, vos recommandations..."
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                  />
+                  <p className="text-xs text-zinc-500 mt-1 ml-1">
+                    {formData.content.length} caractères
+                  </p>
+                </div>
+              </form>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex gap-3">
+                <Button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={isLoading}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Annuler
+                </Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isLoading}
+                  className="flex-1 gap-2"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="animate-spin" size={18} />
+                      Publication...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={18} />
+                      Publier le Blog
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+};
+
+
+================================================================================
+FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\components\content\PodcastModal.tsx
+================================================================================
+
+"use client";
+
+import { useState, useEffect } from "react";
+import { X, Mic, Save, Loader2, ImagePlus, Type, AlignLeft, Upload, Clock } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { FormInput } from "@/components/ui/form/FormInput";
+import { motion, AnimatePresence } from "framer-motion";
+import { authService } from "@/services/authService";
+import { contentService } from "@/services/contentService";
+import { POI } from "@/types";
+
+interface PodcastModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedPoi?: POI | null;
+  onSuccess?: () => void;
+}
+
+export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: PodcastModalProps) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [availablePois, setAvailablePois] = useState<POI[]>([]);
+  const [formData, setFormData] = useState({
+    poi_id: "",
+    title: "",
+    description: "",
+    audio_file_url: "",
+    cover_image_url: "",
+    duration_seconds: 0,
+  });
+
+  const user = authService.getSession();
+
+  useEffect(() => {
+    if (isOpen) {
+      loadUserPois();
+      if (selectedPoi) {
+        setFormData(prev => ({ ...prev, poi_id: selectedPoi.poi_id }));
+      }
+    }
+  }, [isOpen, selectedPoi]);
+
+  const loadUserPois = async () => {
+    if (!user?.userId) return;
+    
+    try {
+      const response = await fetch(`https://poi-navigoo.pynfi.com/api/pois/user/${user.userId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setAvailablePois(data || []);
+      }
+    } catch (error) {
+      console.error("Erreur chargement POIs:", error);
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    
+    if (name === "duration_seconds") {
+      setFormData(prev => ({ ...prev, [name]: parseInt(value) || 0 }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const formatDuration = (seconds: number): string => {
+    if (seconds < 60) return `${seconds} sec`;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return remainingSeconds > 0 
+      ? `${minutes} min ${remainingSeconds} sec` 
+      : `${minutes} min`;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!user?.userId) {
+      alert("Vous devez être connecté");
+      return;
+    }
+
+    if (!formData.poi_id || !formData.title || !formData.audio_file_url || formData.duration_seconds === 0) {
+      alert("Veuillez remplir tous les champs obligatoires (POI, titre, fichier audio, durée)");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const podcastData = {
+        user_id: user.userId,
+        poi_id: formData.poi_id,
+        title: formData.title,
+        description: formData.description || "",
+        cover_image_url: formData.cover_image_url || "",
+        audio_file_url: formData.audio_file_url,
+        duration_seconds: formData.duration_seconds,
+      };
+
+      await contentService.createPodcast(podcastData);
+      
+      alert("✅ Podcast créé avec succès !");
+      
+      // Reset form
+      setFormData({
+        poi_id: "",
+        title: "",
+        description: "",
+        audio_file_url: "",
+        cover_image_url: "",
+        duration_seconds: 0,
+      });
+
+      if (onSuccess) onSuccess();
+      onClose();
+    } catch (error: any) {
+      console.error("Erreur création podcast:", error);
+      alert(`❌ Erreur: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isLoading) {
+      setFormData({
+        poi_id: "",
+        title: "",
+        description: "",
+        audio_file_url: "",
+        cover_image_url: "",
+        duration_seconds: 0,
+      });
+      onClose();
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+            onClick={handleClose}
+          />
+
+          {/* Modal */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: "spring", duration: 0.3 }}
+            className="fixed inset-0 z-[101] flex items-center justify-center p-4"
+          >
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-purple-500 rounded-2xl">
+                    <Mic size={28} className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black text-zinc-900 dark:text-white">
+                      Créer un Podcast
+                    </h2>
+                    <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                      Partagez une expérience audio sur un lieu
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleClose}
+                  disabled={isLoading}
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  <X size={24} className="text-zinc-600 dark:text-zinc-400" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+                
+                {/* POI Selection */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
+                    Point d'intérêt * {selectedPoi && <span className="text-primary">(Pré-sélectionné)</span>}
+                  </label>
+                  <select
+                    name="poi_id"
+                    value={formData.poi_id}
+                    onChange={handleChange}
+                    required
+                    disabled={!!selectedPoi}
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-60"
+                  >
+                    <option value="">-- Sélectionner un POI --</option>
+                    {availablePois.map(poi => (
+                      <option key={poi.poi_id} value={poi.poi_id}>
+                        {poi.poi_name} ({poi.address_city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Title */}
+                <FormInput
+                  label="Titre du podcast *"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleChange}
+                  icon={<Type size={18} />}
+                  placeholder="Ex: Histoire culinaire de Yaoundé"
+                  required
+                />
+
+                {/* Description */}
+                <FormInput
+                  label="Description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  icon={<AlignLeft size={18} />}
+                  placeholder="Résumé du contenu audio (optionnel)"
+                />
+
+                {/* Audio File URL */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
+                    URL Fichier Audio * (MP3, WAV, etc.)
+                  </label>
+                  <div className="relative">
+                    <Upload className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input
+                      type="url"
+                      name="audio_file_url"
+                      value={formData.audio_file_url}
+                      onChange={handleChange}
+                      required
+                      placeholder="https://example.com/podcast.mp3"
+                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Cover Image URL */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
+                    URL Image de couverture
+                  </label>
+                  <div className="relative">
+                    <ImagePlus className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input
+                      type="url"
+                      name="cover_image_url"
+                      value={formData.cover_image_url}
+                      onChange={handleChange}
+                      placeholder="https://example.com/cover.jpg (optionnel)"
+                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Duration */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
+                    Durée (en secondes) *
+                  </label>
+                  <div className="relative">
+                    <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                    <input
+                      type="number"
+                      name="duration_seconds"
+                      value={formData.duration_seconds}
+                      onChange={handleChange}
+                      required
+                      min="1"
+                      placeholder="120"
+                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    />
+                  </div>
+                  {formData.duration_seconds > 0 && (
+                    <p className="text-xs text-primary mt-1 ml-1 font-medium">
+                      ≈ {formatDuration(formData.duration_seconds)}
+                    </p>
+                  )}
+                </div>
+
+                {/* Info Box */}
+                <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl p-4">
+                  <div className="flex items-start gap-3">
+                    <Mic size={20} className="text-purple-600 dark:text-purple-400 mt-0.5 shrink-0" />
+                    <div className="text-xs text-purple-800 dark:text-purple-200">
+                      <p className="font-bold mb-1">💡 Conseils</p>
+                      <ul className="space-y-1 list-disc list-inside">
+                        <li>Hébergez votre fichier audio sur un service cloud (Google Drive, Dropbox, etc.)</li>
+                        <li>Assurez-vous que l'URL est accessible publiquement</li>
+                        <li>Format recommandé: MP3 pour une meilleure compatibilité</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </form>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex gap-3">
+                <Button
+                  type="button"
+                  onClick={handleClose}
+                  disabled={isLoading}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Annuler
+                </Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isLoading}
+                  className="flex-1 gap-2 bg-purple-600 hover:bg-purple-700"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="animate-spin" size={18} />
+                      Publication...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={18} />
+                      Publier le Podcast
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 };
 
@@ -12587,16 +13266,22 @@ class ReviewService {
     return data;
   }
 
-  // Créer un avis
-  async createReview(review: Omit<PoiReview, 'reviewId' | 'createdAt'>): Promise<PoiReview> {
-    console.log("📝 [ReviewService] Création d'un avis:", review);
-    
-    return this.request<PoiReview>("/api-reviews", {
-      method: "POST",
-      body: JSON.stringify(review),
-    });
-  }
+async createReview(review: Omit<PoiReview, 'reviewId' | 'createdAt'>): Promise<PoiReview> {
+  // Sécurité : forcer les types attendus par le Backend Spring/R2DBC
+  const payload = {
+    ...review,
+    rating: Math.floor(review.rating), // Forcer un entier 1-5
+    organizationId: review.organizationId || "83ce5943-d920-454f-908d-3248a73aafdf", // ID Défaut
+    platformType: "WEB"
+  };
 
+  console.log("📤 Publication de l'avis au backend...", payload);
+  
+  return this.request<PoiReview>("/api-reviews", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
   // Obtenir tous les avis
   async getAllReviews(): Promise<PoiReview[]> {
     console.log("📋 [ReviewService] Récupération de tous les avis");
