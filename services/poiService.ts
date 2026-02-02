@@ -1,8 +1,8 @@
 import { CreatePoiDTO, POI } from "@/types";
 import { authService } from "./authService";
 
-const API_BASE_URL = "https://poi-navigoo.pynfi.com";
-
+// Nouveau : utilise le proxy définit dans next.config.ts
+const API_BASE_URL = typeof window !== 'undefined' ? "/remote-api" : "https://poi-navigoo.pynfi.com";
 /**
  * Fonction utilitaire pour transformer le format à plat du Backend Java
  * vers le format imbriqué { location: { latitude, longitude } } attendu par le Frontend.
