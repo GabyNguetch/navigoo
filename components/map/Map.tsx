@@ -122,6 +122,8 @@ function MapComponent({
 }: MapProps) {
   const mapRef = useRef<MapRef>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    // État interne pour ne faire l'auto-zoom au chargement qu'une seule fois
+  const [hasInitialCentered, setHasInitialCentered] = useState(false);
 
   const [viewState, setViewState] = useState({
     longitude: 11.516,
@@ -161,6 +163,19 @@ function MapComponent({
       setClickPosition(null);
     }
   }, [onMapEmptyClick]);
+
+    // Effet pour zoomer sur la position utilisateur
+  useEffect(() => {
+    if (userLocation && mapRef.current) {
+      // Zoom automatique la première fois OU à chaque clic manuel (si géré par ref)
+      mapRef.current.flyTo({
+        center: [userLocation.longitude, userLocation.latitude],
+        zoom: 15,
+        duration: 2000, // Animation fluide de 2 secondes
+        essential: true
+      });
+    }
+  }, [userLocation]); // Réagit dès que userLocation est mis à jour
 
   useEffect(() => {
     if (userLocation && mapRef.current && !routeGeometry) {
