@@ -5,8 +5,6 @@ import dynamic from "next/dynamic";
 import { TopLayout } from "@/components/navigation/TopLayout";
 import { Sidebar } from "@/components/sidebar/Sidebar";
 import { PoiDetailsSidebar } from "@/components/sidebar/POIDetailsSidebar";
-import { DirectionsSidebar } from "@/components/sidebar/DirectionSidebar";
-import { SecondarySidebar } from "@/components/sidebar/SecondarySidebar";
 import { POI, Location, TransportMode } from "@/types";
 import { getRoute, calculateDistance } from "@/services/routingService";
 import { poiService } from "@/services/poiService";
@@ -24,6 +22,10 @@ const MapComponent = dynamic(() => import("@/components/map/Map"), {
   ssr: false,
   loading: () => <Loader />,
 });
+
+// Ajoutez aussi le chargement différé pour les Sidebars secondaires qui ne sont pas visibles au chargement
+const SecondarySidebar = dynamic(() => import("@/components/sidebar/SecondarySidebar").then(mod => mod.SecondarySidebar), { ssr: false });
+const DirectionsSidebar = dynamic(() => import("@/components/sidebar/DirectionSidebar").then(mod => mod.DirectionsSidebar), { ssr: false });
 
 const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9"; 
 
