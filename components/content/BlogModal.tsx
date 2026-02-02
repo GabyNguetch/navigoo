@@ -59,52 +59,22 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!user?.userId) {
-      alert("Vous devez être connecté");
-      return;
-    }
-
-    if (!formData.poi_id || !formData.title || !formData.content) {
-      alert("Veuillez remplir tous les champs obligatoires");
-      return;
-    }
-
+    if (!formData.poi_id || !formData.title || !formData.content) return alert("Champs obligatoires manquants");
+    
     setIsLoading(true);
-
     try {
-      const blogData = {
-        user_id: user.userId,
-        poi_id: formData.poi_id,
-        title: formData.title,
-        description: formData.description || "",
-        cover_image_url: formData.cover_image_url || "",
-        content: formData.content,
-      };
-
-      await contentService.createBlog(blogData);
-      
-      alert("✅ Blog créé avec succès !");
-      
-      // Reset form
-      setFormData({
-        poi_id: "",
-        title: "",
-        description: "",
-        content: "",
-        cover_image_url: "",
+      await contentService.createBlog({
+        ...formData,
+        user_id: user?.userId
       });
-
       if (onSuccess) onSuccess();
       onClose();
-    } catch (error: any) {
-      console.error("Erreur création blog:", error);
-      alert(`❌ Erreur: ${error.message}`);
+    } catch (error) {
+      alert("Erreur lors de la création");
     } finally {
       setIsLoading(false);
     }
   };
-
   const handleClose = () => {
     if (!isLoading) {
       setFormData({

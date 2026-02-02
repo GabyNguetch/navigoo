@@ -70,6 +70,18 @@ export default function Home() {
     getCurrentPosition 
   } = useGeolocation();
 
+    // 1. Déclenchement automatique au chargement
+  useEffect(() => {
+    const autoLocate = async () => {
+      try {
+        await getCurrentPosition();
+      } catch (err) {
+        console.warn("Auto-localisation désactivée par l'utilisateur ou indisponible.");
+      }
+    };
+    autoLocate();
+  }, [getCurrentPosition]);
+
   // ============================================
   // INITIALISATION (Géoloc + Fetch API)
   // ============================================
@@ -134,6 +146,17 @@ export default function Home() {
         }
     }
   }, [panelState.type, loadUserPois]);
+
+    // 2. Gestionnaire pour le bouton "Ma position"
+  const handleLocateMe = async () => {
+    try {
+      const pos = await getCurrentPosition();
+      // On force la carte à se repositionner (géré par le useEffect dans Map.tsx)
+      console.log("📍 Localisation manuelle vers:", pos);
+    } catch (err) {
+      alert("Localisation impossible : vérifiez les permissions de votre navigateur.");
+    }
+  };
 
   // ============================================
   // HANDLERS INTERFACE
@@ -301,14 +324,7 @@ export default function Home() {
         onSelectCategory={(id) => setSelectedCategory(prev => prev === id ? "" : id)}
         onSearch={setSearchQuery}
         onSelectResult={handleSelectPoi}
-        onLocateMe={async () => {
-          try {
-            const pos = await getCurrentPosition();
-            console.log("📍 Position obtenue:", pos);
-          } catch (err) {
-            alert("Impossible d'obtenir votre position");
-          }
-        }}
+        onLocateMe={handleLocateMe}
         recentSearches={[]}
         recentPois={recentPois}
       />
@@ -317,13 +333,7 @@ export default function Home() {
         isOpen={isMainSidebarOpen} 
         onClose={() => setIsMainSidebarOpen(false)}
         onViewChange={handleViewChange}
-        onLocateMe={async () => {
-          try {
-            await getCurrentPosition();
-          } catch (err) {
-            alert("Géolocalisation échouée");
-          }
-        }}
+        onLocateMe={handleLocateMe}
         onShare={shareMap}
         onPrint={captureMap}
         onToggleSettings={() => setIsSettingsOpen(true)}

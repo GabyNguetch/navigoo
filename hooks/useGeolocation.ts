@@ -76,11 +76,14 @@ export const useGeolocation = () => {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude
           };
-          setState(prev => ({ ...prev, position: location }));
+          // IMPORTANT: Mettre à jour le state pour notifier app/page.tsx
+          setState(prev => ({ 
+            ...prev, 
+            position: { ...location } // Création d'un nouvel objet pour forcer la détection de changement
+          }));
           resolve(location);
         },
-        (error) => reject(error),
-        { enableHighAccuracy: true, timeout: 5000 }
+        // ...
       );
     });
   }, []);

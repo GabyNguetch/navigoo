@@ -12,23 +12,27 @@ class ContentService {
     return response.status !== 204 ? response.json() : ({} as T);
   }
 
-  // BLOGS
-  async createBlog(blog: Partial<Blog>) {
-    return this.request<Blog>("/blogs", {
-      method: "POST",
-      body: JSON.stringify(blog),
-    });
-  }
-
   async getBlogsByUser(userId: string) {
     return this.request<Blog[]>(`/blogs/user/${userId}`);
   }
 
-  // PODCASTS
+    async createBlog(blog: Partial<Blog>) {
+    return this.request<Blog>("/blogs", {
+      method: "POST",
+      body: JSON.stringify({
+        ...blog,
+        is_active: true // Forcer l'activation par défaut
+      }),
+    });
+  }
+
   async createPodcast(podcast: Partial<Podcast>) {
     return this.request<Podcast>("/podcasts", {
       method: "POST",
-      body: JSON.stringify(podcast),
+      body: JSON.stringify({
+        ...podcast,
+        is_active: true
+      }),
     });
   }
 

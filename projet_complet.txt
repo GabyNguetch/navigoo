@@ -1423,6 +1423,8 @@ import { authService } from "@/services/authService";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { Button } from "@/components/ui/Button";
 import { Loader } from "@/components/ui/Loader";
+import { BlogModal } from "@/components/content/BlogModal";
+import { PodcastModal } from "@/components/content/PodcastModal";
 import { clsx } from "clsx";
 
 export default function ProfilePage() {
@@ -1447,6 +1449,8 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'pois' | 'reviews' | 'blogs' | 'podcasts' | 'activity'>('overview');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editForm, setEditForm] = useState({ email: '', phone: '' });
+    const [isBlogModalOpen, setIsBlogModalOpen] = useState(false);
+  const [isPodcastModalOpen, setIsPodcastModalOpen] = useState(false);
 
   useEffect(() => {
     const session = authService.getSession();
@@ -1474,6 +1478,11 @@ export default function ProfilePage() {
   const handleLogout = () => {
     authService.logout();
   };
+
+  const handleContentSuccess = () => {
+    alert("Contenu publié avec succès !");
+  };
+
 
   const handleSaveProfile = async () => {
     try {
@@ -1615,21 +1624,23 @@ export default function ProfilePage() {
                 />
               )}
 
+
               {activeTab === 'blogs' && (
                 <BlogsTab 
-                  myBlogs={myBlogs}
-                  onDelete={deleteBlog}
-                  router={router}
+                  myBlogs={myBlogs} 
+                  onDelete={deleteBlog} 
+                  onAdd={() => setIsBlogModalOpen(true)} // Action pour ouvrir la modal
                 />
               )}
 
               {activeTab === 'podcasts' && (
                 <PodcastsTab 
-                  myPodcasts={myPodcasts}
+                  myPodcasts={myPodcasts} 
                   onDelete={deletePodcast}
-                  router={router}
+                  onAdd={() => setIsPodcastModalOpen(true)} // Action pour ouvrir la modal
                 />
               )}
+              
 
               {activeTab === 'activity' && (
                 <ActivityTab 
@@ -1641,7 +1652,17 @@ export default function ProfilePage() {
             </div>
         </div>
       </main>
-
+            {/* MODALS GLOBALES */}
+      <BlogModal 
+        isOpen={isBlogModalOpen} 
+        onClose={() => setIsBlogModalOpen(false)} 
+        onSuccess={handleContentSuccess} 
+      />
+      <PodcastModal 
+        isOpen={isPodcastModalOpen} 
+        onClose={() => setIsPodcastModalOpen(false)} 
+        onSuccess={handleContentSuccess} 
+      />
     </div>
   );
 }
@@ -1748,7 +1769,7 @@ const ReviewsTab = ({ myReviews, onDelete, router }: any) => (
   </div>
 );
 
-const BlogsTab = ({ myBlogs, onDelete, router }: any) => (
+const BlogsTab = ({ myBlogs, onDelete, router, onAdd }: any) => (
   <div className="space-y-4">
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
       <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
@@ -1783,7 +1804,7 @@ const BlogsTab = ({ myBlogs, onDelete, router }: any) => (
   </div>
 );
 
-const PodcastsTab = ({ myPodcasts, onDelete, router }: any) => (
+const PodcastsTab = ({ myPodcasts, onDelete, router, onAdd }: any) => (
   <div className="space-y-4">
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
       <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
@@ -8467,22 +8488,26 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
   // Vérifier si le POI appartient à l'utilisateur
   const isOwner = myPois.some(p => p.poi_id === poi.poi_id);
 
-  // Charger les stats d'avis
+    // Charger les stats d'avis
   useEffect(() => {
-    const loadStats = async () => {
-      try {
-        console.log("📊 [PoiDetailsSidebar] Chargement stats avis pour POI:", poi.poi_id);
-        const statsData = await reviewService.getPoiStats(poi.poi_id);
-        setStats(statsData);
-        console.log("✅ [PoiDetailsSidebar] Stats chargées:", statsData);
-      } catch (error) {
-        console.warn("⚠️ [PoiDetailsSidebar] Impossible de charger les stats:", error);
-      }
-    };
+      const loadStats = async () => {
+        // Bloquer l'appel API si ID externe
+        if (poi.poi_id.startsWith("external-") || poi.poi_id.startsWith("search-")) {
+          setStats({ averageRating: 0, reviewCount: 0 });
+          return;
+        }
 
-    if (poi.poi_id) {
-      loadStats();
-    }
+        try {
+          const statsData = await reviewService.getPoiStats(poi.poi_id);
+          setStats(statsData);
+        } catch (error) {
+          setStats({ averageRating: 0, reviewCount: 0 });
+        }
+      };
+
+      if (poi.poi_id) {
+        loadStats();
+      }
   }, [poi.poi_id]);
 
   const handleEdit = () => {
@@ -10509,48 +10534,41 @@ export const ReviewsSection = ({ poiId, onReviewSubmitted }: ReviewsSectionProps
   }, [poiId]);
 
   const loadReviews = async () => {
-  try {
-    setIsLoading(true);
-    
-    // 1. Charger les avis individuels (Généralement plus stable)
     try {
+      setIsLoading(true);
+      
+      // Sécurité : Si le POI est externe, inutile de charger quoi que ce soit
+      if (poiId.startsWith("external-") || poiId.startsWith("search-")) {
+          setReviews([]);
+          setStats({ averageRating: 0, reviewCount: 0 });
+          setUserHasReviewed(false);
+          return;
+      }
+
+      // 1. Charger les avis
       const reviewsData = await reviewService.getReviewsByPoi(poiId);
       setReviews(Array.isArray(reviewsData) ? reviewsData : []);
-    } catch (e) {
-      console.warn("⚠️ Impossible de charger la liste des avis");
-      setReviews([]);
-    }
 
-    // 2. Charger les statistiques (Celui qui cause la 500)
-    try {
-      const statsData = await reviewService.getPoiStats(poiId);
-      // On vérifie si statsData contient des données valides
-      if (statsData && typeof statsData.averageRating === 'number') {
-        setStats(statsData);
-      } else {
-        throw new Error("Stats invalides");
-      }
-    } catch (e) {
-      console.log("ℹ️ Pas encore de statistiques pour ce POI. Utilisation des valeurs par défaut.");
-      // Fallback manuel pour éviter le crash du composant
-      setStats({ averageRating: 0, reviewCount: 0 });
-    }
-
-    // 3. Vérifier si l'utilisateur a déjà posté
-    if (currentUser) {
+      // 2. Charger les statistiques (on attrape l'erreur individuellement ici aussi)
       try {
-        const hasReviewed = await reviewService.hasUserReviewed(currentUser.userId, poiId);
-        setUserHasReviewed(hasReviewed);
+        const statsData = await reviewService.getPoiStats(poiId);
+        setStats(statsData || { averageRating: 0, reviewCount: 0 });
       } catch (e) {
-        setUserHasReviewed(false);
+        setStats({ averageRating: 0, reviewCount: 0 });
       }
+
+      // 3. Vérification utilisateur connecté
+      if (currentUser) {
+         const hasReviewed = await reviewService.hasUserReviewed(currentUser.userId, poiId);
+         setUserHasReviewed(hasReviewed);
+      }
+    } catch (error) {
+      console.warn("⚠️ [ReviewsSection] Erreur chargement reviews (POI peut être hors-base):", error);
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error("❌ Erreur critique lors du chargement des reviews:", error);
-  } finally {
-    setIsLoading(false);
-  }
 };
+
   const handleSubmitReview = async () => {
     if (!currentUser) {
       alert("Vous devez être connecté pour laisser un avis");
@@ -10909,52 +10927,22 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!user?.userId) {
-      alert("Vous devez être connecté");
-      return;
-    }
-
-    if (!formData.poi_id || !formData.title || !formData.content) {
-      alert("Veuillez remplir tous les champs obligatoires");
-      return;
-    }
-
+    if (!formData.poi_id || !formData.title || !formData.content) return alert("Champs obligatoires manquants");
+    
     setIsLoading(true);
-
     try {
-      const blogData = {
-        user_id: user.userId,
-        poi_id: formData.poi_id,
-        title: formData.title,
-        description: formData.description || "",
-        cover_image_url: formData.cover_image_url || "",
-        content: formData.content,
-      };
-
-      await contentService.createBlog(blogData);
-      
-      alert("✅ Blog créé avec succès !");
-      
-      // Reset form
-      setFormData({
-        poi_id: "",
-        title: "",
-        description: "",
-        content: "",
-        cover_image_url: "",
+      await contentService.createBlog({
+        ...formData,
+        user_id: user?.userId
       });
-
       if (onSuccess) onSuccess();
       onClose();
-    } catch (error: any) {
-      console.error("Erreur création blog:", error);
-      alert(`❌ Erreur: ${error.message}`);
+    } catch (error) {
+      alert("Erreur lors de la création");
     } finally {
       setIsLoading(false);
     }
   };
-
   const handleClose = () => {
     if (!isLoading) {
       setFormData({
@@ -12886,23 +12874,27 @@ class ContentService {
     return response.status !== 204 ? response.json() : ({} as T);
   }
 
-  // BLOGS
-  async createBlog(blog: Partial<Blog>) {
-    return this.request<Blog>("/blogs", {
-      method: "POST",
-      body: JSON.stringify(blog),
-    });
-  }
-
   async getBlogsByUser(userId: string) {
     return this.request<Blog[]>(`/blogs/user/${userId}`);
   }
 
-  // PODCASTS
+    async createBlog(blog: Partial<Blog>) {
+    return this.request<Blog>("/blogs", {
+      method: "POST",
+      body: JSON.stringify({
+        ...blog,
+        is_active: true // Forcer l'activation par défaut
+      }),
+    });
+  }
+
   async createPodcast(podcast: Partial<Podcast>) {
     return this.request<Podcast>("/podcasts", {
       method: "POST",
-      body: JSON.stringify(podcast),
+      body: JSON.stringify({
+        ...podcast,
+        is_active: true
+      }),
     });
   }
 
@@ -13237,6 +13229,10 @@ export interface ReviewStats {
 }
 
 class ReviewService {
+    // Ajout d'une petite fonction utilitaire pour vérifier si l'ID est un lieu système
+  private isExternalId(id: string): boolean {
+    return id.startsWith("external-") || id.startsWith("search-");
+  }
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     
@@ -13294,12 +13290,6 @@ async createReview(review: Omit<PoiReview, 'reviewId' | 'createdAt'>): Promise<P
     return this.request<PoiReview>(`/api-reviews/${reviewId}`);
   }
 
-  // Obtenir les avis d'un POI
-  async getReviewsByPoi(poiId: string): Promise<PoiReview[]> {
-    console.log(`📍 [ReviewService] Récupération avis POI: ${poiId}`);
-    return this.request<PoiReview[]>(`/api-reviews/poi/${poiId}/reviews`);
-  }
-
   // Obtenir les avis d'un utilisateur
   async getReviewsByUser(userId: string): Promise<PoiReview[]> {
     console.log(`👤 [ReviewService] Récupération avis utilisateur: ${userId}`);
@@ -13312,10 +13302,25 @@ async createReview(review: Omit<PoiReview, 'reviewId' | 'createdAt'>): Promise<P
     return this.request<PoiReview[]>(`/api-reviews/organization/${orgId}/reviews`);
   }
 
-  // Obtenir les statistiques d'un POI
+  async getReviewsByPoi(poiId: string): Promise<PoiReview[]> {
+    if (this.isExternalId(poiId)) return []; // Retourne une liste vide sans requête
+    console.log(`📍 [ReviewService] Récupération avis POI: ${poiId}`);
+    return this.request<PoiReview[]>(`/api-reviews/poi/${poiId}/reviews`);
+  }
+
   async getPoiStats(poiId: string): Promise<ReviewStats> {
-    console.log(`📊 [ReviewService] Récupération stats POI: ${poiId}`);
-    return this.request<ReviewStats>(`/api-reviews/poi/${poiId}/stats`);
+    // Si l'ID est externe, on ne contacte pas le backend (éviter l'erreur 400/500)
+    if (this.isExternalId(poiId)) {
+        return { averageRating: 0, reviewCount: 0 };
+    }
+    
+    try {
+        console.log(`📊 [ReviewService] Récupération stats POI: ${poiId}`);
+        return await this.request<ReviewStats>(`/api-reviews/poi/${poiId}/stats`);
+    } catch (e) {
+        // Fallback pour les nouveaux POI réels sans avis encore créés
+        return { averageRating: 0, reviewCount: 0 };
+    }
   }
 
   // Obtenir la note moyenne d'un POI

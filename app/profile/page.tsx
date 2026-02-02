@@ -15,6 +15,8 @@ import { authService } from "@/services/authService";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { Button } from "@/components/ui/Button";
 import { Loader } from "@/components/ui/Loader";
+import { BlogModal } from "@/components/content/BlogModal";
+import { PodcastModal } from "@/components/content/PodcastModal";
 import { clsx } from "clsx";
 
 export default function ProfilePage() {
@@ -39,6 +41,8 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'pois' | 'reviews' | 'blogs' | 'podcasts' | 'activity'>('overview');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editForm, setEditForm] = useState({ email: '', phone: '' });
+    const [isBlogModalOpen, setIsBlogModalOpen] = useState(false);
+  const [isPodcastModalOpen, setIsPodcastModalOpen] = useState(false);
 
   useEffect(() => {
     const session = authService.getSession();
@@ -66,6 +70,11 @@ export default function ProfilePage() {
   const handleLogout = () => {
     authService.logout();
   };
+
+  const handleContentSuccess = () => {
+    alert("Contenu publié avec succès !");
+  };
+
 
   const handleSaveProfile = async () => {
     try {
@@ -207,21 +216,23 @@ export default function ProfilePage() {
                 />
               )}
 
+
               {activeTab === 'blogs' && (
                 <BlogsTab 
-                  myBlogs={myBlogs}
-                  onDelete={deleteBlog}
-                  router={router}
+                  myBlogs={myBlogs} 
+                  onDelete={deleteBlog} 
+                  onAdd={() => setIsBlogModalOpen(true)} // Action pour ouvrir la modal
                 />
               )}
 
               {activeTab === 'podcasts' && (
                 <PodcastsTab 
-                  myPodcasts={myPodcasts}
+                  myPodcasts={myPodcasts} 
                   onDelete={deletePodcast}
-                  router={router}
+                  onAdd={() => setIsPodcastModalOpen(true)} // Action pour ouvrir la modal
                 />
               )}
+              
 
               {activeTab === 'activity' && (
                 <ActivityTab 
@@ -233,7 +244,17 @@ export default function ProfilePage() {
             </div>
         </div>
       </main>
-
+            {/* MODALS GLOBALES */}
+      <BlogModal 
+        isOpen={isBlogModalOpen} 
+        onClose={() => setIsBlogModalOpen(false)} 
+        onSuccess={handleContentSuccess} 
+      />
+      <PodcastModal 
+        isOpen={isPodcastModalOpen} 
+        onClose={() => setIsPodcastModalOpen(false)} 
+        onSuccess={handleContentSuccess} 
+      />
     </div>
   );
 }
@@ -340,7 +361,7 @@ const ReviewsTab = ({ myReviews, onDelete, router }: any) => (
   </div>
 );
 
-const BlogsTab = ({ myBlogs, onDelete, router }: any) => (
+const BlogsTab = ({ myBlogs, onDelete, router, onAdd }: any) => (
   <div className="space-y-4">
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
       <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
@@ -375,7 +396,7 @@ const BlogsTab = ({ myBlogs, onDelete, router }: any) => (
   </div>
 );
 
-const PodcastsTab = ({ myPodcasts, onDelete, router }: any) => (
+const PodcastsTab = ({ myPodcasts, onDelete, router, onAdd }: any) => (
   <div className="space-y-4">
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
       <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
