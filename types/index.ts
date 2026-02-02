@@ -29,6 +29,8 @@ export interface POI {
   poi_description?: string;
   poi_category: string; 
   poi_type?: string;
+
+  created_at?: string;
   
   // Supporte les deux formats pour la transition
   latitude?: number;
@@ -107,3 +109,28 @@ export type PoiCategory =
   | "FINANCE" 
   | "EDUCATION" 
   | "WORSHIP_SPIRITUALITY";
+
+export interface Blog {
+  blog_id?: string;
+  user_id: string;
+  poi_id: string;
+  title: string;
+  description?: string;
+  cover_image_url?: string;
+  content: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface Podcast {
+  podcast_id?: string;
+  user_id: string;
+  poi_id: string;
+  title: string;
+  description?: string;
+  audio_file_url: string;
+  cover_image_url?: string;
+  duration_seconds: number;
+  is_active: boolean;
+  created_at?: string;
+}

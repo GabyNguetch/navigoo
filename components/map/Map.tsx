@@ -18,9 +18,11 @@ interface MapProps {
   routeGeometry: any | null; 
   mapStyleType: "streets-v2" | "hybrid";
   onMapEmptyClick: (lng: number, lat: number) => void;
+  // NOUVEAU: Props pour le suivi GPS
+  isNavigating?: boolean;
+  traveledPath?: Location[];
 }
 
-// Memoization du marqueur
 const MapMarker = memo(({ poi, isSelected, onClick, onHover }: { 
   poi: POI, 
   isSelected: boolean, 
@@ -32,12 +34,7 @@ const MapMarker = memo(({ poi, isSelected, onClick, onHover }: {
   const lat = poi.location?.latitude ?? poi.latitude;
 
   return (
-    <Marker
-      longitude={lng}
-      latitude={lat}
-      anchor="bottom"
-      onClick={onClick}
-    >
+    <Marker longitude={lng} latitude={lat} anchor="bottom" onClick={onClick}>
       <div 
         onMouseEnter={() => onHover(poi)}
         onMouseLeave={() => onHover(null)}
@@ -74,7 +71,6 @@ const MapMarker = memo(({ poi, isSelected, onClick, onHover }: {
 
 MapMarker.displayName = "MapMarker";
 
-// Composant d'indicateur de chargement enrichi
 const LoadingIndicator = ({ clickPosition, loadingStage }: { 
   clickPosition: { x: number; y: number }, 
   loadingStage: string 
@@ -86,55 +82,23 @@ const LoadingIndicator = ({ clickPosition, loadingStage }: {
   ];
 
   return (
-    <div 
-      className="absolute z-50 pointer-events-none"
-      style={{ 
-        left: clickPosition.x, 
-        top: clickPosition.y,
-        transform: 'translate(-50%, -50%)'
-      }}
-    >
-      <motion.div
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0, opacity: 0 }}
-        className="relative"
-      >
-        {/* Cercle de ping */}
+    <div className="absolute z-50 pointer-events-none" style={{ left: clickPosition.x, top: clickPosition.y, transform: 'translate(-50%, -50%)' }}>
+      <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} className="relative">
         <div className="absolute inset-0 bg-primary rounded-full opacity-50 animate-ping"></div>
-        
-        {/* Container principal */}
         <div className="relative bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-2xl border border-zinc-200 dark:border-zinc-700 min-w-[200px]">
-          
-          {/* Titre */}
           <div className="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-200 dark:border-zinc-700">
             <Loader2 className="animate-spin text-primary" size={20} />
-            <span className="text-sm font-bold text-zinc-800 dark:text-white">Recherche en cours...</span>
+            <span className="text-sm font-bold text-zinc-800 dark:text-white">Recherche...</span>
           </div>
-          
-          {/* Étapes */}
           <div className="space-y-2">
             {stages.map((stage) => (
-              <div 
-                key={stage.key}
-                className={`flex items-center gap-2 text-xs transition-all ${
-                  loadingStage === stage.key 
-                    ? 'text-primary font-bold' 
-                    : loadingStage > stage.key 
-                    ? 'text-green-600 dark:text-green-400' 
-                    : 'text-zinc-400'
-                }`}
-              >
-                <div className={`transition-transform ${loadingStage === stage.key ? 'animate-pulse' : ''}`}>
-                  {stage.icon}
-                </div>
+              <div key={stage.key} className={`flex items-center gap-2 text-xs transition-all ${
+                loadingStage === stage.key ? 'text-primary font-bold' : loadingStage > stage.key ? 'text-green-600 dark:text-green-400' : 'text-zinc-400'
+              }`}>
+                <div className={`transition-transform ${loadingStage === stage.key ? 'animate-pulse' : ''}`}>{stage.icon}</div>
                 <span>{stage.label}</span>
-                {loadingStage > stage.key && (
-                  <CheckCircle2 size={14} className="ml-auto text-green-600" />
-                )}
-                {loadingStage === stage.key && (
-                  <Loader2 size={14} className="ml-auto animate-spin" />
-                )}
+                {loadingStage > stage.key && <CheckCircle2 size={14} className="ml-auto text-green-600" />}
+                {loadingStage === stage.key && <Loader2 size={14} className="ml-auto animate-spin" />}
               </div>
             ))}
           </div>
@@ -144,7 +108,6 @@ const LoadingIndicator = ({ clickPosition, loadingStage }: {
   );
 };
 
-// Composant carte principal
 function MapComponent({ 
   apiKey, 
   pois, 
@@ -153,7 +116,9 @@ function MapComponent({
   userLocation, 
   routeGeometry, 
   mapStyleType, 
-  onMapEmptyClick 
+  onMapEmptyClick,
+  isNavigating = false,
+  traveledPath = []
 }: MapProps) {
   const mapRef = useRef<MapRef>(null);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -169,7 +134,6 @@ function MapComponent({
   const [loadingStage, setLoadingStage] = useState('');
   const [clickPosition, setClickPosition] = useState<{ x: number; y: number } | null>(null);
 
-  // Optimisation Hover avec debounce
   const handleHover = useCallback((poi: POI | null) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     if (poi) {
@@ -179,28 +143,18 @@ function MapComponent({
     }
   }, []);
 
-  // Gestion du clic avec tracking des étapes
   const handleMapClick = useCallback(async (e: any) => {
     if (e.originalEvent?.defaultPrevented) return;
-    
     const { lngLat } = e;
-    
     setClickPosition({ x: e.point.x, y: e.point.y });
     setIsLoadingClick(true);
-    
     try {
-      // Simuler les étapes de chargement
       setLoadingStage('maptiler');
       await new Promise(resolve => setTimeout(resolve, 300));
-      
       setLoadingStage('osm');
       await new Promise(resolve => setTimeout(resolve, 300));
-      
       setLoadingStage('details');
-      
-      // Appeler la fonction de géocodage
       await onMapEmptyClick(lngLat.lng, lngLat.lat);
-      
     } finally {
       setIsLoadingClick(false);
       setLoadingStage('');
@@ -208,14 +162,9 @@ function MapComponent({
     }
   }, [onMapEmptyClick]);
 
-  // Effets de zoom
   useEffect(() => {
     if (userLocation && mapRef.current && !routeGeometry) {
-      mapRef.current.flyTo({ 
-        center: [userLocation.longitude, userLocation.latitude], 
-        zoom: 15, 
-        duration: 1200 
-      });
+      mapRef.current.flyTo({ center: [userLocation.longitude, userLocation.latitude], zoom: 15, duration: 1200 });
     }
   }, [userLocation, routeGeometry]);
 
@@ -223,12 +172,7 @@ function MapComponent({
     if (selectedPoi && mapRef.current && !routeGeometry) {
       const lng = selectedPoi.location?.longitude ?? selectedPoi.longitude;
       const lat = selectedPoi.location?.latitude ?? selectedPoi.latitude;
-      
-      mapRef.current.flyTo({ 
-        center: [lng, lat], 
-        zoom: 16, 
-        duration: 1000 
-      });
+      mapRef.current.flyTo({ center: [lng, lat], zoom: 16, duration: 1000 });
     }
   }, [selectedPoi, routeGeometry]);
 
@@ -237,7 +181,6 @@ function MapComponent({
         const coords = routeGeometry.coordinates;
         const bounds = new LngLatBounds(coords[0], coords[0]);
         for (const coord of coords) bounds.extend(coord as [number, number]);
-        
         mapRef.current.fitBounds(bounds, {
             padding: { top: 80, bottom: 80, right: 50, left: window.innerWidth > 768 ? 420 : 50 },
             duration: 1500 
@@ -245,30 +188,45 @@ function MapComponent({
     }
   }, [routeGeometry]);
 
-  // Rendu des marqueurs
+  // NOUVEAU: Centrer sur la position en temps réel pendant la navigation
+  useEffect(() => {
+    if (isNavigating && userLocation && mapRef.current) {
+      mapRef.current.easeTo({
+        center: [userLocation.longitude, userLocation.latitude],
+        duration: 500
+      });
+    }
+  }, [isNavigating, userLocation]);
+
   const pins = useMemo(() => {
     return pois.map((poi) => {
       const lat = poi.location?.latitude ?? poi.latitude;
       const lng = poi.location?.longitude ?? poi.longitude;
-
-      if (lat === undefined || lng === undefined || lat === 0) {
-        return null;
-      }
-      
+      if (lat === undefined || lng === undefined || lat === 0) return null;
       return (
         <MapMarker 
           key={poi.poi_id} 
           poi={poi} 
           isSelected={selectedPoi?.poi_id === poi.poi_id}
           onHover={handleHover}
-          onClick={(e) => {
-            e.originalEvent.stopPropagation();
-            onSelectPoi(poi);
-          }}
+          onClick={(e) => { e.originalEvent.stopPropagation(); onSelectPoi(poi); }}
         />
       );
     }).filter(Boolean);
   }, [pois, selectedPoi?.poi_id, onSelectPoi, handleHover]);
+
+  // NOUVEAU: GeoJSON du chemin parcouru
+  const traveledPathGeoJSON = useMemo(() => {
+    if (traveledPath.length < 2) return null;
+    return {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates: traveledPath.map(p => [p.longitude, p.latitude])
+      }
+    };
+  }, [traveledPath]);
 
   return (
     <div className="relative w-full h-full">
@@ -289,26 +247,35 @@ function MapComponent({
         <NavigationControl position="bottom-right" showCompass={false} />
         <ScaleControl />
 
-        {/* Itinéraire */}
+        {/* Itinéraire complet */}
         {routeGeometry && (
           <Source id="route-source" type="geojson" data={routeGeometry}>
              <Layer 
                id="route-outline"
                type="line"
-               paint={{
-                 'line-color': '#ffffff',
-                 'line-width': 8,
-                 'line-opacity': 0.8
-               }}
+               paint={{ 'line-color': '#ffffff', 'line-width': 8, 'line-opacity': 0.8 }}
                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
              />
              <Layer 
                id="route-line"
                type="line"
+               paint={{ 'line-color': '#9400D3', 'line-width': 5, 'line-opacity': 1 }}
+               layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+             />
+          </Source>
+        )}
+
+        {/* NOUVEAU: Chemin parcouru en pointillés */}
+        {traveledPathGeoJSON && (
+          <Source id="traveled-path-source" type="geojson" data={traveledPathGeoJSON}>
+             <Layer 
+               id="traveled-path"
+               type="line"
                paint={{
-                 'line-color': '#9400D3',
-                 'line-width': 5,
-                 'line-opacity': 1
+                 'line-color': '#22c55e',
+                 'line-width': 4,
+                 'line-dasharray': [2, 2],
+                 'line-opacity': 0.9
                }}
                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
              />
@@ -326,10 +293,8 @@ function MapComponent({
           </Marker>
         )}
 
-        {/* Marqueurs POI */}
         {pins}
 
-        {/* Tooltip survol */}
         <AnimatePresence>
           {hoveredPoi && !selectedPoi && (
             <Popup
@@ -348,16 +313,8 @@ function MapComponent({
                 className="flex gap-2 p-0 min-w-[180px] shadow-xl rounded-lg bg-white overflow-hidden"
               >
                 <div className="relative w-10 h-10 shrink-0 bg-zinc-100 flex items-center justify-center overflow-hidden">
-                  {hoveredPoi.poi_images_urls && hoveredPoi.poi_images_urls[0] && 
-                  !hoveredPoi.poi_images_urls[0].includes("example.com") ? (
-                    <Image 
-                      src={hoveredPoi.poi_images_urls[0]} 
-                      alt=""
-                      fill 
-                      className="object-cover" 
-                      sizes="40px"
-                      quality={50}
-                    />
+                  {hoveredPoi.poi_images_urls && hoveredPoi.poi_images_urls[0] && !hoveredPoi.poi_images_urls[0].includes("example.com") ? (
+                    <Image src={hoveredPoi.poi_images_urls[0]} alt="" fill className="object-cover" sizes="40px" quality={50} />
                   ) : (
                     <MapPinIcon size={16} className="text-zinc-300" />
                   )}
@@ -377,7 +334,6 @@ function MapComponent({
         </AnimatePresence>
       </Map>
 
-      {/* Indicateur de chargement enrichi */}
       <AnimatePresence>
         {isLoadingClick && clickPosition && (
           <LoadingIndicator clickPosition={clickPosition} loadingStage={loadingStage} />

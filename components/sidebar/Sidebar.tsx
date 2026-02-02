@@ -7,6 +7,7 @@ import {
   Building, UserSearch, PanelLeftClose, MapPinHouse
 } from "lucide-react";
 import { clsx } from "clsx";
+import { captureMap, shareMap } from "@/services/mapCaptureService";
 
 interface SidebarProps {
   isOpen: boolean; 
@@ -79,8 +80,8 @@ export const Sidebar = ({
           
           <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2 mx-2" />
 
-          <SidebarItem isExpanded={isExpanded} icon={<Share2 size={22} />} label="Partager la carte" onClick={() => handleAction(onShare)} />
-          <SidebarItem isExpanded={isExpanded} icon={<Printer size={22} />} label="Imprimer la carte" onClick={() => handleAction(onPrint)} />
+          <SidebarItem isExpanded={isExpanded} icon={<Share2 size={22} />} label="Partager la carte" onClick={() => handleAction(shareMap)} />
+          <SidebarItem isExpanded={isExpanded} icon={<Printer size={22} />} label="Imprimer la carte" onClick={() => handleAction(captureMap)} />
           
           <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2 mx-2" />
 

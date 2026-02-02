@@ -8,7 +8,7 @@ import { PoiDetailsSidebar } from "@/components/sidebar/POIDetailsSidebar";
 import { DirectionsSidebar } from "@/components/sidebar/DirectionSidebar";
 import { SecondarySidebar } from "@/components/sidebar/SecondarySidebar";
 import { POI, Location, TransportMode } from "@/types";
-import { getRoute } from "@/services/routingService";
+import { getRoute, calculateDistance } from "@/services/routingService";
 import { poiService } from "@/services/poiService";
 import { useUserData } from "@/hooks/useUserData";
 import { Settings as SettingsIcon, Check, X, AlertTriangle } from "lucide-react";
@@ -16,6 +16,8 @@ import { Loader } from "@/components/ui/Loader";
 import { MobileNavBar } from "@/components/navigation/MobileNavbar";
 import { authService } from "@/services/authService";
 import { reverseGeocode } from "@/services/geocodingService";
+import { useGeolocation } from "@/hooks/useGeolocation";
+import { captureMap, shareMap } from "@/services/mapCaptureService";
 
 // Import Map Dynamique sans SSR
 const MapComponent = dynamic(() => import("@/components/map/Map"), {
@@ -48,13 +50,25 @@ export default function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [userLocation, setUserLocation] = useState<Location | null>(null);
   
   // États Routage
   const [routeStats, setRouteStats] = useState<any>(null);
   const [routeGeometry, setRouteGeometry] = useState<any>(null);
   const [isRouteLoading, setIsRouteLoading] = useState(false);
   const [activeTransportMode, setActiveTransportMode] = useState<TransportMode>("driving");
+
+  // États pour la navigation GPS
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [traveledPath, setTraveledPath] = useState<Location[]>([]);
+
+  // ✅ CORRECTION : On utilise uniquement le hook useGeolocation (plus de state séparé)
+  const { 
+    position: userLocation,  // Renommage direct ici
+    isTracking, 
+    startTracking, 
+    stopTracking,
+    getCurrentPosition 
+  } = useGeolocation();
 
   // ============================================
   // INITIALISATION (Géoloc + Fetch API)
@@ -95,26 +109,20 @@ export default function Home() {
         }
      };
 
-     if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                if(!mounted) return;
-                const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-                setUserLocation(loc);
-                loadLocalPois(loc.latitude, loc.longitude);
-            },
-            (err) => {
-                console.warn("Géolocalisation refusée ou erreur:", err);
-                loadAllPois();
-            },
-            { timeout: 10000 }
-        );
-     } else {
-        loadAllPois();
-     }
+     // ✅ Utilisation du hook getCurrentPosition au lieu de navigator.geolocation
+     getCurrentPosition()
+       .then(loc => {
+         if (mounted) {
+           loadLocalPois(loc.latitude, loc.longitude);
+         }
+       })
+       .catch(() => {
+         console.warn("Géolocalisation échouée, chargement de tous les POIs");
+         loadAllPois();
+       });
 
      return () => { mounted = false; };
-  }, []);
+  }, [getCurrentPosition]);
 
   useEffect(() => {
     if (panelState.type === "mypois") {
@@ -156,7 +164,10 @@ export default function Home() {
   };
 
   const handleCalculateRoute = async (destination: POI, mode: TransportMode) => {
-    if (!userLocation) return alert("Nous avons besoin de votre position pour l'itinéraire.");
+    if (!userLocation) {
+      alert("Impossible de calculer l'itinéraire sans votre position.");
+      return;
+    }
     
     setActiveTransportMode(mode);
     setIsRouteLoading(true);
@@ -184,21 +195,21 @@ export default function Home() {
     setPanelState({ type: null });
     setRouteGeometry(null); 
     setRouteStats(null);
+    handleStopNavigation(); // Arrêter la navigation si active
   };
 
   const handleResetToMap = () => {
     setPanelState({ type: null });
-    setIsMainSidebarOpen(false);   
+    setIsMainSidebarOpen(false);
+    handleStopNavigation();
   };
 
   // HANDLER OPTIMISÉ POUR LE CLIC SUR LA CARTE
   const handleMapClick = async (lng: number, lat: number) => {
     try {
-      // Appeler le service de géocodage inverse
       const externalPoi = await reverseGeocode(lat, lng);
       
       if (externalPoi) {
-        // Afficher directement le POI externe dans la sidebar
         setPanelState({ 
           type: "details", 
           data: externalPoi as POI 
@@ -208,6 +219,54 @@ export default function Home() {
       console.error("Erreur lors du clic sur la carte:", error);
     }
   };
+
+  // ============================================
+  // NAVIGATION GPS
+  // ============================================
+
+  const handleStartNavigation = () => {
+    if (!userLocation || !panelState.data) {
+      alert("Position ou destination manquante");
+      return;
+    }
+
+    setIsNavigating(true);
+    setTraveledPath([userLocation]); // Début du trajet
+    startTracking(); // Activer le suivi GPS continu
+    
+    console.log("🚀 Navigation démarrée");
+  };
+
+  const handleStopNavigation = () => {
+    setIsNavigating(false);
+    setTraveledPath([]);
+    stopTracking();
+    console.log("🛑 Navigation arrêtée");
+  };
+
+  // Mise à jour du chemin parcouru
+  useEffect(() => {
+    if (isNavigating && userLocation) {
+      setTraveledPath(prev => {
+        // Éviter les doublons trop proches
+        const lastPoint = prev[prev.length - 1];
+        if (lastPoint) {
+          const dist = calculateDistance(lastPoint, userLocation);
+          if (dist < 5) return prev; // Ignorer si < 5m
+        }
+        return [...prev, userLocation];
+      });
+
+      // Vérifier si on est arrivé (distance < 20m)
+      if (panelState.data?.location) {
+        const distanceToDestination = calculateDistance(userLocation, panelState.data.location);
+        if (distanceToDestination < 20) {
+          alert("🎉 Vous êtes arrivé à destination !");
+          handleStopNavigation();
+        }
+      }
+    }
+  }, [isNavigating, userLocation, panelState.data]);
 
   // Filtrage Local
   const filteredPois = useMemo(() => {
@@ -242,7 +301,14 @@ export default function Home() {
         onSelectCategory={(id) => setSelectedCategory(prev => prev === id ? "" : id)}
         onSearch={setSearchQuery}
         onSelectResult={handleSelectPoi}
-        onLocateMe={() => userLocation && setUserLocation({...userLocation})}
+        onLocateMe={async () => {
+          try {
+            const pos = await getCurrentPosition();
+            console.log("📍 Position obtenue:", pos);
+          } catch (err) {
+            alert("Impossible d'obtenir votre position");
+          }
+        }}
         recentSearches={[]}
         recentPois={recentPois}
       />
@@ -251,9 +317,15 @@ export default function Home() {
         isOpen={isMainSidebarOpen} 
         onClose={() => setIsMainSidebarOpen(false)}
         onViewChange={handleViewChange}
-        onLocateMe={() => userLocation && setUserLocation({...userLocation})}
-        onShare={() => navigator.clipboard.writeText(window.location.href)}
-        onPrint={() => window.print()}
+        onLocateMe={async () => {
+          try {
+            await getCurrentPosition();
+          } catch (err) {
+            alert("Géolocalisation échouée");
+          }
+        }}
+        onShare={shareMap}
+        onPrint={captureMap}
         onToggleSettings={() => setIsSettingsOpen(true)}
       />
 
@@ -284,6 +356,9 @@ export default function Home() {
             isLoadingRoute={isRouteLoading}
             routeStats={routeStats}
             onCalculateRoute={(mode) => handleCalculateRoute(panelState.data, mode)}
+            onStartNavigation={handleStartNavigation}
+            onStopNavigation={handleStopNavigation}
+            isNavigating={isNavigating}
         />
       )}
 
@@ -337,6 +412,8 @@ export default function Home() {
           routeGeometry={routeGeometry}
           mapStyleType={mapStyle} 
           onMapEmptyClick={handleMapClick}
+          isNavigating={isNavigating}
+          traveledPath={traveledPath}
         />
       </div>
 
