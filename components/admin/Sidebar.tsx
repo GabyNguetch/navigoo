@@ -2,7 +2,9 @@
 
 import React, { useState } from 'react';
 import { cn } from '@/components/admin/utils';
-
+import { LogOut } from 'lucide-react';
+import { authService } from '@/services/authService';
+import { router, useRouter } from 'next/navigation';
 interface SidebarProps {
   onNavigate?: (section: string) => void;
   currentSection?: string;
@@ -17,7 +19,17 @@ interface NavItem {
 
 export const Sidebar: React.FC<SidebarProps> = ({ onNavigate, currentSection = 'dashboard' }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
+   const router = useRouter();
 
+  const handleLogout = () => {
+    if (confirm("Voulez-vous vraiment vous déconnecter ?")) {
+      authService.logout();
+    }
+  };
+
+  const handleReturnToMap = () => {
+    router.push('/');
+  };
   const navItems: NavItem[] = [
     {
       id: 'dashboard',
@@ -53,43 +65,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigate, currentSection = '
       icon: (
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-        </svg>
-      ),
-    },
-    {
-      id: 'organizations',
-      label: 'Organisations',
-      icon: (
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-        </svg>
-      ),
-    },
-    {
-      id: 'analytics',
-      label: 'Analytiques',
-      icon: (
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      ),
-    },
-    {
-      id: 'content',
-      label: 'Contenu',
-      icon: (
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-        </svg>
-      ),
-    },
-    {
-      id: 'settings',
-      label: 'Paramètres',
-      icon: (
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
       ),
     },
@@ -163,20 +138,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigate, currentSection = '
           </ul>
         </nav>
 
-        {/* User Profile */}
-        <div className="border-t border-gray-200 p-4 dark:border-gray-700">
-          <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-500 text-white">
-              <span className="text-sm font-bold">AD</span>
+      {/* Footer Area: Profile & Logout */}
+      <div className="border-t border-gray-200 p-4 dark:border-gray-700 space-y-2">
+        {/* Profile Info */}
+        <div className="flex items-center gap-3 px-3 py-2">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-500 text-white font-bold">
+            AD
+          </div>
+          {!isCollapsed && (
+            <div className="flex-1 text-left overflow-hidden">
+              <p className="text-sm font-bold text-gray-900 dark:text-white truncate">Admin Navigoo</p>
+              <p className="text-xs text-gray-500 truncate">admin@navigoo.com</p>
             </div>
-            {!isCollapsed && (
-              <div className="flex-1 text-left">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Admin</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">admin@navigoo.com</p>
-              </div>
-            )}
-          </button>
+          )}
         </div>
+
+        {/* --- ACTION: LOGOUT --- */}
+        <button
+          onClick={handleLogout}
+          className={cn(
+            "flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all",
+            isCollapsed ? "justify-center" : "justify-start"
+          )}
+          title="Se déconnecter"
+        >
+          <LogOut size={20} className="shrink-0" />
+          {!isCollapsed && <span>Se déconnecter</span>}
+        </button>
+      </div>
       </div>
     </aside>
   );

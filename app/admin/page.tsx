@@ -6,7 +6,7 @@ import { StatsCard } from '@/components/admin/StatCards';
 import { Chart } from '@/components/admin/Chart';
 import { RecentActivity } from '@/components/admin/RecentActivity';
 import { DataTable, Column } from '@/components/admin/DataTable';
-import { Modal } from '@/components/admin/Modal'; // Import du nouveau composant
+import { Modal } from '@/components/admin/Modal';
 import { 
   DashboardAPI, 
   PoiAPI, 
