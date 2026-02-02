@@ -1,15 +1,14 @@
-// hooks/useUserData.ts
-
+// hooks/useUserData.ts - VERSION COMPLÈTE BACKEND
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { POI, Trip, MapStyle } from "@/types";
 import { poiService } from "@/services/poiService";
 import { authService } from "@/services/authService";
-import { AccessLogAPI } from "@/services/adminService";
+import { userProfileService } from "@/services/userProfileService";
 
 export const useUserData = () => {
-  const [savedPois, setSavedPois] = useState<POI[]>([]); // Simulation via Favoris (à implémenter au backend si besoin)
+  const [savedPois, setSavedPois] = useState<POI[]>([]);
   const [recentPois, setRecentPois] = useState<POI[]>([]);
   const [recentTrips, setRecentTrips] = useState<Trip[]>([]);
   const [myPois, setMyPois] = useState<POI[]>([]);
@@ -31,24 +30,17 @@ export const useUserData = () => {
 
   const loadRecentActivity = useCallback(async (userId: string) => {
     try {
-      // On récupère les logs d'accès de l'utilisateur pour construire la liste "Récents"
-      const logs = await AccessLogAPI.getByUser(userId);
-      
-      // On prend les 5 derniers IDs de POIs uniques visités
-      const uniquePoiIds = Array.from(new Set(logs.map((log) => log.poiId))).slice(0, 5);
-      
-      // On récupère les détails de ces POIs
-      const detailedPois = await Promise.all(
-        uniquePoiIds.map((id) => poiService.getPoiById(id))
-      );
-      
-      setRecentPois(detailedPois);
-      
-      // Filtrage des logs pour les trajets récents (si métadonnées présentes)
-      const trips = logs
-        .filter(l => l.accessType === "TRIP" && l.metadata)
-        .map(l => l.metadata as unknown as Trip);
-      setRecentTrips(trips);
+      // Récupérer POIs récents via le service profil
+      const recentPoisData = await userProfileService.getRecentPois(userId, 10);
+      setRecentPois(recentPoisData);
+
+      // Récupérer POIs sauvegardés
+      const savedPoisData = await userProfileService.getSavedPois(userId);
+      setSavedPois(savedPoisData);
+
+      // Récupérer trajets récents
+      const tripsData = await userProfileService.getRecentTrips(userId, 10);
+      setRecentTrips(tripsData);
 
     } catch (err) {
       console.error("Erreur chargement historique:", err);
@@ -108,15 +100,22 @@ export const useUserData = () => {
     if (!currentUser) return;
     try {
       // Enregistre l'accès au backend
-      await AccessLogAPI.create({
+      await userProfileService.createAccessLog({
         poiId: poi.poi_id,
         userId: currentUser.userId,
         organizationId: currentUser.organizationId,
         accessType: "VIEW",
         platformType: "WEB"
       });
+      
       // Update local state pour réactivité immédiate
-      setRecentPois((prev) => [poi, ...prev.filter((p) => p.poi_id !== poi.poi_id)].slice(0, 10));
+      setRecentPois((prev) => {
+        const exists = prev.find(p => p.poi_id === poi.poi_id);
+        if (exists) {
+          return [exists, ...prev.filter(p => p.poi_id !== poi.poi_id)].slice(0, 10);
+        }
+        return [poi, ...prev].slice(0, 10);
+      });
     } catch (err) {
       console.warn("Échec enregistrement log accès");
     }
@@ -125,13 +124,13 @@ export const useUserData = () => {
   const addTrip = async (trip: Trip) => {
     if (!currentUser) return;
     try {
-        await AccessLogAPI.create({
-            poiId: trip.id, // Destination
+        await userProfileService.createAccessLog({
+            poiId: trip.id,
             userId: currentUser.userId,
             organizationId: currentUser.organizationId,
             accessType: "TRIP",
             platformType: "WEB",
-            metadata: { ...trip }
+            metadata: trip
         });
         setRecentTrips((prev) => [trip, ...prev].slice(0, 10));
     } catch (err) {
@@ -146,9 +145,15 @@ export const useUserData = () => {
   };
 
   const toggleSavePoi = async (poi: POI) => {
-    // Le backend ne possède pas encore de table /favorites, on peut utiliser 
-    // les likes de la table Reviews ou attendre une évolution API.
-    console.info("L'API actuelle ne gère pas encore les favoris persistants.");
+    // Gestion temporaire locale
+    // TODO: Créer une vraie table favorites sur le backend
+    const isSaved = savedPois.some(p => p.poi_id === poi.poi_id);
+    
+    if (isSaved) {
+      setSavedPois(prev => prev.filter(p => p.poi_id !== poi.poi_id));
+    } else {
+      setSavedPois(prev => [poi, ...prev]);
+    }
   };
 
   return {
