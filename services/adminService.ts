@@ -121,8 +121,21 @@ export interface Podcast {
 
 // Helper function for API calls avec fallback localStorage
 async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
+<<<<<<< HEAD
   const url = `${API_BASE_URL}${endpoint}`;
   console.log(`📡 Admin API: ${options?.method || 'GET'} ${url}`);
+=======
+  const url = `${API_BASE_URL}${endpoint}`; // Construire l'URL
+  console.log(`📡 Calling API: ${options?.method || 'GET'} ${url}`); // LOG DE DEBUG
+
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+>>>>>>> d23c286 (feat: Enhance API call logging and handle non-JSON responses)
 
   try {
     const response = await fetch(url, {
@@ -149,6 +162,7 @@ async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
   }
 }
 
+<<<<<<< HEAD
 // Fonctions localStorage
 function getLocalStorageData<T>(key: string): T[] {
   if (typeof window === 'undefined') return [];
@@ -160,6 +174,14 @@ function saveLocalStorageData<T>(key: string, data: T[]): void {
   if (typeof window !== 'undefined') {
     localStorage.setItem(key, JSON.stringify(data));
   }
+=======
+  const contentType = response.headers.get("content-type");
+  if (response.status === 204 || !contentType || !contentType.includes("application/json")) {
+    return {} as T; 
+  }
+
+  return response.json();
+>>>>>>> d23c286 (feat: Enhance API call logging and handle non-JSON responses)
 }
 
 // ==================== USER API ====================
