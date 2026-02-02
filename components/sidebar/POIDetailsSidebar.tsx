@@ -1,10 +1,15 @@
+// components/sidebar/POIDetailsSidebar.tsx
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { POI } from "@/types";
-import { X, Navigation, Bookmark, Share2, Smartphone, Globe, Clock, MapPin, Star, MessageSquare, Edit } from "lucide-react";
+import { X, Navigation, Bookmark, Share2, Smartphone, Globe, Clock, MapPin, Star, MessageSquare, Edit, FileText, Mic } from "lucide-react";
 import { getCategoryConfig } from "@/data/categories";
 import { useRouter } from "next/navigation";
-import { useUserData } from "@/hooks/useUserData"; // Pour vérifier propriété
+import { useUserData } from "@/hooks/useUserData";
+import { Button } from "@/components/ui/Button";
+import { ReviewsSection } from "../reviews/ReviewsSection";
+import { reviewService } from "@/services/reviewService";
 
 interface PoiDetailsProps {
   poi: POI;
@@ -17,12 +22,46 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
   const categoryConfig = getCategoryConfig(poi.poi_category);
   const router = useRouter();
   const { myPois } = useUserData();
+  
+  const [stats, setStats] = useState<{ averageRating: number; reviewCount: number } | null>(null);
 
   // Vérifier si le POI appartient à l'utilisateur
   const isOwner = myPois.some(p => p.poi_id === poi.poi_id);
 
+  // Charger les stats d'avis
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        console.log("📊 [PoiDetailsSidebar] Chargement stats avis pour POI:", poi.poi_id);
+        const statsData = await reviewService.getPoiStats(poi.poi_id);
+        setStats(statsData);
+        console.log("✅ [PoiDetailsSidebar] Stats chargées:", statsData);
+      } catch (error) {
+        console.warn("⚠️ [PoiDetailsSidebar] Impossible de charger les stats:", error);
+      }
+    };
+
+    if (poi.poi_id) {
+      loadStats();
+    }
+  }, [poi.poi_id]);
+
   const handleEdit = () => {
     router.push(`/add-poi?id=${poi.poi_id}`);
+  };
+
+  const handleCreateContent = (type: 'blog' | 'podcast') => {
+    router.push(`/add-content?type=${type}&poiId=${poi.poi_id}`);
+  };
+
+  const handleReviewSubmitted = async () => {
+    // Recharger les stats après soumission d'un avis
+    try {
+      const statsData = await reviewService.getPoiStats(poi.poi_id);
+      setStats(statsData);
+    } catch (error) {
+      console.error("Erreur rechargement stats:", error);
+    }
   };
 
   return (
@@ -31,7 +70,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
       animate={{ x: isOpen ? "0%" : "-100%" }}
       exit={{ x: "-100%" }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className="fixed top-0 left-0 md:left-[72px] h-full w-full md:w-[400px] bg-white dark:bg-zinc-900 shadow-2xl z-[55] flex flex-col border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto"
+      className="fixed top-0 left-0 md:left-[72px] h-full w-full md:w-[420px] bg-white dark:bg-zinc-900 shadow-2xl z-[55] flex flex-col border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent"
     >
       {/* HEADER IMAGE HERO */}
       <div className="relative w-full h-56 shrink-0 bg-zinc-200">
@@ -52,7 +91,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
                 onClick={handleEdit}
                 className="absolute bottom-4 right-4 bg-white text-black px-4 py-2 rounded-full shadow-lg font-bold text-sm flex items-center gap-2 hover:scale-105 transition-transform"
             >
-                <Edit size={16} /> Modifier Infos
+                <Edit size={16} /> Modifier
             </button>
         )}
       </div>
@@ -60,17 +99,26 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
       {/* CONTENU */}
       <div className="p-6 space-y-6 pb-20">
         
-        {/* TITRE & REVIEW */}
+        {/* TITRE & STATS */}
         <div>
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 leading-tight">{poi.poi_name}</h1>
-          <div className="flex items-center gap-2 mt-3">
-            <span className="font-black text-sm bg-green-600 text-white px-1.5 rounded">{poi.rating || "N/A"}</span>
-            <div className="flex text-yellow-500">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star key={star} size={14} fill={star <= Math.round(poi.rating) ? "currentColor" : "none"} />
-              ))}
-            </div>
-            <span className="text-zinc-500 text-sm underline">({poi.review_count} avis)</span>
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            {stats ? (
+              <>
+                <span className="font-black text-sm bg-green-600 text-white px-2 py-0.5 rounded">{stats.averageRating.toFixed(1)}</span>
+                <div className="flex text-yellow-500">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star key={star} size={14} fill={star <= Math.round(stats.averageRating) ? "currentColor" : "none"} />
+                  ))}
+                </div>
+                <span className="text-zinc-500 text-sm underline">({stats.reviewCount} avis)</span>
+              </>
+            ) : (
+              <>
+                <span className="font-black text-sm bg-zinc-600 text-white px-2 py-0.5 rounded">{poi.rating || "N/A"}</span>
+                <span className="text-zinc-500 text-sm">Chargement...</span>
+              </>
+            )}
             <span className="text-zinc-300">•</span>
             <span className="text-primary text-sm font-semibold flex items-center gap-1">
                 {categoryConfig.icon} {categoryConfig.label}
@@ -115,42 +163,38 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
 
         <div className="h-px bg-zinc-100 dark:bg-zinc-800 w-full" />
 
-        {/* SECTION AVIS / COMMENTAIRES */}
+        {/* CRÉER DU CONTENU (Blog/Podcast) */}
         <div>
-            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <MessageSquare size={18} /> Avis et commentaires
-            </h3>
-            
-            <div className="space-y-4">
-                {/* Simulation Commentaire 1 */}
-                <div className="flex gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center font-bold text-blue-600 text-sm">JM</div>
-                    <div className="bg-zinc-50 dark:bg-zinc-800 p-3 rounded-r-xl rounded-bl-xl text-sm flex-1">
-                        <div className="flex justify-between items-center mb-1">
-                            <span className="font-bold">Jean-Marc</span>
-                            <div className="flex text-yellow-500"><Star size={10} fill="currentColor"/> 5.0</div>
-                        </div>
-                        <p className="text-zinc-600 dark:text-zinc-300">Très bel endroit, je recommande pour les soirées entre amis !</p>
-                    </div>
-                </div>
-
-                {/* Simulation Commentaire 2 */}
-                <div className="flex gap-3">
-                    <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center font-bold text-purple-600 text-sm">AL</div>
-                    <div className="bg-zinc-50 dark:bg-zinc-800 p-3 rounded-r-xl rounded-bl-xl text-sm flex-1">
-                        <div className="flex justify-between items-center mb-1">
-                            <span className="font-bold">Alice L.</span>
-                            <div className="flex text-yellow-500"><Star size={10} fill="currentColor"/> 4.0</div>
-                        </div>
-                        <p className="text-zinc-600 dark:text-zinc-300">Le service est un peu lent mais la nourriture est excellente.</p>
-                    </div>
-                </div>
-            </div>
-
-            <button className="w-full mt-4 py-2 border border-zinc-200 dark:border-zinc-700 text-zinc-500 text-sm font-medium rounded-lg hover:bg-zinc-50 transition-colors">
-                Voir les 45 avis
-            </button>
+          <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+            📝 Créer du contenu
+          </h3>
+          <div className="flex gap-3">
+            <Button 
+              onClick={() => handleCreateContent('blog')}
+              variant="outline"
+              size="sm"
+              className="flex-1 gap-2"
+            >
+              <FileText size={16}/> Blog
+            </Button>
+            <Button 
+              onClick={() => handleCreateContent('podcast')}
+              variant="outline"
+              size="sm"
+              className="flex-1 gap-2"
+            >
+              <Mic size={16}/> Podcast
+            </Button>
+          </div>
         </div>
+
+        <div className="h-px bg-zinc-100 dark:bg-zinc-800 w-full" />
+
+        {/* SECTION AVIS - Intégration complète */}
+        <ReviewsSection 
+          poiId={poi.poi_id} 
+          onReviewSubmitted={handleReviewSubmitted}
+        />
 
       </div>
     </motion.div>
