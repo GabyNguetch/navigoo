@@ -9,7 +9,7 @@ import { DirectionsSidebar } from "@/components/sidebar/DirectionSidebar";
 import { SecondarySidebar } from "@/components/sidebar/SecondarySidebar";
 import { POI, Location, TransportMode } from "@/types";
 import { getRoute } from "@/services/routingService";
-import { poiService } from "@/services/poiService"; // Notre nouveau service
+import { poiService } from "@/services/poiService";
 import { useUserData } from "@/hooks/useUserData";
 import { Settings as SettingsIcon, Check, X, AlertTriangle } from "lucide-react";
 import { Loader } from "@/components/ui/Loader";
@@ -23,7 +23,6 @@ const MapComponent = dynamic(() => import("@/components/map/Map"), {
   loading: () => <Loader />,
 });
 
-// À mettre dans un fichier env idéalement
 const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9"; 
 
 export default function Home() {
@@ -64,7 +63,6 @@ export default function Home() {
   useEffect(() => {
      let mounted = true;
 
-     // 1. Définir une fonction pour charger TOUS les POIs
      const loadAllPois = async () => {
         try {
             if(mounted) setIsLoadingPois(true);
@@ -78,14 +76,11 @@ export default function Home() {
         }
      };
 
-     // 2. Définir une fonction pour charger par LOCATION
      const loadLocalPois = async (lat: number, lon: number) => {
         try {
             if(mounted) setIsLoadingPois(true);
-            // Recherche rayon 50km
             const data = await poiService.searchPoisByLocation(lat, lon, 50);
             
-            // Si pas de résultat autour, on charge tout pour ne pas laisser la carte vide
             if (!data || data.length === 0) {
                console.warn("Pas de POIs proches, chargement global.");
                await loadAllPois();
@@ -94,13 +89,12 @@ export default function Home() {
             }
         } catch (err) {
             console.error("Erreur recherche locale, repli sur tout:", err);
-            await loadAllPois(); // Fallback robuste
+            await loadAllPois();
         } finally {
             if(mounted) setIsLoadingPois(false);
         }
      };
 
-     // 3. Logique Géoloc Navigateur
      if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
             (pos) => {
@@ -111,23 +105,19 @@ export default function Home() {
             },
             (err) => {
                 console.warn("Géolocalisation refusée ou erreur:", err);
-                // Si l'utilisateur refuse la loc, on charge tout par défaut
                 loadAllPois();
             },
-            { timeout: 10000 } // Timeout 10s max pour ne pas bloquer l'écran
+            { timeout: 10000 }
         );
      } else {
-        // Pas de support géoloc
         loadAllPois();
      }
 
      return () => { mounted = false; };
-  }, []); // Run once on mount
+  }, []);
 
-  // Rafraichir "Mes POIs" depuis le Backend quand on ouvre le panneau
   useEffect(() => {
     if (panelState.type === "mypois") {
-        // Récupération de la session réelle
         const user = authService.getSession(); 
         if (user?.userId) {
             loadUserPois(user.userId); 
@@ -135,7 +125,7 @@ export default function Home() {
             console.warn("Utilisateur non connecté, impossible de charger 'Mes POIs'");
         }
     }
-  }, [panelState.type, loadUserPois]); // Ajouter loadUserPois en dépendance
+  }, [panelState.type, loadUserPois]);
 
   // ============================================
   // HANDLERS INTERFACE
@@ -146,7 +136,6 @@ export default function Home() {
         setPanelState({ type: null });
         return;
     }
-    // Convertir au bon format si le backend renvoie des champs manquants
     const safePoi = { ...poi, poi_images_urls: poi.poi_images_urls || [] };
     
     addRecentPoi(safePoi);
@@ -202,30 +191,31 @@ export default function Home() {
     setIsMainSidebarOpen(false);   
   };
 
+  // HANDLER OPTIMISÉ POUR LE CLIC SUR LA CARTE
   const handleMapClick = async (lng: number, lat: number) => {
-    // Si on a cliqué sur le vide (géré par le composant Map qui appelle handleSelectPoi(null))
-    setIsRouteLoading(true); // On affiche un petit loader visuel
-    const externalPoi = await reverseGeocode(lat, lng);
-    
-    if (externalPoi) {
+    try {
+      // Appeler le service de géocodage inverse
+      const externalPoi = await reverseGeocode(lat, lng);
+      
+      if (externalPoi) {
+        // Afficher directement le POI externe dans la sidebar
         setPanelState({ 
-            type: "details", 
-            data: externalPoi as POI 
+          type: "details", 
+          data: externalPoi as POI 
         });
+      }
+    } catch (error) {
+      console.error("Erreur lors du clic sur la carte:", error);
     }
-    setIsRouteLoading(false);
-};
+  };
 
-  // Filtrage Local (Client-Side) pour réactivité instantanée
+  // Filtrage Local
   const filteredPois = useMemo(() => {
     return allPois.filter((poi) => {
-      // Sécurité si les champs sont nuls
       const catMatch = selectedCategory ? (poi.poi_category === selectedCategory) : true;
       const nameMatch = searchQuery 
         ? (poi.poi_name?.toLowerCase().includes(searchQuery.toLowerCase())) 
         : true;
-      
-      // Filtrer seulement les POIs actifs
       const activeMatch = poi.is_active !== false; 
 
       return catMatch && nameMatch && activeMatch;
@@ -235,10 +225,8 @@ export default function Home() {
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-zinc-50 dark:bg-black font-sans">
       
-      {/* LOADER INITIAL UNIQUEMENT */}
       {isLoadingPois && <Loader className="z-[9999]" />}
 
-      {/* ERROR TOAST (Toast erreur si API Backend HS) */}
       {fetchError && !isLoadingPois && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 z-50 bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-3 shadow-xl animate-in fade-in slide-in-from-top-5">
             <AlertTriangle size={20} />
@@ -247,17 +235,15 @@ export default function Home() {
         </div>
       )}
 
-      {/* --- UI Components --- */}
-
       <TopLayout 
         onToggleSidebar={() => setIsMainSidebarOpen(!isMainSidebarOpen)}
-        allPois={allPois} // Data provenant du backend
+        allPois={allPois}
         selectedCategory={selectedCategory}
         onSelectCategory={(id) => setSelectedCategory(prev => prev === id ? "" : id)}
         onSearch={setSearchQuery}
         onSelectResult={handleSelectPoi}
-        onLocateMe={() => userLocation && setUserLocation({...userLocation})} // Recentrer
-        recentSearches={[]} // TODO: Persister recherches
+        onLocateMe={() => userLocation && setUserLocation({...userLocation})}
+        recentSearches={[]}
         recentPois={recentPois}
       />
 
@@ -278,9 +264,6 @@ export default function Home() {
         onResetView={handleResetToMap}
       />
 
-      {/* --- PANNEAUX LATERAUX --- */}
-
-      {/* Détails */}
       {panelState.type === "details" && panelState.data && (
         <PoiDetailsSidebar 
           poi={panelState.data} 
@@ -290,7 +273,6 @@ export default function Home() {
         />
       )}
 
-      {/* Itinéraire */}
       {panelState.type === "directions" && panelState.data && (
         <DirectionsSidebar 
             isOpen={true}
@@ -305,7 +287,6 @@ export default function Home() {
         />
       )}
 
-      {/* Listes (Sauvegardés, Mes Pois...) */}
       {(["saved", "recent", "trips", "mypois"].includes(panelState.type || "")) && (
           <SecondarySidebar 
              view={panelState.type}
@@ -315,7 +296,6 @@ export default function Home() {
           />
       )}
 
-      {/* Settings Modal */}
       {isSettingsOpen && (
          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
              <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
@@ -347,17 +327,16 @@ export default function Home() {
          </div>
       )}
 
-      {/* Carte Interactive */}
       <div className="absolute top-0 left-0 w-full h-full z-0 print:block">
         <MapComponent 
           apiKey={MAPTILER_API_KEY} 
-          pois={filteredPois} // Données dynamiques
+          pois={filteredPois}
           selectedPoi={panelState.type === "details" || panelState.type === "directions" ? panelState.data : null}
           userLocation={userLocation}
           onSelectPoi={handleSelectPoi}
           routeGeometry={routeGeometry}
           mapStyleType={mapStyle} 
-          onMapEmptyClick={handleMapClick} // La prop demandée
+          onMapEmptyClick={handleMapClick}
         />
       </div>
 

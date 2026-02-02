@@ -1403,6 +1403,239 @@ export default function AdminLayout({
 
 
 ================================================================================
+FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\app\profile\page.tsx
+================================================================================
+
+"use client";
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { 
+  User, Mail, Phone, Lock, Camera, LogOut, 
+  MapPin, Route, Star, LayoutDashboard, ChevronRight, 
+  Settings, Building2, Calendar
+} from "lucide-react";
+import { authService } from "@/services/authService";
+import { poiService } from "@/services/poiService";
+import { useUserData } from "@/hooks/useUserData";
+import { AppUser, POI } from "@/types";
+import { Button } from "@/components/ui/Button";
+import { Loader } from "@/components/ui/Loader";
+
+export default function ProfilePage() {
+  const router = useRouter();
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [userPoi, setUserPoi] = useState<POI | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  const { recentPois, recentTrips } = useUserData();
+
+  useEffect(() => {
+    const initProfile = async () => {
+      const session = authService.getSession();
+      
+      if (!session) {
+        router.push("/signin");
+        return;
+      }
+
+      // REDIRECTION SI SUPERADMIN
+      if (session.role === "SUPER_ADMIN") {
+        router.push("/admin");
+        return;
+      }
+
+      setUser(session);
+
+      // Charger le POI de l'utilisateur s'il existe
+      try {
+        const pois = await poiService.getPoisByUser(session.userId);
+        if (pois && pois.length > 0) {
+            setUserPoi(pois[0]); // On prend le premier
+        }
+      } catch (err) {
+        console.error("Erreur POI", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initProfile();
+  }, [router]);
+
+  const handleLogout = () => {
+    authService.logout();
+  };
+
+  if (loading) return <Loader />;
+
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col md:flex-row font-sans">
+      
+      {/* --- SIDEBAR GAUCHE : INFOS UTILISATEUR --- */}
+      <div className="w-full md:w-[350px] bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 p-8 flex flex-col shrink-0">
+        
+        {/* Photo de Profil */}
+        <div className="relative w-32 h-32 mx-auto mb-6 group">
+            <div className="w-full h-full rounded-3xl bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-primary/20">
+               {/* Simuler photo ou Initiale */}
+               <span className="text-4xl font-black text-primary">
+                 {user?.username.charAt(0).toUpperCase()}
+               </span>
+            </div>
+            <button className="absolute -bottom-2 -right-2 p-2.5 bg-primary text-white rounded-xl shadow-lg hover:scale-110 transition-transform">
+                <Camera size={18} />
+            </button>
+        </div>
+
+        <div className="text-center mb-8">
+            <h1 className="text-2xl font-black text-zinc-900 dark:text-white">{user?.username}</h1>
+            <p className="text-xs font-bold text-primary uppercase tracking-widest mt-1 bg-primary/5 py-1 px-3 rounded-full inline-block">
+                Explorateur Navigoo
+            </p>
+        </div>
+
+        {/* Champs Infos */}
+        <div className="space-y-4 flex-1">
+            <InfoBox icon={<Mail size={18}/>} label="Email" value={user?.email || "N/A"} />
+            <InfoBox icon={<Phone size={18}/>} label="Téléphone" value={user?.phone || "Non renseigné"} />
+            <InfoBox icon={<Lock size={18}/>} label="Mot de passe" value="••••••••••••" />
+            <InfoBox icon={<Calendar size={18}/>} label="Membre depuis" value={new Date(user?.createdAt || Date.now()).toLocaleDateString('fr-FR', {month: 'long', year: 'numeric'})} />
+        </div>
+
+        {/* Boutons Actions Basiques */}
+        <div className="mt-auto space-y-3 pt-6 border-t border-zinc-100 dark:border-zinc-800">
+            <Button variant="outline" className="w-full justify-start gap-3 h-12" onClick={() => router.push("/")}>
+                <MapPin size={20}/> Retour à la carte
+            </Button>
+            <Button onClick={handleLogout} className="w-full justify-start gap-3 h-12 bg-red-50 text-red-600 hover:bg-red-100 border-none shadow-none font-bold">
+                <LogOut size={20}/> Se déconnecter
+            </Button>
+        </div>
+      </div>
+
+      {/* --- CONTENU CENTRAL : ACTIVITÉ --- */}
+      <main className="flex-1 overflow-y-auto p-4 md:p-12 space-y-12 pb-24">
+        
+        <header className="max-w-4xl">
+            <h2 className="text-4xl font-black text-zinc-900 dark:text-white mb-2">Tableau de Bord</h2>
+            <p className="text-zinc-500">Bienvenue chez vous. Gérez vos découvertes et vos lieux favoris.</p>
+        </header>
+
+        {/* --- SECTION "MON POI" (SI EXISTE) --- */}
+        {userPoi ? (
+            <section className="max-w-5xl">
+                <div className="flex items-center gap-3 mb-6">
+                    <Building2 className="text-primary" size={24} />
+                    <h3 className="text-xl font-bold dark:text-white">Votre établissement</h3>
+                </div>
+                <div className="bg-gradient-to-r from-violet-600 to-indigo-700 rounded-[2.5rem] p-8 text-white flex flex-col md:flex-row items-center gap-8 shadow-2xl shadow-primary/20">
+                    <div className="w-32 h-32 relative rounded-2xl overflow-hidden shrink-0 shadow-lg border-4 border-white/20">
+                        <Image src={userPoi.poi_images_urls[0] || "/images/placeholder.png"} alt="" fill className="object-cover" />
+                    </div>
+                    <div className="flex-1">
+                        <h4 className="text-3xl font-black mb-1">{userPoi.poi_name}</h4>
+                        <div className="flex items-center gap-4 text-white/80 text-sm mb-4">
+                            <span className="flex items-center gap-1 font-bold"><Star size={16} fill="white" className="text-yellow-400" /> {userPoi.rating}</span>
+                            <span className="px-2 py-0.5 bg-white/20 rounded-md text-xs">{userPoi.poi_category}</span>
+                            <span>{userPoi.address_city}</span>
+                        </div>
+                        <Button onClick={() => router.push(`/add-poi?id=${userPoi.poi_id}`)} className="bg-white text-primary font-black px-8 py-3 rounded-xl hover:bg-zinc-100">
+                           Gérer les infos
+                        </Button>
+                    </div>
+                </div>
+            </section>
+        ) : (
+            /* Call to Action si pas de POI */
+            <div className="p-8 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-[2rem] flex flex-col items-center text-center max-w-4xl">
+                <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-900 rounded-2xl flex items-center justify-center text-zinc-400 mb-4">
+                    <Building2 size={32} />
+                </div>
+                <h3 className="text-xl font-bold dark:text-white mb-2">Vous avez un commerce ?</h3>
+                <p className="text-zinc-500 text-sm mb-6 max-w-xs">Enregistrez votre lieu sur Navigoo et soyez visible par des milliers d'explorateurs.</p>
+                <Button onClick={() => router.push("/add-poi")} className="font-bold">Publier mon lieu</Button>
+            </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 max-w-5xl">
+            
+            {/* --- LIEUX RÉCENTS --- */}
+            <section>
+                <h3 className="text-xl font-black dark:text-white mb-6 flex items-center gap-3">
+                    <MapPin className="text-zinc-400" size={20} /> Consultés récemment
+                </h3>
+                <div className="space-y-4">
+                    {recentPois.length > 0 ? (
+                        recentPois.slice(0, 4).map(poi => (
+                            <ActivityCard key={poi.poi_id} title={poi.poi_name} sub={poi.poi_category} img={poi.poi_images_urls[0]} />
+                        ))
+                    ) : (
+                        <p className="text-zinc-400 italic text-sm">Pas d'activité récente.</p>
+                    )}
+                </div>
+            </section>
+
+            {/* --- TRAJETS RÉCENTS --- */}
+            <section>
+                <h3 className="text-xl font-black dark:text-white mb-6 flex items-center gap-3">
+                    <Route className="text-zinc-400" size={20} /> Derniers itinéraires
+                </h3>
+                <div className="space-y-4">
+                    {recentTrips.length > 0 ? (
+                        recentTrips.slice(0, 4).map(trip => (
+                            <div key={trip.id} className="flex items-center gap-4 p-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+                                <div className="p-3 bg-zinc-50 dark:bg-zinc-800 rounded-xl">
+                                    <Route size={20} className="text-zinc-500" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-zinc-900 dark:text-zinc-100 truncate">{trip.arriveName}</p>
+                                    <p className="text-[11px] text-zinc-400 uppercase font-black">{Math.round(trip.distance / 1000)} km parcourus</p>
+                                </div>
+                                <ChevronRight size={16} className="text-zinc-300" />
+                            </div>
+                        ))
+                    ) : (
+                        <p className="text-zinc-400 italic text-sm">Aucun trajet enregistré.</p>
+                    )}
+                </div>
+            </section>
+
+        </div>
+      </main>
+
+    </div>
+  );
+}
+
+// --- SOUS COMPOSANTS DE STYLE ---
+
+const InfoBox = ({ icon, label, value }: { icon: any, label: string, value: string }) => (
+    <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl flex items-center gap-4">
+        <div className="text-zinc-400">{icon}</div>
+        <div className="overflow-hidden">
+            <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">{label}</p>
+            <p className="text-sm font-bold text-zinc-700 dark:text-zinc-300 truncate">{value}</p>
+        </div>
+    </div>
+);
+
+const ActivityCard = ({ title, sub, img }: { title: string, sub: string, img?: string }) => (
+    <div className="group flex items-center gap-4 p-3 bg-white dark:bg-zinc-900 hover:border-primary border border-zinc-100 dark:border-zinc-800 rounded-2xl cursor-pointer transition-all shadow-sm">
+        <div className="w-14 h-14 rounded-xl relative overflow-hidden bg-zinc-100">
+            {img && <Image src={img} alt="" fill className="object-cover group-hover:scale-110 transition-transform" />}
+        </div>
+        <div className="flex-1 min-w-0">
+            <p className="font-bold text-zinc-900 dark:text-zinc-100 truncate">{title}</p>
+            <p className="text-xs text-zinc-500">{sub}</p>
+        </div>
+        <ChevronRight size={16} className="text-zinc-300 mr-2" />
+    </div>
+);
+
+
+================================================================================
 FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\app\page.tsx
 ================================================================================
 
@@ -1417,12 +1650,13 @@ import { DirectionsSidebar } from "@/components/sidebar/DirectionSidebar";
 import { SecondarySidebar } from "@/components/sidebar/SecondarySidebar";
 import { POI, Location, TransportMode } from "@/types";
 import { getRoute } from "@/services/routingService";
-import { poiService } from "@/services/poiService"; // Notre nouveau service
+import { poiService } from "@/services/poiService";
 import { useUserData } from "@/hooks/useUserData";
 import { Settings as SettingsIcon, Check, X, AlertTriangle } from "lucide-react";
 import { Loader } from "@/components/ui/Loader";
 import { MobileNavBar } from "@/components/navigation/MobileNavbar";
 import { authService } from "@/services/authService";
+import { reverseGeocode } from "@/services/geocodingService";
 
 // Import Map Dynamique sans SSR
 const MapComponent = dynamic(() => import("@/components/map/Map"), {
@@ -1430,7 +1664,6 @@ const MapComponent = dynamic(() => import("@/components/map/Map"), {
   loading: () => <Loader />,
 });
 
-// À mettre dans un fichier env idéalement
 const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9"; 
 
 export default function Home() {
@@ -1471,7 +1704,6 @@ export default function Home() {
   useEffect(() => {
      let mounted = true;
 
-     // 1. Définir une fonction pour charger TOUS les POIs
      const loadAllPois = async () => {
         try {
             if(mounted) setIsLoadingPois(true);
@@ -1485,14 +1717,11 @@ export default function Home() {
         }
      };
 
-     // 2. Définir une fonction pour charger par LOCATION
      const loadLocalPois = async (lat: number, lon: number) => {
         try {
             if(mounted) setIsLoadingPois(true);
-            // Recherche rayon 50km
             const data = await poiService.searchPoisByLocation(lat, lon, 50);
             
-            // Si pas de résultat autour, on charge tout pour ne pas laisser la carte vide
             if (!data || data.length === 0) {
                console.warn("Pas de POIs proches, chargement global.");
                await loadAllPois();
@@ -1501,13 +1730,12 @@ export default function Home() {
             }
         } catch (err) {
             console.error("Erreur recherche locale, repli sur tout:", err);
-            await loadAllPois(); // Fallback robuste
+            await loadAllPois();
         } finally {
             if(mounted) setIsLoadingPois(false);
         }
      };
 
-     // 3. Logique Géoloc Navigateur
      if ("geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
             (pos) => {
@@ -1518,23 +1746,19 @@ export default function Home() {
             },
             (err) => {
                 console.warn("Géolocalisation refusée ou erreur:", err);
-                // Si l'utilisateur refuse la loc, on charge tout par défaut
                 loadAllPois();
             },
-            { timeout: 10000 } // Timeout 10s max pour ne pas bloquer l'écran
+            { timeout: 10000 }
         );
      } else {
-        // Pas de support géoloc
         loadAllPois();
      }
 
      return () => { mounted = false; };
-  }, []); // Run once on mount
+  }, []);
 
-  // Rafraichir "Mes POIs" depuis le Backend quand on ouvre le panneau
   useEffect(() => {
     if (panelState.type === "mypois") {
-        // Récupération de la session réelle
         const user = authService.getSession(); 
         if (user?.userId) {
             loadUserPois(user.userId); 
@@ -1542,7 +1766,7 @@ export default function Home() {
             console.warn("Utilisateur non connecté, impossible de charger 'Mes POIs'");
         }
     }
-  }, [panelState.type, loadUserPois]); // Ajouter loadUserPois en dépendance
+  }, [panelState.type, loadUserPois]);
 
   // ============================================
   // HANDLERS INTERFACE
@@ -1553,7 +1777,6 @@ export default function Home() {
         setPanelState({ type: null });
         return;
     }
-    // Convertir au bon format si le backend renvoie des champs manquants
     const safePoi = { ...poi, poi_images_urls: poi.poi_images_urls || [] };
     
     addRecentPoi(safePoi);
@@ -1609,16 +1832,31 @@ export default function Home() {
     setIsMainSidebarOpen(false);   
   };
 
-  // Filtrage Local (Client-Side) pour réactivité instantanée
+  // HANDLER OPTIMISÉ POUR LE CLIC SUR LA CARTE
+  const handleMapClick = async (lng: number, lat: number) => {
+    try {
+      // Appeler le service de géocodage inverse
+      const externalPoi = await reverseGeocode(lat, lng);
+      
+      if (externalPoi) {
+        // Afficher directement le POI externe dans la sidebar
+        setPanelState({ 
+          type: "details", 
+          data: externalPoi as POI 
+        });
+      }
+    } catch (error) {
+      console.error("Erreur lors du clic sur la carte:", error);
+    }
+  };
+
+  // Filtrage Local
   const filteredPois = useMemo(() => {
     return allPois.filter((poi) => {
-      // Sécurité si les champs sont nuls
       const catMatch = selectedCategory ? (poi.poi_category === selectedCategory) : true;
       const nameMatch = searchQuery 
         ? (poi.poi_name?.toLowerCase().includes(searchQuery.toLowerCase())) 
         : true;
-      
-      // Filtrer seulement les POIs actifs
       const activeMatch = poi.is_active !== false; 
 
       return catMatch && nameMatch && activeMatch;
@@ -1628,10 +1866,8 @@ export default function Home() {
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-zinc-50 dark:bg-black font-sans">
       
-      {/* LOADER INITIAL UNIQUEMENT */}
       {isLoadingPois && <Loader className="z-[9999]" />}
 
-      {/* ERROR TOAST (Toast erreur si API Backend HS) */}
       {fetchError && !isLoadingPois && (
         <div className="absolute top-24 left-1/2 -translate-x-1/2 z-50 bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-3 shadow-xl animate-in fade-in slide-in-from-top-5">
             <AlertTriangle size={20} />
@@ -1640,17 +1876,15 @@ export default function Home() {
         </div>
       )}
 
-      {/* --- UI Components --- */}
-
       <TopLayout 
         onToggleSidebar={() => setIsMainSidebarOpen(!isMainSidebarOpen)}
-        allPois={allPois} // Data provenant du backend
+        allPois={allPois}
         selectedCategory={selectedCategory}
         onSelectCategory={(id) => setSelectedCategory(prev => prev === id ? "" : id)}
         onSearch={setSearchQuery}
         onSelectResult={handleSelectPoi}
-        onLocateMe={() => userLocation && setUserLocation({...userLocation})} // Recentrer
-        recentSearches={[]} // TODO: Persister recherches
+        onLocateMe={() => userLocation && setUserLocation({...userLocation})}
+        recentSearches={[]}
         recentPois={recentPois}
       />
 
@@ -1671,9 +1905,6 @@ export default function Home() {
         onResetView={handleResetToMap}
       />
 
-      {/* --- PANNEAUX LATERAUX --- */}
-
-      {/* Détails */}
       {panelState.type === "details" && panelState.data && (
         <PoiDetailsSidebar 
           poi={panelState.data} 
@@ -1683,7 +1914,6 @@ export default function Home() {
         />
       )}
 
-      {/* Itinéraire */}
       {panelState.type === "directions" && panelState.data && (
         <DirectionsSidebar 
             isOpen={true}
@@ -1698,7 +1928,6 @@ export default function Home() {
         />
       )}
 
-      {/* Listes (Sauvegardés, Mes Pois...) */}
       {(["saved", "recent", "trips", "mypois"].includes(panelState.type || "")) && (
           <SecondarySidebar 
              view={panelState.type}
@@ -1708,7 +1937,6 @@ export default function Home() {
           />
       )}
 
-      {/* Settings Modal */}
       {isSettingsOpen && (
          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
              <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
@@ -1740,16 +1968,16 @@ export default function Home() {
          </div>
       )}
 
-      {/* Carte Interactive */}
       <div className="absolute top-0 left-0 w-full h-full z-0 print:block">
         <MapComponent 
           apiKey={MAPTILER_API_KEY} 
-          pois={filteredPois} // Données dynamiques
+          pois={filteredPois}
           selectedPoi={panelState.type === "details" || panelState.type === "directions" ? panelState.data : null}
           userLocation={userLocation}
           onSelectPoi={handleSelectPoi}
           routeGeometry={routeGeometry}
           mapStyleType={mapStyle} 
+          onMapEmptyClick={handleMapClick}
         />
       </div>
 
@@ -6990,14 +7218,14 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\components\map\Map.tsx
 
 "use client";
 
-import { useState, useMemo, useEffect, useRef, memo } from "react";
+import { useState, useMemo, useEffect, useRef, memo, useCallback } from "react";
 import Map, { Marker, NavigationControl, GeolocateControl, ScaleControl, Popup, MapRef, Source, Layer } from "react-map-gl/maplibre";
 import maplibregl, { LngLatBounds } from "maplibre-gl"; 
 import { POI, Location } from "@/types";
 import { getCategoryConfig } from "@/data/categories";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
-import { Star, MapPin as MapPinIcon } from "lucide-react";
+import { Star, MapPin as MapPinIcon, Loader2, Database, Map as MapIcon, CheckCircle2 } from "lucide-react";
 
 interface MapProps {
   apiKey: string;
@@ -7007,13 +7235,17 @@ interface MapProps {
   userLocation: Location | null;
   routeGeometry: any | null; 
   mapStyleType: "streets-v2" | "hybrid";
+  onMapEmptyClick: (lng: number, lat: number) => void;
 }
 
-// 1. MEMOIZATION DU PIN INDIVIDUEL (Très important pour la performance DOM)
-// Cela évite de re-rendre chaque pin si la carte bouge mais que le POI ne change pas
-const MapMarker = memo(({ poi, isSelected, onClick, onHover }: { poi: POI, isSelected: boolean, onClick: (e: any) => void, onHover: (p: POI | null) => void }) => {
+// Memoization du marqueur
+const MapMarker = memo(({ poi, isSelected, onClick, onHover }: { 
+  poi: POI, 
+  isSelected: boolean, 
+  onClick: (e: any) => void, 
+  onHover: (p: POI | null) => void 
+}) => {
   const config = getCategoryConfig(poi.poi_category);
-    // Utilise soit l'objet location, soit les champs à la racine
   const lng = poi.location?.longitude ?? poi.longitude;
   const lat = poi.location?.latitude ?? poi.latitude;
 
@@ -7027,13 +7259,11 @@ const MapMarker = memo(({ poi, isSelected, onClick, onHover }: { poi: POI, isSel
       <div 
         onMouseEnter={() => onHover(poi)}
         onMouseLeave={() => onHover(null)}
-        // Utilisation de classes Tailwind group et hardware acceleration (transform-gpu)
         className="relative flex flex-col items-center cursor-pointer group transform-gpu"
         style={{ zIndex: isSelected ? 50 : 10 }}
       >
         {isSelected ? (
            <div className="relative">
-              {/* Animation Ping simplifiée (CSS pur souvent plus rapide que JS Framer sur mobile) */}
               <div className="absolute inset-0 bg-red-500 rounded-full opacity-75 animate-ping"></div>
               <div className="relative z-10 text-red-600 drop-shadow-lg scale-125 transition-transform duration-200">
                  <MapPinIcon size={48} fill="#ef4444" className="text-red-900" />
@@ -7052,7 +7282,6 @@ const MapMarker = memo(({ poi, isSelected, onClick, onHover }: { poi: POI, isSel
                  {config.icon}
                </div>
              </div>
-             {/* Le petit triangle sous la bulle */}
              <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[6px] mt-[-1px]" style={{ borderTopColor: config.color }}></div>
           </>
         )}
@@ -7063,12 +7292,88 @@ const MapMarker = memo(({ poi, isSelected, onClick, onHover }: { poi: POI, isSel
 
 MapMarker.displayName = "MapMarker";
 
-// --- COMPOSANT CARTE ---
+// Composant d'indicateur de chargement enrichi
+const LoadingIndicator = ({ clickPosition, loadingStage }: { 
+  clickPosition: { x: number; y: number }, 
+  loadingStage: string 
+}) => {
+  const stages = [
+    { key: 'maptiler', label: 'MapTiler', icon: <MapIcon size={16} /> },
+    { key: 'osm', label: 'OpenStreetMap', icon: <Database size={16} /> },
+    { key: 'details', label: 'Détails', icon: <CheckCircle2 size={16} /> },
+  ];
 
-function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, routeGeometry, mapStyleType }: MapProps) {
+  return (
+    <div 
+      className="absolute z-50 pointer-events-none"
+      style={{ 
+        left: clickPosition.x, 
+        top: clickPosition.y,
+        transform: 'translate(-50%, -50%)'
+      }}
+    >
+      <motion.div
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0, opacity: 0 }}
+        className="relative"
+      >
+        {/* Cercle de ping */}
+        <div className="absolute inset-0 bg-primary rounded-full opacity-50 animate-ping"></div>
+        
+        {/* Container principal */}
+        <div className="relative bg-white dark:bg-zinc-900 rounded-2xl p-4 shadow-2xl border border-zinc-200 dark:border-zinc-700 min-w-[200px]">
+          
+          {/* Titre */}
+          <div className="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-200 dark:border-zinc-700">
+            <Loader2 className="animate-spin text-primary" size={20} />
+            <span className="text-sm font-bold text-zinc-800 dark:text-white">Recherche en cours...</span>
+          </div>
+          
+          {/* Étapes */}
+          <div className="space-y-2">
+            {stages.map((stage) => (
+              <div 
+                key={stage.key}
+                className={`flex items-center gap-2 text-xs transition-all ${
+                  loadingStage === stage.key 
+                    ? 'text-primary font-bold' 
+                    : loadingStage > stage.key 
+                    ? 'text-green-600 dark:text-green-400' 
+                    : 'text-zinc-400'
+                }`}
+              >
+                <div className={`transition-transform ${loadingStage === stage.key ? 'animate-pulse' : ''}`}>
+                  {stage.icon}
+                </div>
+                <span>{stage.label}</span>
+                {loadingStage > stage.key && (
+                  <CheckCircle2 size={14} className="ml-auto text-green-600" />
+                )}
+                {loadingStage === stage.key && (
+                  <Loader2 size={14} className="ml-auto animate-spin" />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+// Composant carte principal
+function MapComponent({ 
+  apiKey, 
+  pois, 
+  onSelectPoi, 
+  selectedPoi, 
+  userLocation, 
+  routeGeometry, 
+  mapStyleType, 
+  onMapEmptyClick 
+}: MapProps) {
   const mapRef = useRef<MapRef>(null);
-  
-  // Utilisation d'un ref pour éviter les re-render inutiles lors des survols
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [viewState, setViewState] = useState({
@@ -7078,28 +7383,70 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
   });
 
   const [hoveredPoi, setHoveredPoi] = useState<POI | null>(null);
+  const [isLoadingClick, setIsLoadingClick] = useState(false);
+  const [loadingStage, setLoadingStage] = useState('');
+  const [clickPosition, setClickPosition] = useState<{ x: number; y: number } | null>(null);
 
-  // Optimisation Hover avec debounce léger
-  const handleHover = (poi: POI | null) => {
+  // Optimisation Hover avec debounce
+  const handleHover = useCallback((poi: POI | null) => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     if (poi) {
         setHoveredPoi(poi);
     } else {
         hoverTimeoutRef.current = setTimeout(() => setHoveredPoi(null), 100);
     }
-  };
+  }, []);
 
-  // --- EFFETS DE ZOOM (Ginchés inchangés mais optimisés via la condition) ---
-  
+  // Gestion du clic avec tracking des étapes
+  const handleMapClick = useCallback(async (e: any) => {
+    if (e.originalEvent?.defaultPrevented) return;
+    
+    const { lngLat } = e;
+    
+    setClickPosition({ x: e.point.x, y: e.point.y });
+    setIsLoadingClick(true);
+    
+    try {
+      // Simuler les étapes de chargement
+      setLoadingStage('maptiler');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      setLoadingStage('osm');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      setLoadingStage('details');
+      
+      // Appeler la fonction de géocodage
+      await onMapEmptyClick(lngLat.lng, lngLat.lat);
+      
+    } finally {
+      setIsLoadingClick(false);
+      setLoadingStage('');
+      setClickPosition(null);
+    }
+  }, [onMapEmptyClick]);
+
+  // Effets de zoom
   useEffect(() => {
     if (userLocation && mapRef.current && !routeGeometry) {
-      mapRef.current.flyTo({ center: [userLocation.longitude, userLocation.latitude], zoom: 15, duration: 1200 }); // Duration réduite pour sensation de vitesse
+      mapRef.current.flyTo({ 
+        center: [userLocation.longitude, userLocation.latitude], 
+        zoom: 15, 
+        duration: 1200 
+      });
     }
   }, [userLocation, routeGeometry]);
 
   useEffect(() => {
     if (selectedPoi && mapRef.current && !routeGeometry) {
-      mapRef.current.flyTo({ center: [selectedPoi.location.longitude, selectedPoi.location.latitude], zoom: 16, duration: 1000 });
+      const lng = selectedPoi.location?.longitude ?? selectedPoi.longitude;
+      const lat = selectedPoi.location?.latitude ?? selectedPoi.latitude;
+      
+      mapRef.current.flyTo({ 
+        center: [lng, lat], 
+        zoom: 16, 
+        duration: 1000 
+      });
     }
   }, [selectedPoi, routeGeometry]);
 
@@ -7110,17 +7457,15 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
         for (const coord of coords) bounds.extend(coord as [number, number]);
         
         mapRef.current.fitBounds(bounds, {
-            padding: { top: 80, bottom: 80, right: 50, left: window.innerWidth > 768 ? 420 : 50 }, // Padding ajusté pour éviter Sidebar
+            padding: { top: 80, bottom: 80, right: 50, left: window.innerWidth > 768 ? 420 : 50 },
             duration: 1500 
         });
     }
   }, [routeGeometry]);
 
-  // --- RENDU OPTIMISÉ DES PINS ---
-// --- RENDU OPTIMISÉ DES PINS ---
+  // Rendu des marqueurs
   const pins = useMemo(() => {
     return pois.map((poi) => {
-      // SÉCURITÉ : Vérifier que les coordonnées existent
       const lat = poi.location?.latitude ?? poi.latitude;
       const lng = poi.location?.longitude ?? poi.longitude;
 
@@ -7128,7 +7473,6 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
         return null;
       }
       
-      // AJOUT DU RETURN CI-DESSOUS (C'était l'erreur)
       return (
         <MapMarker 
           key={poi.poi_id} 
@@ -7141,32 +7485,31 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
           }}
         />
       );
-    }).filter(Boolean); // On retire les nulls
-  }, [pois, selectedPoi?.poi_id, onSelectPoi]);
+    }).filter(Boolean);
+  }, [pois, selectedPoi?.poi_id, onSelectPoi, handleHover]);
 
   return (
-    <Map
-      ref={mapRef}
-      {...viewState}
-      onMove={evt => setViewState(evt.viewState)}
-      style={{ width: "100%", height: "100%" }}
-      mapStyle={`https://api.maptiler.com/maps/${mapStyleType}/style.json?key=${apiKey}`}
-      attributionControl={false}
-      onClick={() => onSelectPoi(null)}
-      // --- PERFORMANCE BOOSTERS ---
-      mapLib={maplibregl} // Utilise la lib importée directement
-      reuseMaps={true}    // CRUCIAL: Réutilise le contexte WebGL au lieu de le détruire
-      cooperativeGestures={true} // UX: Gestion fluide du scroll
-      maxTileCacheSize={100} // Cache plus de tuiles en mémoire
-    >
-      <GeolocateControl position="bottom-right" />
-      <NavigationControl position="bottom-right" showCompass={false} />
-      <ScaleControl />
+    <div className="relative w-full h-full">
+      <Map
+        ref={mapRef}
+        {...viewState}
+        onMove={evt => setViewState(evt.viewState)}
+        style={{ width: "100%", height: "100%" }}
+        mapStyle={`https://api.maptiler.com/maps/${mapStyleType}/style.json?key=${apiKey}`}
+        attributionControl={false}
+        onClick={handleMapClick}
+        mapLib={maplibregl}
+        reuseMaps={true}
+        cooperativeGestures={true}
+        maxTileCacheSize={100}
+      >
+        <GeolocateControl position="bottom-right" />
+        <NavigationControl position="bottom-right" showCompass={false} />
+        <ScaleControl />
 
-      {/* ITINÉRAIRE - OPTIMISÉ via Source/Layer natif (Pas de React Nodes) */}
-      {routeGeometry && (
+        {/* Itinéraire */}
+        {routeGeometry && (
           <Source id="route-source" type="geojson" data={routeGeometry}>
-             {/* Bordure blanche pour contraste */}
              <Layer 
                id="route-outline"
                type="line"
@@ -7177,81 +7520,88 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
                }}
                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
              />
-             {/* Ligne principale */}
              <Layer 
                id="route-line"
                type="line"
                paint={{
-                 'line-color': '#9400D3', // Couleur Primary
+                 'line-color': '#9400D3',
                  'line-width': 5,
                  'line-opacity': 1
                }}
                layout={{ 'line-cap': 'round', 'line-join': 'round' }}
              />
           </Source>
-       )}
+        )}
 
-      {/* PIN UTILISATEUR */}
-      {userLocation && (
-        <Marker longitude={userLocation.longitude} latitude={userLocation.latitude}>
-           <div className="relative flex items-center justify-center w-6 h-6 transform-gpu">
-              <span className="absolute w-12 h-12 bg-blue-500 rounded-full opacity-30 animate-ping"></span>
-              <span className="absolute w-6 h-6 bg-blue-500/40 rounded-full border border-blue-500/50 backdrop-blur-sm"></span>
-              <span className="absolute w-3.5 h-3.5 bg-blue-600 rounded-full border-2 border-white shadow-sm z-10"></span>
-           </div>
-        </Marker>
-      )}
+        {/* Position utilisateur */}
+        {userLocation && (
+          <Marker longitude={userLocation.longitude} latitude={userLocation.latitude}>
+             <div className="relative flex items-center justify-center w-6 h-6 transform-gpu">
+                <span className="absolute w-12 h-12 bg-blue-500 rounded-full opacity-30 animate-ping"></span>
+                <span className="absolute w-6 h-6 bg-blue-500/40 rounded-full border border-blue-500/50 backdrop-blur-sm"></span>
+                <span className="absolute w-3.5 h-3.5 bg-blue-600 rounded-full border-2 border-white shadow-sm z-10"></span>
+             </div>
+          </Marker>
+        )}
 
-      {/* POI MARKERS */}
-      {pins}
+        {/* Marqueurs POI */}
+        {pins}
 
-      {/* TOOLTIP LEGER AU SURVOL */}
-      <AnimatePresence>
-        {hoveredPoi && !selectedPoi && (
-          <Popup
-            longitude={hoveredPoi.location.longitude}
-            latitude={hoveredPoi.location.latitude}
-            anchor="top"
-            closeButton={false}
-            offset={12}
-            className="z-50 pointer-events-none" // pointer-events-none pour fluidité
-          >
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }} 
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.1 }} // Animation très rapide
-              className="flex gap-2 p-0 min-w-[180px] shadow-xl rounded-lg bg-white overflow-hidden"
+        {/* Tooltip survol */}
+        <AnimatePresence>
+          {hoveredPoi && !selectedPoi && (
+            <Popup
+              longitude={hoveredPoi.location?.longitude ?? hoveredPoi.longitude}
+              latitude={hoveredPoi.location?.latitude ?? hoveredPoi.latitude}
+              anchor="top"
+              closeButton={false}
+              offset={12}
+              className="z-50 pointer-events-none"
             >
-              <div className="relative w-10 h-10 shrink-0 bg-zinc-100 flex items-center justify-center overflow-hidden">
-                {hoveredPoi.poi_images_urls && hoveredPoi.poi_images_urls[0] && 
-                !hoveredPoi.poi_images_urls[0].includes("example.com") ? ( // Sécurité temporaire si example.com reste bloqué
-                  <Image 
-                    src={hoveredPoi.poi_images_urls[0]} 
-                    alt=""
-                    fill 
-                    className="object-cover" 
-                    sizes="40px"
-                    quality={50}
-                  />
-                ) : (
-                  <MapPinIcon size={16} className="text-zinc-300" /> // Icone par défaut si pas d'image
-                )}
-              </div>
-               <div className="flex flex-col justify-center py-1 pr-2">
-                 <h4 className="font-bold text-xs text-zinc-900 leading-tight line-clamp-1">{hoveredPoi.poi_name}</h4>
-                 <div className="flex items-center gap-1 text-[10px] text-zinc-500 font-medium">
-                   <Star size={9} className="text-yellow-500 fill-current" />
-                   <span>{hoveredPoi.rating}</span>
-                   <span>•</span>
-                   <span>{getCategoryConfig(hoveredPoi.poi_category).label}</span>
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }} 
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.1 }}
+                className="flex gap-2 p-0 min-w-[180px] shadow-xl rounded-lg bg-white overflow-hidden"
+              >
+                <div className="relative w-10 h-10 shrink-0 bg-zinc-100 flex items-center justify-center overflow-hidden">
+                  {hoveredPoi.poi_images_urls && hoveredPoi.poi_images_urls[0] && 
+                  !hoveredPoi.poi_images_urls[0].includes("example.com") ? (
+                    <Image 
+                      src={hoveredPoi.poi_images_urls[0]} 
+                      alt=""
+                      fill 
+                      className="object-cover" 
+                      sizes="40px"
+                      quality={50}
+                    />
+                  ) : (
+                    <MapPinIcon size={16} className="text-zinc-300" />
+                  )}
+                </div>
+                 <div className="flex flex-col justify-center py-1 pr-2">
+                   <h4 className="font-bold text-xs text-zinc-900 leading-tight line-clamp-1">{hoveredPoi.poi_name}</h4>
+                   <div className="flex items-center gap-1 text-[10px] text-zinc-500 font-medium">
+                     <Star size={9} className="text-yellow-500 fill-current" />
+                     <span>{hoveredPoi.rating}</span>
+                     <span>•</span>
+                     <span>{getCategoryConfig(hoveredPoi.poi_category).label}</span>
+                   </div>
                  </div>
-               </div>
-            </motion.div>
-          </Popup>
+              </motion.div>
+            </Popup>
+          )}
+        </AnimatePresence>
+      </Map>
+
+      {/* Indicateur de chargement enrichi */}
+      <AnimatePresence>
+        {isLoadingClick && clickPosition && (
+          <LoadingIndicator clickPosition={clickPosition} loadingStage={loadingStage} />
         )}
       </AnimatePresence>
-    </Map>
+    </div>
   );
 }
 
@@ -7993,7 +8343,9 @@ const EmptyState = ({ text }: { text: string }) => (
 FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\components\navigation\SearchInput.tsx
 ================================================================================
 
-import { Search, Menu, X, ArrowRight, History, MapPin, Navigation2 } from "lucide-react";
+"use client";
+
+import { Search, Menu, X, History, MapPin, Navigation2 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import clsx from "clsx";
 import { POI } from "@/types";
@@ -8002,7 +8354,7 @@ import { poiService } from "@/services/poiService";
 interface SearchInputProps {
   onMenuClick: () => void;
   className?: string;
-  pois: POI[]; // Peut servir de cache ou fallback, mais la recherche principale est via API
+  pois: POI[]; // Liste complète pour fallback
   onSearch: (query: string) => void;
   onSelectResult: (poi: POI) => void;
   onLocateMe: () => void;
@@ -8010,117 +8362,125 @@ interface SearchInputProps {
   recentPois: POI[];
 }
 
-export const SearchInput = ({ 
-  onMenuClick, 
-  className, 
-  pois, 
+export const SearchInput = ({
+  onMenuClick,
+  className,
+  pois,
   onLocateMe,
-  onSearch, 
+  onSearch,
   onSelectResult,
-  recentSearches, 
-  recentPois 
+  recentSearches,
+  recentPois
 }: SearchInputProps) => {
   const [isFocused, setIsFocused] = useState(false);
   const [query, setQuery] = useState("");
-  
-  // State pour les résultats de l'API (Live Search)
   const [suggestions, setSuggestions] = useState<POI[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // --- LIVE SEARCH AVEC DEBOUNCE SUR LE BACKEND ---
+  // --- LIVE SEARCH AVEC DEBOUNCE & BACKEND SEARCH GLOBAL ---
   useEffect(() => {
     const fetchSuggestions = async () => {
-      if (query.trim().length === 0) {
+      // Si la recherche est vide ou trop courte
+      if (query.trim().length < 2) {
         setSuggestions([]);
         return;
       }
 
       try {
-        // Appel au endpoint GET /api/pois/name/{name}
-        const results = await poiService.searchPoisByName(query);
-        // On limite à 5 résultats pour l'affichage dropdown
-        setSuggestions(results ? results.slice(0, 5) : []);
-      } catch (error) {
-        console.error("Erreur recherche backend:", error);
-        setSuggestions([]); 
-        // Optionnel : Fallback sur le filtre client si le backend échoue
-        // setSuggestions(pois.filter(p => p.poi_name.toLowerCase().includes(query.toLowerCase())).slice(0, 5));
+        // Appeler la méthode searchGlobal (Recherche Backend sur Nom/Ville/Keywords)
+        // Note: Assurez-vous d'avoir implémenté searchGlobal dans votre poiService.ts
+        const results = await poiService.searchGlobal(query);
+        
+        if (results && results.length > 0) {
+            setSuggestions(results.slice(0, 8));
+        } else {
+            // Fallback sur le filtrage local si le serveur ne renvoie rien
+            throw new Error("Aucun résultat backend");
+        }
+      } catch (err) {
+        // Fallback local intelligent sur Nom, Ville ou Tags
+        const lowerQuery = query.toLowerCase();
+        const localResults = pois.filter(p => 
+          p.poi_name?.toLowerCase().includes(lowerQuery) ||
+          p.address_city?.toLowerCase().includes(lowerQuery) ||
+          p.poi_keywords?.some(k => k.toLowerCase().includes(lowerQuery))
+        );
+        setSuggestions(localResults.slice(0, 8));
       }
     };
 
-    // Délai de 300ms pour éviter de spammer l'API à chaque lettre
-    const timeoutId = setTimeout(fetchSuggestions, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [query]);
+    const timer = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(timer);
+  }, [query, pois]);
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    onSearch(query);
-    setIsFocused(false);
-    inputRef.current?.blur();
+    if (query.trim()) {
+        onSearch(query);
+        setIsFocused(false);
+        inputRef.current?.blur();
+    }
   };
 
   const handleSelectPoi = (poi: POI) => {
     setQuery(poi.poi_name);
-    onSelectResult(poi); // Zoom sur la carte et ouvre details
+    onSelectResult(poi); 
     setIsFocused(false);
+    inputRef.current?.blur();
   };
 
   return (
     <div className={clsx("relative z-50", className)}>
-            <form 
+      <form
         onSubmit={handleSearchSubmit}
         className={clsx(
-          "flex items-center bg-white dark:bg-zinc-800 h-11 border border-zinc-200 dark:border-zinc-700 transition-shadow",
-          isFocused ? "rounded-t-[24px] rounded-b-none shadow-lg border-b-0" : "rounded-full shadow-sm hover:shadow-md"
+          "flex items-center bg-white dark:bg-zinc-900 h-12 border border-zinc-200 dark:border-zinc-800 transition-all duration-200",
+          isFocused ? "rounded-t-[24px] rounded-b-none shadow-2xl border-b-0" : "rounded-full shadow-lg hover:shadow-xl"
         )}
       >
-        <button 
+        <button
           type="button"
           onClick={onMenuClick}
-          className="pl-3 pr-2 text-zinc-500 hover:text-black dark:text-zinc-400 dark:hover:text-white"
+          className="pl-4 pr-2 text-zinc-500 hover:text-primary dark:text-zinc-400 dark:hover:text-primary transition-colors"
         >
-          {isFocused ? <Search size={20} /> : <Menu size={20} />}
+          {isFocused ? <Search size={20} /> : <Menu size={22} />}
         </button>
 
-        <input 
+        <input
           ref={inputRef}
-          type="text" 
-          placeholder="Rechercher ici..."
-          className="flex-1 bg-transparent border-none outline-none text-[15px] text-zinc-900 dark:text-zinc-100 px-2 truncate font-normal"
+          type="text"
+          placeholder="Rechercher un lieu, une ville ou un tag..."
+          className="flex-1 bg-transparent border-none outline-none text-[15px] text-zinc-900 dark:text-zinc-100 px-2 truncate font-medium"
           value={query}
           onFocus={() => setIsFocused(true)}
           onChange={(e) => {
             setQuery(e.target.value);
-            // Si on efface tout, on déclenche une recherche vide pour reset la vue parente si besoin
             if (e.target.value === "") onSearch("");
           }}
         />
 
-        <div className="flex items-center gap-1 pr-1.5">
+        <div className="flex items-center gap-1 pr-2">
           {query && (
-            <button 
-              type="button" 
-              onClick={() => { setQuery(""); onSearch(""); setSuggestions([]); }} 
-              className="p-2 text-zinc-500 hover:text-black"
+            <button
+              type="button"
+              onClick={() => { setQuery(""); onSearch(""); setSuggestions([]); }}
+              className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
             >
               <X size={18} />
             </button>
           )}
-          
-          <div className="h-6 w-px bg-zinc-300 dark:bg-zinc-600 mx-1"></div>
-          
-          {/* BOUTON LOCALISATION (Flèche Violette) */}
-          <button 
-            type="button" 
-            onClick={onLocateMe}
-            className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-full group transition-colors"
-            title="Me localiser"
+
+          <div className="h-6 w-px bg-zinc-200 dark:bg-zinc-800 mx-1"></div>
+
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); onLocateMe(); }}
+            className="p-1.5 hover:bg-primary/10 rounded-full group transition-all"
+            title="Ma position"
           >
-             <div className="w-7 h-7 bg-primary flex items-center justify-center rounded-full text-white shadow-sm group-hover:scale-105 transition-transform">
-                <Navigation2 size={14} className="-rotate-45" fill="currentColor" />
-             </div>
+            <div className="w-8 h-8 bg-primary flex items-center justify-center rounded-full text-white shadow-md group-hover:scale-105 group-active:scale-95 transition-transform">
+              <Navigation2 size={16} className="-rotate-45" fill="currentColor" />
+            </div>
           </button>
         </div>
       </form>
@@ -8128,59 +8488,68 @@ export const SearchInput = ({
       {/* --- MENU DÉROULANT --- */}
       {isFocused && (
         <>
-          <div 
-            className="fixed inset-0 bg-transparent z-[-1]" 
-            onClick={() => setIsFocused(false)} 
-          />
-          <div className="absolute top-full left-0 w-full bg-white dark:bg-zinc-800 rounded-b-[24px] shadow-lg border-t-0 border border-zinc-200 dark:border-zinc-700 pb-2 overflow-hidden">
-             
-             {/* CAS 1 : SUGGESTIONS AUTOCOMPLÉTION (Recherche active via BACKEND) */}
-             {query.length > 0 && (
-                <div className="pt-2">
-                  {suggestions.length > 0 ? (
-                    suggestions.map(poi => (
-                      <SuggestionItem 
-                        key={poi.poi_id}
-                        icon={<MapPin size={18} />} 
-                        title={poi.poi_name} 
-                        subtitle={poi.address_city} 
-                        onClick={() => handleSelectPoi(poi)}
-                        isLocation
-                      />
-                    ))
-                  ) : (
-                    <div className="px-4 py-3 text-sm text-zinc-500 italic">Aucun résultat trouvé</div>
-                  )}
-                </div>
-             )}
-
-             {/* CAS 2 : HISTORIQUE (Champ vide) */}
-             {query.length === 0 && (
-                <div className="pt-1">
-                  <div className="px-4 py-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider">Récents</div>
-                  
-                  {/* 3 Dernières Recherches (String) */}
-                  {recentSearches.map((term, i) => (
-                    <SuggestionItem 
-                      key={`hist-${i}`}
-                      icon={<History size={18} />} 
-                      title={term} 
-                      onClick={() => { setQuery(term); onSearch(term); setIsFocused(false); }}
-                    />
-                  ))}
-
-                  {/* 2 Derniers POIs Vus (Objets) */}
-                  {recentPois.map((poi) => (
-                    <SuggestionItem 
-                      key={`recent-poi-${poi.poi_id}`}
-                      icon={<Navigation2 size={18} className="text-primary" />} 
-                      title={poi.poi_name} 
-                      subtitle={`${poi.poi_category} • Consulté récemment`}
+          <div className="fixed inset-0 bg-black/5 dark:bg-white/5 z-[-1]" onClick={() => setIsFocused(false)} />
+          <div className="absolute top-full left-0 w-full bg-white dark:bg-zinc-900 rounded-b-[24px] shadow-2xl border border-t-0 border-zinc-200 dark:border-zinc-800 pb-3 max-h-[70vh] overflow-y-auto">
+            
+            {/* SUGGESTIONS LIVE (Backend Results) */}
+            {query.length >= 2 && (
+              <div className="pt-2">
+                {suggestions.length > 0 ? (
+                  suggestions.map(poi => (
+                    <SuggestionItem
+                      key={poi.poi_id}
+                      icon={<MapPin size={18} />}
+                      title={poi.poi_name}
+                      subtitle={`${poi.poi_category} • ${poi.address_city}`}
                       onClick={() => handleSelectPoi(poi)}
+                      isLocation
                     />
-                  ))}
-                </div>
-             )}
+                  ))
+                ) : (
+                  <div className="px-6 py-4 text-sm text-zinc-400 italic">Aucun résultat pour cette recherche...</div>
+                )}
+              </div>
+            )}
+
+            {/* HISTORIQUE ET RECENTS (Quand le champ est vide) */}
+            {query.length < 2 && (
+              <div className="pt-2">
+                {recentSearches.length > 0 && (
+                  <div className="mb-2">
+                    <div className="px-6 py-2 text-[11px] font-bold text-zinc-400 uppercase tracking-[0.1em]">Recherches passées</div>
+                    {recentSearches.slice(0, 3).map((term, i) => (
+                      <SuggestionItem
+                        key={`hist-${i}`}
+                        icon={<History size={18} />}
+                        title={term}
+                        onClick={() => { setQuery(term); onSearch(term); setIsFocused(false); }}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {recentPois.length > 0 && (
+                  <div>
+                    <div className="px-6 py-2 text-[11px] font-bold text-zinc-400 uppercase tracking-[0.1em]">Lieux consultés</div>
+                    {recentPois.slice(0, 3).map((poi) => (
+                      <SuggestionItem
+                        key={`recent-poi-${poi.poi_id}`}
+                        icon={<MapPin size={18} className="text-primary" />}
+                        title={poi.poi_name}
+                        subtitle={`${poi.poi_category} • ${poi.address_city}`}
+                        onClick={() => handleSelectPoi(poi)}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {recentSearches.length === 0 && recentPois.length === 0 && (
+                   <div className="px-6 py-4 text-center">
+                        <p className="text-sm text-zinc-400 font-medium italic">Commencez à explorer...</p>
+                   </div>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -8188,23 +8557,23 @@ export const SearchInput = ({
   );
 };
 
-// Item générique de la liste
+// --- COMPOSANT INTERNE SUGGESTION ---
 const SuggestionItem = ({ icon, title, subtitle, onClick, isLocation }: any) => (
-  <div 
+  <div
     onClick={onClick}
-    className="flex items-center gap-4 py-3 px-4 hover:bg-zinc-50 dark:hover:bg-zinc-700 cursor-pointer transition-colors"
+    className="flex items-center gap-4 py-3 px-6 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer transition-colors group"
   >
     <div className={clsx(
-      "w-9 h-9 min-w-9 rounded-full flex items-center justify-center",
-      isLocation ? "bg-white border border-zinc-200" : "bg-zinc-100 dark:bg-zinc-900"
+      "w-9 h-9 min-w-[36px] rounded-xl flex items-center justify-center transition-colors",
+      isLocation ? "bg-primary/10 text-primary" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"
     )}>
-      <span className="text-zinc-500 dark:text-zinc-400">{icon}</span>
+      {icon}
     </div>
     <div className="flex flex-col overflow-hidden">
-      <span className={clsx("text-[15px] truncate font-medium text-zinc-800 dark:text-zinc-100")}>
+      <span className="text-[14px] font-bold text-zinc-800 dark:text-zinc-100 truncate group-hover:text-primary transition-colors">
         {title}
       </span>
-      {subtitle && <span className="text-zinc-500 text-xs truncate">{subtitle}</span>}
+      {subtitle && <span className="text-[12px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">{subtitle}</span>}
     </div>
   </div>
 );
@@ -8249,13 +8618,16 @@ export const CategoryBar = ({ onSelect, selected }: CategoryBarProps) => {
 FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\components\navigation\TopLayout.tsx
 ================================================================================
 
+"use client";
+
 import { SearchInput } from "./SearchInput";
 import { CategoryBar } from "./CategoryBar";
-import { Grip, UserCircle2, LogIn } from "lucide-react";
-import { POI } from "@/types";
+import { Grip, UserCircle2, LogIn, LayoutDashboard } from "lucide-react";
+import { POI, AppUser } from "@/types";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import clsx from "clsx";
+import { authService } from "@/services/authService";
+import { clsx } from "clsx";
 
 interface TopLayoutProps {
   onToggleSidebar: () => void;
@@ -8269,8 +8641,8 @@ interface TopLayoutProps {
   recentPois: POI[];
 }
 
-export const TopLayout = ({ 
-  onToggleSidebar, 
+export const TopLayout = ({
+  onToggleSidebar,
   allPois,
   selectedCategory,
   onSelectCategory,
@@ -8278,26 +8650,31 @@ export const TopLayout = ({
   onLocateMe,
   onSelectResult,
   recentSearches,
-  recentPois
+  recentPois,
 }: TopLayoutProps) => {
-
   const router = useRouter();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<AppUser | null>(null);
 
-  // Vérification basique de l'authentification (à adapter avec ton vrai context si besoin)
   useEffect(() => {
-    // Exemple : on vérifie si un token ou des infos user existent dans le localStorage
-    const user = localStorage.getItem("navigoo_user"); 
-    // OU pour simuler : const user = "ok";
-    setIsAuthenticated(!!user);
+    // Récupération réelle de la session via le service
+    const session = authService.getSession();
+    setUser(session);
   }, []);
 
+  const handleProfileClick = () => {
+    if (user?.role === "SUPER_ADMIN") {
+      router.push("/admin");
+    } else {
+      router.push("/profile");
+    }
+  };
+
   return (
-    <div className="absolute top-0 ml-18 left-0 w-full z-40 bg-transparent p-2 pointer-events-none flex items-start gap-2">
+    <div className="absolute top-0 left-0 w-full z-40 p-2 md:p-4 pointer-events-none flex flex-col md:flex-row items-start gap-3">
       
-      {/* Bloc Recherche */}
-      <div className="pointer-events-auto min-w-[340px] max-w-[420px] shrink-0">
-        <SearchInput 
+      {/* 1. BLOC RECHERCHE - Largeur fixe sur PC, Full sur mobile */}
+      <div className="ml-16 pointer-events-auto w-full md:w-[380px] lg:w-[320px] shrink-0">
+        <SearchInput
           onMenuClick={onToggleSidebar}
           pois={allPois}
           onSearch={onSearch}
@@ -8305,57 +8682,80 @@ export const TopLayout = ({
           onLocateMe={onLocateMe}
           recentSearches={recentSearches}
           recentPois={recentPois}
+          className="shadow-xl"
         />
       </div>
 
-      {/* 2. Bloc Catégories + Section Auth */}
-      <div className="flex-1 flex items-center gap-2 min-w-0 pointer-events-auto pl-2">
-        <div className="flex-1 min-w-0">
-           <CategoryBar 
-             selected={selectedCategory} 
-             onSelect={onSelectCategory} 
-           />
+      {/* 2. BLOC CATÉGORIES ET AUTH - S'adapte au reste de l'espace */}
+      <div className="flex-1 flex items-center justify-between gap-2 w-full pointer-events-auto overflow-hidden">
+        
+        {/* Barre de Catégories : Visible principalement sur Desktop/Tablet */}
+        <div className="flex-1 hidden sm:block min-w-0">
+          <CategoryBar
+            selected={selectedCategory}
+            onSelect={onSelectCategory}
+          />
         </div>
 
-        {/* --- SECTION AUTHENTIFICATION & PROFIL --- */}
-        <div className="flex items-center gap-2 pl-2 pr-2">
-           
-           {isAuthenticated ? (
-             /* === CAS CONNECTÉ === */
-             <>
-               <button className="p-2.5 rounded-full bg-white shadow-sm border border-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:border-zinc-700 hidden sm:block transition-colors">
-                 <Grip size={20} className="text-zinc-600" />
-               </button>
-               
-               <div 
-                 onClick={() => {
-                    // Optionnel: Logout ou aller vers profil
-                    // localStorage.removeItem("navigoo_user");
-                    // window.location.reload();
-                 }}
-                 className="relative cursor-pointer ml-1 w-10 h-10 rounded-full border-2 border-white bg-primary/10 flex items-center justify-center shadow-md hover:scale-105 transition-transform"
-               >
-                  {/* Tu pourras remplacer UserCircle2 par l'image de l'user s'il en a une */}
-                  <UserCircle2 size={42} className="text-zinc-600 dark:text-zinc-300" />
-               </div>
-             </>
-           ) : (
-             /* === CAS DÉCONNECTÉ (Bouton Animé) === */
-             <button
-                onClick={() => router.push("/signin")}
-                className={clsx(
-                  "flex items-center gap-2 px-5 py-2.5 rounded-full",
-                  "bg-primary text-white font-bold text-sm",
-                  "shadow-lg shadow-primary/30 border border-primary/50",
-                  "transform hover:scale-105 active:scale-95 transition-all duration-300",
-                  "animate-[pulse_3s_ease-in-out_infinite]" // Petite animation pulse subtile
-                )}
-             >
-                <LogIn size={18} className="stroke-[3]" />
-                <span className="whitespace-nowrap hidden sm:inline">Se connecter</span>
-             </button>
-           )}
+        {/* SECTION UTILISATEUR / ACTIONS */}
+        <div className="flex items-center gap-2 ml-auto pr-1 md:pr-0">
+          
+          {user ? (
+            /* --- CAS CONNECTÉ --- */
+            <div className="flex items-center gap-2 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md p-1.5 rounded-full border border-zinc-200 dark:border-zinc-800 shadow-lg">
+              
+              {/* Bouton Raccourci Admin (Optionnel) */}
+              {user.role === "SUPER_ADMIN" && (
+                <button 
+                  onClick={() => router.push("/admin")}
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-600 dark:text-zinc-400 hidden lg:block"
+                  title="Panel Admin"
+                >
+                  <LayoutDashboard size={20} />
+                </button>
+              )}
 
+              {/* Grip / Menu Applications (Style Google) */}
+              <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-600 dark:text-zinc-400 hidden md:block">
+                <Grip size={20} />
+              </button>
+
+              {/* Avatar et Lien Profil */}
+              <button
+                onClick={handleProfileClick}
+                className={clsx(
+                  "relative group flex items-center justify-center",
+                  "w-9 h-9 rounded-full overflow-hidden transition-all duration-300",
+                  "border-2 border-primary/20 hover:border-primary active:scale-95 shadow-inner"
+                )}
+              >
+                <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
+                  <UserCircle2 size={38} className="text-primary/70 group-hover:scale-110 transition-transform" />
+                </div>
+                {/* On peut ajouter l'initiale de l'utilisateur par dessus si pas de photo */}
+                <span className="relative z-10 text-[10px] font-black text-primary pointer-events-none">
+                   {user.username.charAt(0).toUpperCase()}
+                </span>
+              </button>
+            </div>
+          ) : (
+            /* --- CAS DÉCONNECTÉ --- */
+            <button
+              onClick={() => router.push("/signin")}
+              className={clsx(
+                "group relative flex items-center gap-2 px-6 py-2.5 rounded-full overflow-hidden",
+                "bg-primary text-white font-bold text-sm",
+                "shadow-lg shadow-primary/30",
+                "transition-all duration-300 hover:shadow-primary/50 hover:scale-[1.03] active:scale-95"
+              )}
+            >
+              {/* Effet Brillance / Hover */}
+              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+              
+              <LogIn size={18} className="stroke-[3]" />
+              <span className="whitespace-nowrap">Connexion</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -9628,6 +10028,21 @@ class PoiService {
   async updatePopularityScore(poiId: string, score: number): Promise<void> {
     return this.request<void>(`/api/pois/${poiId}/popularity?score=${score}`, { method: "PATCH" });
   }
+
+  // Ajoute cette méthode pour une recherche globale
+  async searchGlobal(query: string): Promise<POI[]> {
+    // Cette méthode tente de chercher par nom, puis par ville, puis fusionne les tags
+    // Idéalement, le backend devrait avoir un endpoint /search?q=...
+    const [byName, byCity] = await Promise.all([
+      this.searchPoisByName(query),
+      this.getPoisByCity(query)
+    ]);
+    
+    // Fusion unique par ID
+    const combined = [...byName, ...byCity];
+    return Array.from(new Map(combined.map(item => [item.poi_id, item])).values());
+  }
+
 }
 
 export const poiService = new PoiService();
@@ -10046,6 +10461,508 @@ export const DashboardAPI = {
       totalLikes: stats.reduce((sum, s) => sum + s.likes, 0),
     };
   },
+};
+
+
+================================================================================
+FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\services\geocodingService.ts
+================================================================================
+
+import { POI } from "@/types";
+
+const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9";
+
+// Cache pour éviter les requêtes redondantes
+const geocodeCache = new Map<string, Partial<POI>>();
+
+// Détermine la catégorie en fonction du type de lieu
+const determineCategoryFromType = (placeType: string): string => {
+  const typeMap: Record<string, string> = {
+    'restaurant': 'FOOD_DRINK',
+    'cafe': 'FOOD_DRINK',
+    'bar': 'FOOD_DRINK',
+    'fast_food': 'FOOD_DRINK',
+    'food_court': 'FOOD_DRINK',
+    'hotel': 'ACCOMMODATION',
+    'motel': 'ACCOMMODATION',
+    'hostel': 'ACCOMMODATION',
+    'guest_house': 'ACCOMMODATION',
+    'shop': 'SHOPPING_RETAIL',
+    'supermarket': 'SHOPPING_RETAIL',
+    'mall': 'SHOPPING_RETAIL',
+    'marketplace': 'SHOPPING_RETAIL',
+    'boutique': 'SHOPPING_RETAIL',
+    'hospital': 'HEALTH_WELLNESS',
+    'clinic': 'HEALTH_WELLNESS',
+    'pharmacy': 'HEALTH_WELLNESS',
+    'doctors': 'HEALTH_WELLNESS',
+    'dentist': 'HEALTH_WELLNESS',
+    'veterinary': 'HEALTH_WELLNESS',
+    'school': 'EDUCATION',
+    'university': 'EDUCATION',
+    'college': 'EDUCATION',
+    'kindergarten': 'EDUCATION',
+    'library': 'EDUCATION',
+    'bank': 'FINANCE',
+    'atm': 'FINANCE',
+    'bureau_de_change': 'FINANCE',
+    'church': 'WORSHIP_SPIRITUALITY',
+    'mosque': 'WORSHIP_SPIRITUALITY',
+    'temple': 'WORSHIP_SPIRITUALITY',
+    'chapel': 'WORSHIP_SPIRITUALITY',
+    'museum': 'LEISURE_CULTURE',
+    'cinema': 'LEISURE_CULTURE',
+    'theater': 'LEISURE_CULTURE',
+    'theatre': 'LEISURE_CULTURE',
+    'park': 'LEISURE_CULTURE',
+    'zoo': 'LEISURE_CULTURE',
+    'stadium': 'LEISURE_CULTURE',
+    'bus_stop': 'TRANSPORTATION',
+    'bus_station': 'TRANSPORTATION',
+    'train_station': 'TRANSPORTATION',
+    'airport': 'TRANSPORTATION',
+    'taxi_stand': 'TRANSPORTATION',
+    'fuel': 'TRANSPORTATION',
+    'parking': 'TRANSPORTATION',
+    'town_hall': 'PUBLIC_ADMIN_SERVICES',
+    'police': 'PUBLIC_ADMIN_SERVICES',
+    'fire_station': 'PUBLIC_ADMIN_SERVICES',
+    'post_office': 'PUBLIC_ADMIN_SERVICES',
+    'government': 'PUBLIC_ADMIN_SERVICES',
+  };
+  
+  const lowerType = placeType.toLowerCase();
+  return typeMap[lowerType] || 'LEISURE_CULTURE';
+};
+
+// Génère une description contextuelle enrichie
+const generateDescription = (
+  placeName: string, 
+  placeType: string, 
+  city: string,
+  additionalInfo?: any
+): string => {
+  const baseDescriptions: Record<string, string> = {
+    'FOOD_DRINK': `établissement de restauration`,
+    'ACCOMMODATION': `hébergement`,
+    'SHOPPING_RETAIL': `commerce`,
+    'HEALTH_WELLNESS': `établissement de santé`,
+    'EDUCATION': `établissement d'enseignement`,
+    'FINANCE': `établissement financier`,
+    'WORSHIP_SPIRITUALITY': `lieu de culte`,
+    'LEISURE_CULTURE': `lieu culturel et de loisirs`,
+    'TRANSPORTATION': `point de transport`,
+    'PUBLIC_ADMIN_SERVICES': `service public`
+  };
+  
+  const category = determineCategoryFromType(placeType);
+  const baseDesc = baseDescriptions[category] || 'établissement';
+  
+  let description = `${placeName} est un ${baseDesc} situé à ${city}.`;
+  
+  // Ajouter des informations contextuelles si disponibles
+  if (additionalInfo) {
+    if (additionalInfo.address) {
+      description += ` Adresse: ${additionalInfo.address}.`;
+    }
+    if (additionalInfo.opening_hours) {
+      description += ` Horaires: ${additionalInfo.opening_hours}.`;
+    }
+    if (additionalInfo.phone) {
+      description += ` Contact: ${additionalInfo.phone}.`;
+    }
+  }
+  
+  description += ` Partagez votre expérience sur Navigoo.`;
+  
+  return description;
+};
+
+// Sélectionne une image appropriée selon la catégorie
+const getCategoryImage = (category: string): string => {
+  const imageMap: Record<string, string> = {
+    'FOOD_DRINK': 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=800',
+    'ACCOMMODATION': 'https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=800',
+    'SHOPPING_RETAIL': 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=800',
+    'HEALTH_WELLNESS': 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?q=80&w=800',
+    'EDUCATION': 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?q=80&w=800',
+    'FINANCE': 'https://images.unsplash.com/photo-1541354329998-f4d9a9f9297f?q=80&w=800',
+    'WORSHIP_SPIRITUALITY': 'https://images.unsplash.com/photo-1548625361-5b2e24e3f179?q=80&w=800',
+    'LEISURE_CULTURE': 'https://images.unsplash.com/photo-1518998053901-5348d3961a04?q=80&w=800',
+    'TRANSPORTATION': 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=800',
+    'PUBLIC_ADMIN_SERVICES': 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=800'
+  };
+  
+  return imageMap[category] || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=800';
+};
+
+// Extrait les équipements depuis les tags OSM
+const extractAmenitiesFromTags = (tags: any): string[] => {
+  const amenities: string[] = [];
+  
+  if (!tags) return amenities;
+  
+  // Mapping des tags OSM vers amenities Navigoo
+  const amenityMap: Record<string, string> = {
+    'wifi': 'Wi-Fi',
+    'internet_access': 'Wi-Fi',
+    'parking': 'Parking',
+    'wheelchair': 'Handicap',
+    'air_conditioning': 'Climatisé',
+    'outdoor_seating': 'Terrasse',
+    'delivery': 'Livraison',
+    'takeaway': 'À emporter',
+    'toilets': 'Toilettes',
+    'smoking': 'Fumeur',
+    'payment:mobile_money': 'Mobile Money',
+  };
+  
+  Object.keys(tags).forEach(key => {
+    if (amenityMap[key] && tags[key] === 'yes') {
+      amenities.push(amenityMap[key]);
+    }
+  });
+  
+  // Ajouter selon le type
+  if (tags.cuisine) amenities.push(`Cuisine: ${tags.cuisine}`);
+  if (tags.stars) amenities.push(`${tags.stars} étoiles`);
+  if (tags.opening_hours) amenities.push('Horaires disponibles');
+  
+  return amenities;
+};
+
+// NOUVELLE FONCTION: Recherche détaillée via Overpass API (OpenStreetMap)
+const fetchFromOverpassAPI = async (lat: number, lon: number, radius: number = 50): Promise<any> => {
+  try {
+    // Query Overpass pour récupérer les POIs dans un rayon
+    const query = `
+      [out:json][timeout:25];
+      (
+        node["name"](around:${radius},${lat},${lon});
+        way["name"](around:${radius},${lat},${lon});
+        relation["name"](around:${radius},${lat},${lon});
+      );
+      out body;
+      >;
+      out skel qt;
+    `;
+    
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: `data=${encodeURIComponent(query)}`,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+    
+    if (!response.ok) {
+      console.warn('Overpass API error:', response.status);
+      return null;
+    }
+    
+    const data = await response.json();
+    
+    if (data.elements && data.elements.length > 0) {
+      // Trouver l'élément le plus proche
+      let closest = null;
+      let minDistance = Infinity;
+      
+      data.elements.forEach((element: any) => {
+        if (element.tags && element.tags.name) {
+          const elLat = element.lat || element.center?.lat;
+          const elLon = element.lon || element.center?.lon;
+          
+          if (elLat && elLon) {
+            const distance = Math.sqrt(
+              Math.pow(elLat - lat, 2) + Math.pow(elLon - lon, 2)
+            );
+            
+            if (distance < minDistance) {
+              minDistance = distance;
+              closest = element;
+            }
+          }
+        }
+      });
+      
+      return closest;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Overpass API error:', error);
+    return null;
+  }
+};
+
+// NOUVELLE FONCTION: Enrichir avec Nominatim (détails complets)
+const enrichWithNominatim = async (lat: number, lon: number): Promise<any> => {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1&extratags=1&namedetails=1`,
+      {
+        headers: {
+          'User-Agent': 'POI-Navigoo/1.0',
+        },
+      }
+    );
+    
+    if (!response.ok) return null;
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Nominatim error:', error);
+    return null;
+  }
+};
+
+// FONCTION PRINCIPALE: Géocodage Inverse Multi-Sources
+export const reverseGeocode = async (lat: number, lon: number): Promise<Partial<POI> | null> => {
+  const cacheKey = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+  
+  // Vérifier le cache
+  if (geocodeCache.has(cacheKey)) {
+    console.log('✅ Cache hit:', cacheKey);
+    return geocodeCache.get(cacheKey)!;
+  }
+
+  console.log('🔍 Recherche multi-sources pour:', lat, lon);
+
+  try {
+    // ÉTAPE 1: MapTiler (rapide, info de base)
+    const maptilerPromise = fetch(
+      `https://api.maptiler.com/geocoding/${lon},${lat}.json?key=${MAPTILER_API_KEY}&limit=1`
+    ).then(res => res.ok ? res.json() : null);
+    
+    // ÉTAPE 2: Overpass API (données OSM riches)
+    const overpassPromise = fetchFromOverpassAPI(lat, lon, 50);
+    
+    // ÉTAPE 3: Nominatim (détails d'adresse)
+    const nominatimPromise = enrichWithNominatim(lat, lon);
+    
+    // Exécution parallèle pour optimiser le temps
+    const [maptilerData, overpassData, nominatimData] = await Promise.all([
+      maptilerPromise,
+      overpassPromise,
+      nominatimPromise,
+    ]);
+    
+    console.log('📊 Données récupérées:', {
+      maptiler: !!maptilerData,
+      overpass: !!overpassData,
+      nominatim: !!nominatimData,
+    });
+    
+    // FUSION DES DONNÉES
+    let placeName = 'Lieu inconnu';
+    let placeType = 'unknown';
+    let city = 'Ville inconnue';
+    let region = '';
+    let country = 'Cameroun';
+    let address = '';
+    let phone = '';
+    let website = '';
+    let opening_hours = '';
+    let amenities: string[] = [];
+    let keywords: string[] = [];
+    let imageUrl = '';
+    
+    // Priorité 1: Overpass (données les plus riches)
+    if (overpassData && overpassData.tags) {
+      const tags = overpassData.tags;
+      placeName = tags.name || tags['name:fr'] || tags['name:en'] || placeName;
+      placeType = tags.amenity || tags.shop || tags.leisure || tags.tourism || placeType;
+      phone = tags.phone || tags['contact:phone'] || phone;
+      website = tags.website || tags['contact:website'] || website;
+      opening_hours = tags.opening_hours || opening_hours;
+      
+      // Extraire les équipements
+      amenities = extractAmenitiesFromTags(tags);
+      
+      // Keywords depuis les tags
+      if (tags.cuisine) keywords.push(tags.cuisine);
+      if (tags.brand) keywords.push(tags.brand);
+      if (tags.operator) keywords.push(tags.operator);
+      
+      console.log('✨ Overpass data:', {
+        name: placeName,
+        type: placeType,
+        tags: Object.keys(tags),
+      });
+    }
+    
+    // Priorité 2: Nominatim (adresse complète)
+    if (nominatimData) {
+      address = nominatimData.display_name || address;
+      
+      if (nominatimData.address) {
+        const addr = nominatimData.address;
+        city = addr.city || addr.town || addr.village || addr.municipality || city;
+        region = addr.state || addr.region || region;
+        country = addr.country || country;
+        
+        // Si pas de nom depuis Overpass, utiliser Nominatim
+        if (placeName === 'Lieu inconnu') {
+          placeName = nominatimData.name || 
+                     addr.amenity || 
+                     addr.shop || 
+                     addr.building || 
+                     placeName;
+        }
+      }
+      
+      // Type depuis Nominatim si non trouvé
+      if (placeType === 'unknown') {
+        placeType = nominatimData.type || 
+                   nominatimData.class || 
+                   placeType;
+      }
+      
+      // Tags extra de Nominatim
+      if (nominatimData.extratags) {
+        const extra = nominatimData.extratags;
+        if (extra.phone && !phone) phone = extra.phone;
+        if (extra.website && !website) website = extra.website;
+        if (extra.opening_hours && !opening_hours) opening_hours = extra.opening_hours;
+      }
+      
+      console.log('🏠 Nominatim data:', {
+        name: placeName,
+        address: city,
+        type: placeType,
+      });
+    }
+    
+    // Priorité 3: MapTiler (fallback)
+    if (maptilerData && maptilerData.features && maptilerData.features.length > 0) {
+      const feature = maptilerData.features[0];
+      const context = feature.context || [];
+      
+      if (placeName === 'Lieu inconnu') {
+        placeName = feature.text || placeName;
+      }
+      
+      const placeContext = context.find((c: any) => c.id?.includes('place'));
+      const regionContext = context.find((c: any) => c.id?.includes('region'));
+      const countryContext = context.find((c: any) => c.id?.includes('country'));
+      
+      if (!city || city === 'Ville inconnue') city = placeContext?.text || city;
+      if (!region) region = regionContext?.text || region;
+      if (!country || country === 'Cameroun') country = countryContext?.text || country;
+      
+      if (placeType === 'unknown') {
+        placeType = feature.properties?.category || placeType;
+      }
+      
+      console.log('🗺️ MapTiler data:', {
+        name: placeName,
+        city,
+        type: placeType,
+      });
+    }
+    
+    // Déterminer la catégorie
+    const category = determineCategoryFromType(placeType);
+    
+    // Image par défaut selon catégorie
+    imageUrl = getCategoryImage(category);
+    
+    // Mots-clés finaux
+    keywords = Array.from(new Set([...keywords, placeType, city, category])).filter(Boolean);
+    
+    // Construire le POI final
+    const poi: Partial<POI> = {
+      poi_id: `external-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      poi_name: placeName,
+      address_informal: address || `${city}, ${country}`,
+      address_city: city,
+      address_state_province: region,
+      address_country: country,
+      location: { latitude: lat, longitude: lon },
+      poi_category: category,
+      poi_description: generateDescription(placeName, placeType, city, {
+        address,
+        opening_hours,
+        phone,
+      }),
+      poi_images_urls: [imageUrl],
+      rating: 0,
+      review_count: 0,
+      popularity_score: 0,
+      poi_amenities: amenities,
+      poi_keywords: keywords,
+      poi_contacts: {
+        phone: phone,
+        website: website,
+        email: '',
+      },
+      is_active: false, // Lieu externe non vérifié
+    };
+    
+    console.log('✅ POI final créé:', {
+      name: poi.poi_name,
+      category: poi.poi_category,
+      amenities: poi.poi_amenities?.length,
+      hasPhone: !!phone,
+      hasWebsite: !!website,
+    });
+    
+    // Mise en cache
+    if (geocodeCache.size > 100) {
+      const firstKey = geocodeCache.keys().next().value;
+      geocodeCache.delete(firstKey);
+    }
+    geocodeCache.set(cacheKey, poi);
+    
+    return poi;
+    
+  } catch (error) {
+    console.error('❌ Erreur geocoding:', error);
+    return null;
+  }
+};
+
+// FONCTION BONUS: Recherche par nom de lieu
+export const searchPlaceByName = async (name: string, lat?: number, lon?: number): Promise<Partial<POI>[]> => {
+  try {
+    const nominatimUrl = lat && lon
+      ? `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=5&lat=${lat}&lon=${lon}&addressdetails=1&extratags=1`
+      : `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=5&addressdetails=1&extratags=1`;
+    
+    const response = await fetch(nominatimUrl, {
+      headers: {
+        'User-Agent': 'POI-Navigoo/1.0',
+      },
+    });
+    
+    if (!response.ok) return [];
+    
+    const results = await response.json();
+    
+    return results.map((result: any) => {
+      const category = determineCategoryFromType(result.type || result.class);
+      
+      return {
+        poi_id: `search-${result.osm_id}`,
+        poi_name: result.display_name.split(',')[0],
+        address_informal: result.display_name,
+        address_city: result.address?.city || result.address?.town || '',
+        address_country: result.address?.country || '',
+        location: {
+          latitude: parseFloat(result.lat),
+          longitude: parseFloat(result.lon),
+        },
+        poi_category: category,
+        poi_description: `${result.display_name}`,
+        poi_images_urls: [getCategoryImage(category)],
+        rating: 0,
+        review_count: 0,
+      };
+    });
+  } catch (error) {
+    console.error('Search error:', error);
+    return [];
+  }
 };
 
 
