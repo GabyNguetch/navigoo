@@ -106,7 +106,10 @@ export interface Podcast {
 
 // Helper function for API calls
 async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const url = `${API_BASE_URL}${endpoint}`; // Construire l'URL
+  console.log(`📡 Calling API: ${options?.method || 'GET'} ${url}`); // LOG DE DEBUG
+
+  const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -116,6 +119,11 @@ async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     throw new Error(`API Error: ${response.status} ${response.statusText}`);
+  }
+
+  const contentType = response.headers.get("content-type");
+  if (response.status === 204 || !contentType || !contentType.includes("application/json")) {
+    return {} as T; 
   }
 
   return response.json();
