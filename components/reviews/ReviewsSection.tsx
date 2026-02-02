@@ -33,48 +33,41 @@ export const ReviewsSection = ({ poiId, onReviewSubmitted }: ReviewsSectionProps
   }, [poiId]);
 
   const loadReviews = async () => {
-  try {
-    setIsLoading(true);
-    
-    // 1. Charger les avis individuels (Généralement plus stable)
     try {
+      setIsLoading(true);
+      
+      // Sécurité : Si le POI est externe, inutile de charger quoi que ce soit
+      if (poiId.startsWith("external-") || poiId.startsWith("search-")) {
+          setReviews([]);
+          setStats({ averageRating: 0, reviewCount: 0 });
+          setUserHasReviewed(false);
+          return;
+      }
+
+      // 1. Charger les avis
       const reviewsData = await reviewService.getReviewsByPoi(poiId);
       setReviews(Array.isArray(reviewsData) ? reviewsData : []);
-    } catch (e) {
-      console.warn("⚠️ Impossible de charger la liste des avis");
-      setReviews([]);
-    }
 
-    // 2. Charger les statistiques (Celui qui cause la 500)
-    try {
-      const statsData = await reviewService.getPoiStats(poiId);
-      // On vérifie si statsData contient des données valides
-      if (statsData && typeof statsData.averageRating === 'number') {
-        setStats(statsData);
-      } else {
-        throw new Error("Stats invalides");
-      }
-    } catch (e) {
-      console.log("ℹ️ Pas encore de statistiques pour ce POI. Utilisation des valeurs par défaut.");
-      // Fallback manuel pour éviter le crash du composant
-      setStats({ averageRating: 0, reviewCount: 0 });
-    }
-
-    // 3. Vérifier si l'utilisateur a déjà posté
-    if (currentUser) {
+      // 2. Charger les statistiques (on attrape l'erreur individuellement ici aussi)
       try {
-        const hasReviewed = await reviewService.hasUserReviewed(currentUser.userId, poiId);
-        setUserHasReviewed(hasReviewed);
+        const statsData = await reviewService.getPoiStats(poiId);
+        setStats(statsData || { averageRating: 0, reviewCount: 0 });
       } catch (e) {
-        setUserHasReviewed(false);
+        setStats({ averageRating: 0, reviewCount: 0 });
       }
+
+      // 3. Vérification utilisateur connecté
+      if (currentUser) {
+         const hasReviewed = await reviewService.hasUserReviewed(currentUser.userId, poiId);
+         setUserHasReviewed(hasReviewed);
+      }
+    } catch (error) {
+      console.warn("⚠️ [ReviewsSection] Erreur chargement reviews (POI peut être hors-base):", error);
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    console.error("❌ Erreur critique lors du chargement des reviews:", error);
-  } finally {
-    setIsLoading(false);
-  }
 };
+
   const handleSubmitReview = async () => {
     if (!currentUser) {
       alert("Vous devez être connecté pour laisser un avis");

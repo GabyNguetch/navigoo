@@ -19,6 +19,10 @@ export interface ReviewStats {
 }
 
 class ReviewService {
+    // Ajout d'une petite fonction utilitaire pour vérifier si l'ID est un lieu système
+  private isExternalId(id: string): boolean {
+    return id.startsWith("external-") || id.startsWith("search-");
+  }
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     
@@ -76,12 +80,6 @@ async createReview(review: Omit<PoiReview, 'reviewId' | 'createdAt'>): Promise<P
     return this.request<PoiReview>(`/api-reviews/${reviewId}`);
   }
 
-  // Obtenir les avis d'un POI
-  async getReviewsByPoi(poiId: string): Promise<PoiReview[]> {
-    console.log(`📍 [ReviewService] Récupération avis POI: ${poiId}`);
-    return this.request<PoiReview[]>(`/api-reviews/poi/${poiId}/reviews`);
-  }
-
   // Obtenir les avis d'un utilisateur
   async getReviewsByUser(userId: string): Promise<PoiReview[]> {
     console.log(`👤 [ReviewService] Récupération avis utilisateur: ${userId}`);
@@ -94,10 +92,25 @@ async createReview(review: Omit<PoiReview, 'reviewId' | 'createdAt'>): Promise<P
     return this.request<PoiReview[]>(`/api-reviews/organization/${orgId}/reviews`);
   }
 
-  // Obtenir les statistiques d'un POI
+  async getReviewsByPoi(poiId: string): Promise<PoiReview[]> {
+    if (this.isExternalId(poiId)) return []; // Retourne une liste vide sans requête
+    console.log(`📍 [ReviewService] Récupération avis POI: ${poiId}`);
+    return this.request<PoiReview[]>(`/api-reviews/poi/${poiId}/reviews`);
+  }
+
   async getPoiStats(poiId: string): Promise<ReviewStats> {
-    console.log(`📊 [ReviewService] Récupération stats POI: ${poiId}`);
-    return this.request<ReviewStats>(`/api-reviews/poi/${poiId}/stats`);
+    // Si l'ID est externe, on ne contacte pas le backend (éviter l'erreur 400/500)
+    if (this.isExternalId(poiId)) {
+        return { averageRating: 0, reviewCount: 0 };
+    }
+    
+    try {
+        console.log(`📊 [ReviewService] Récupération stats POI: ${poiId}`);
+        return await this.request<ReviewStats>(`/api-reviews/poi/${poiId}/stats`);
+    } catch (e) {
+        // Fallback pour les nouveaux POI réels sans avis encore créés
+        return { averageRating: 0, reviewCount: 0 };
+    }
   }
 
   // Obtenir la note moyenne d'un POI
