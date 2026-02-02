@@ -34,6 +34,10 @@ export interface POI {
   poi_category: string; 
   poi_type?: string;
   
+  // Supporte les deux formats pour la transition
+  latitude?: number;
+  longitude?: number;
+  
   location: {
     latitude: number;
     longitude: number;

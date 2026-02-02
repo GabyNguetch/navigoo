@@ -23,11 +23,14 @@ interface MapProps {
 // Cela évite de re-rendre chaque pin si la carte bouge mais que le POI ne change pas
 const MapMarker = memo(({ poi, isSelected, onClick, onHover }: { poi: POI, isSelected: boolean, onClick: (e: any) => void, onHover: (p: POI | null) => void }) => {
   const config = getCategoryConfig(poi.poi_category);
+    // Utilise soit l'objet location, soit les champs à la racine
+  const lng = poi.location?.longitude ?? poi.longitude;
+  const lat = poi.location?.latitude ?? poi.latitude;
 
   return (
     <Marker
-      longitude={poi.location.longitude}
-      latitude={poi.location.latitude}
+      longitude={lng}
+      latitude={lat}
       anchor="bottom"
       onClick={onClick}
     >
@@ -126,7 +129,16 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
   // --- RENDU OPTIMISÉ DES PINS ---
   
   const pins = useMemo(() => {
-    return pois.map((poi) => (
+    return pois.map((poi) => {
+      // SÉCURITÉ : Vérifier que les coordonnées existent avant de tenter le rendu
+      const lat = poi.location?.latitude ?? poi.latitude;
+      const lng = poi.location?.longitude ?? poi.longitude;
+
+      if (lat === undefined || lng === undefined) {
+        console.warn(`POI invalide détecté (ID: ${poi.poi_id}): coordonnées manquantes.`);
+        return null;
+      }
+ 
       <MapMarker 
         key={poi.poi_id} 
         poi={poi} 
@@ -137,7 +149,7 @@ function MapComponent({ apiKey, pois, onSelectPoi, selectedPoi, userLocation, ro
           onSelectPoi(poi);
         }}
       />
-    ));
+    });
   }, [pois, selectedPoi?.poi_id, onSelectPoi]); // Dépendances strictes
 
   return (
