@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { cn } from '@/components/admin/utils';
 import { LogOut } from 'lucide-react';
 import { authService } from '@/services/authService';
-import { router, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 interface SidebarProps {
   onNavigate?: (section: string) => void;
   currentSection?: string;

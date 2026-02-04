@@ -375,12 +375,12 @@ export default function Home() {
       )}
 
       {(["saved", "recent", "trips", "mypois"].includes(panelState.type || "")) && (
-          <SecondarySidebar 
-             view={panelState.type}
-             onClose={handleClosePanel}
-             data={{ savedPois, recentPois, trips: recentTrips }}
-             onSelectPoi={handleSelectPoi}
-          />
+        <SecondarySidebar 
+          view={panelState.type as "saved" | "recent" | "trips" | "mypois"}
+          onClose={handleClosePanel}
+          data={{ savedPois, recentPois, trips: recentTrips }}
+          onSelectPoi={handleSelectPoi}
+        />
       )}
 
       {isSettingsOpen && (

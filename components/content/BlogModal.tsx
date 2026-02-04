@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, FileText, Save, Loader2, ImagePlus, Type, AlignLeft } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, FileText, Save, Loader2, ImagePlus, Type, AlignLeft, Video, Camera, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { FormInput } from "@/components/ui/form/FormInput";
 import { motion, AnimatePresence } from "framer-motion";
 import { authService } from "@/services/authService";
 import { contentService } from "@/services/contentService";
 import { POI } from "@/types";
+import Image from "next/image";
+import { clsx } from "clsx";
 
 interface BlogModalProps {
   isOpen: boolean;
@@ -19,6 +20,10 @@ interface BlogModalProps {
 export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModalProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [availablePois, setAvailablePois] = useState<POI[]>([]);
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [formData, setFormData] = useState({
     poi_id: "",
     title: "",
@@ -57,9 +62,25 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      setMediaPreview(result);
+      setFormData(prev => ({ ...prev, cover_image_url: result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.poi_id || !formData.title || !formData.content) return alert("Champs obligatoires manquants");
+    if (!formData.poi_id || !formData.title || !formData.content) {
+      alert("Champs obligatoires manquants");
+      return;
+    }
     
     setIsLoading(true);
     try {
@@ -68,13 +89,14 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
         user_id: user?.userId
       });
       if (onSuccess) onSuccess();
-      onClose();
+      handleClose();
     } catch (error) {
       alert("Erreur lors de la création");
     } finally {
       setIsLoading(false);
     }
   };
+
   const handleClose = () => {
     if (!isLoading) {
       setFormData({
@@ -84,6 +106,7 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
         content: "",
         cover_image_url: "",
       });
+      setMediaPreview(null);
       onClose();
     }
   };
@@ -92,16 +115,14 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100]"
             onClick={handleClose}
           />
 
-          {/* Modal */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -109,117 +130,176 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
             transition={{ type: "spring", duration: 0.3 }}
             className="fixed inset-0 z-[101] flex items-center justify-center p-4"
           >
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
               
-              {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-blue-50 to-violet-50 dark:from-blue-950/30 dark:to-violet-950/30">
+              {/* HEADER */}
+              <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-blue-500 rounded-2xl">
+                  <div className="p-3 bg-purple-700 rounded-2xl">
                     <FileText size={28} className="text-white" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-black text-zinc-900 dark:text-white">
-                      Créer un Blog
+                      Créer un blog
                     </h2>
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                      Partagez votre expérience sur un lieu
+                      Photo et Vidéo
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={handleClose}
                   disabled={isLoading}
-                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors disabled:opacity-50"
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
                 >
                   <X size={24} className="text-zinc-600 dark:text-zinc-400" />
                 </button>
               </div>
 
-              {/* Body */}
-              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
-                
-                {/* POI Selection */}
-                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    Point d'intérêt * {selectedPoi && <span className="text-primary">(Pré-sélectionné)</span>}
-                  </label>
-                  <select
-                    name="poi_id"
-                    value={formData.poi_id}
-                    onChange={handleChange}
-                    required
-                    disabled={!!selectedPoi}
-                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-60"
-                  >
-                    <option value="">-- Sélectionner un POI --</option>
-                    {availablePois.map(poi => (
-                      <option key={poi.poi_id} value={poi.poi_id}>
-                        {poi.poi_name} ({poi.address_city})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Title */}
-                <FormInput
-                  label="Titre du blog *"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleChange}
-                  icon={<Type size={18} />}
-                  placeholder="Ex: Mon expérience au Restaurant Le Délice"
-                  required
-                />
-
-                {/* Description */}
-                <FormInput
-                  label="Description courte"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  icon={<AlignLeft size={18} />}
-                  placeholder="Résumé en quelques mots (optionnel)"
-                />
-
-                {/* Cover Image URL */}
-                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    URL Image de couverture
-                  </label>
-                  <div className="relative">
-                    <ImagePlus className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                    <input
-                      type="url"
-                      name="cover_image_url"
-                      value={formData.cover_image_url}
-                      onChange={handleChange}
-                      placeholder="https://example.com/image.jpg (optionnel)"
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                    />
+              {/* BODY */}
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 h-full">
+                  
+                  {/* GAUCHE : MÉDIA */}
+                  <div className="relative bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center min-h-[400px] md:min-h-full">
+                    {mediaPreview ? (
+                      <div className="relative w-full h-full">
+                        {mediaType === 'image' ? (
+                          <Image src={mediaPreview} alt="Preview" fill className="object-contain" />
+                        ) : (
+                          <video src={mediaPreview} controls className="w-full h-full object-contain" />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => { setMediaPreview(null); setFormData(prev => ({ ...prev, cover_image_url: '' })); }}
+                          className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-6 p-8">
+                        <div className="flex gap-4">
+                          <button
+                            type="button"
+                            onClick={() => { setMediaType('image'); fileInputRef.current?.click(); }}
+                            className={clsx(
+                              "flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-dashed transition-all",
+                              mediaType === 'image' ? "border-primary bg-primary/5" : "border-zinc-300 dark:border-zinc-700"
+                            )}
+                          >
+                            <div className="p-4 bg-blue-100 dark:bg-blue-900/30 rounded-2xl">
+                              <ImageIcon size={32} className="text-blue-600" />
+                            </div>
+                            <span className="font-bold text-sm">Photo</span>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={() => { setMediaType('video'); fileInputRef.current?.click(); }}
+                            className={clsx(
+                              "flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-dashed transition-all",
+                              mediaType === 'video' ? "border-primary bg-primary/5" : "border-zinc-300 dark:border-zinc-700"
+                            )}
+                          >
+                            <div className="p-4 bg-purple-100 dark:bg-purple-900/30 rounded-2xl">
+                              <Video size={32} className="text-purple-600" />
+                            </div>
+                            <span className="font-bold text-sm">Vidéo</span>
+                          </button>
+                        </div>
+                        
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept={mediaType === 'image' ? 'image/*' : 'video/*'}
+                          onChange={handleMediaUpload}
+                          className="hidden"
+                        />
+                        
+                        <p className="text-sm text-zinc-500 text-center">
+                          ou glissez votre fichier ici
+                        </p>
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                {/* Content */}
-                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    Contenu de l'article *
-                  </label>
-                  <textarea
-                    name="content"
-                    value={formData.content}
-                    onChange={handleChange}
-                    required
-                    rows={12}
-                    placeholder="Rédigez votre article ici... Partagez votre expérience, vos impressions, vos recommandations..."
-                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
-                  />
-                  <p className="text-xs text-zinc-500 mt-1 ml-1">
-                    {formData.content.length} caractères
-                  </p>
+                  {/* DROITE : FORMULAIRE */}
+                  <div className="p-6 space-y-4 overflow-y-auto">
+                    
+                    {/* POI Selection */}
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                        Lieu *
+                      </label>
+                      <select
+                        name="poi_id"
+                        value={formData.poi_id}
+                        onChange={handleChange}
+                        required
+                        disabled={!!selectedPoi}
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                      >
+                        <option value="">-- Sélectionner --</option>
+                        {availablePois.map(poi => (
+                          <option key={poi.poi_id} value={poi.poi_id}>
+                            {poi.poi_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Titre */}
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                        Titre *
+                      </label>
+                      <input
+                        type="text"
+                        name="title"
+                        value={formData.title}
+                        onChange={handleChange}
+                        required
+                        placeholder="Ex: Une soirée mémorable..."
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                        Légende
+                      </label>
+                      <textarea
+                        name="description"
+                        value={formData.description}
+                        onChange={handleChange}
+                        rows={2}
+                        placeholder="Ajoutez une légende..."
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                      />
+                    </div>
+
+                    {/* Contenu */}
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                        Contenu détaillé *
+                      </label>
+                      <textarea
+                        name="content"
+                        value={formData.content}
+                        onChange={handleChange}
+                        required
+                        rows={2}
+                        placeholder="Racontez votre expérience..."
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                      />
+                    </div>
+                  </div>
                 </div>
               </form>
 
-              {/* Footer */}
+              {/* FOOTER */}
               <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex gap-3">
                 <Button
                   type="button"
@@ -233,7 +313,7 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
                 <Button
                   onClick={handleSubmit}
                   disabled={isLoading}
-                  className="flex-1 gap-2"
+                  className="flex-1 gap-2 bg-purple-700"
                 >
                   {isLoading ? (
                     <>
@@ -243,7 +323,7 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
                   ) : (
                     <>
                       <Save size={18} />
-                      Publier le Blog
+                      Publier
                     </>
                   )}
                 </Button>

@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { userProfileService, UserProfile, UserStats } from "@/services/userProfileService";
 import { authService } from "@/services/authService";
+import { AppUser } from "@/services/adminService";
 
 export const useUserProfile = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -86,8 +87,8 @@ export const useUserProfile = () => {
       const updated = await userProfileService.updateUserProfile(currentUser.userId, data);
       setProfile(updated);
       
-      // Mettre à jour la session
-      authService.saveSession({ ...currentUser, ...updated });
+    // PAR CELLE-CI (Ajout de "as AppUser") :
+    authService.saveSession({ ...currentUser, ...updated } as AppUser);
       
       return updated;
     } catch (err: any) {

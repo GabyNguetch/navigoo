@@ -2,9 +2,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   images: {
     // Liste des domaines autorisés pour les images externes
     remotePatterns: [

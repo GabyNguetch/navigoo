@@ -440,7 +440,9 @@ export const reverseGeocode = async (lat: number, lon: number): Promise<Partial<
     // Mise en cache
     if (geocodeCache.size > 100) {
       const firstKey = geocodeCache.keys().next().value;
-      geocodeCache.delete(firstKey);
+      if (firstKey) { // <-- Ajoutez cette vérification
+        geocodeCache.delete(firstKey);
+      }
     }
     geocodeCache.set(cacheKey, poi);
     

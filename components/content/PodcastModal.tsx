@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, Mic, Save, Loader2, ImagePlus, Type, AlignLeft, Upload, Clock } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Mic, Save, Loader2, ImagePlus, Type, AlignLeft, Upload, Clock, Play, Pause, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { FormInput } from "@/components/ui/form/FormInput";
 import { motion, AnimatePresence } from "framer-motion";
 import { authService } from "@/services/authService";
 import { contentService } from "@/services/contentService";
 import { POI } from "@/types";
+import Image from "next/image";
 
 interface PodcastModalProps {
   isOpen: boolean;
@@ -19,6 +19,15 @@ interface PodcastModalProps {
 export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: PodcastModalProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [availablePois, setAvailablePois] = useState<POI[]>([]);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioPreview, setAudioPreview] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  
   const [formData, setFormData] = useState({
     poi_id: "",
     title: "",
@@ -39,6 +48,27 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
     }
   }, [isOpen, selectedPoi]);
 
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const updateTime = () => setCurrentTime(audio.currentTime);
+    const updateDuration = () => {
+      setDuration(audio.duration);
+      setFormData(prev => ({ ...prev, duration_seconds: Math.floor(audio.duration) }));
+    };
+
+    audio.addEventListener('timeupdate', updateTime);
+    audio.addEventListener('loadedmetadata', updateDuration);
+    audio.addEventListener('ended', () => setIsPlaying(false));
+
+    return () => {
+      audio.removeEventListener('timeupdate', updateTime);
+      audio.removeEventListener('loadedmetadata', updateDuration);
+      audio.removeEventListener('ended', () => setIsPlaying(false));
+    };
+  }, [audioPreview]);
+
   const loadUserPois = async () => {
     if (!user?.userId) return;
     
@@ -55,21 +85,38 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
-    if (name === "duration_seconds") {
-      setFormData(prev => ({ ...prev, [name]: parseInt(value) || 0 }));
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    }
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const formatDuration = (seconds: number): string => {
-    if (seconds < 60) return `${seconds} sec`;
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return remainingSeconds > 0 
-      ? `${minutes} min ${remainingSeconds} sec` 
-      : `${minutes} min`;
+  const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAudioFile(file);
+    const url = URL.createObjectURL(file);
+    setAudioPreview(url);
+    
+    // Simuler upload (en production, uploader vers CDN)
+    setFormData(prev => ({ ...prev, audio_file_url: url }));
+  };
+
+  const togglePlayPause = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const formatTime = (seconds: number): string => {
+    if (!seconds || isNaN(seconds)) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,14 +128,14 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
     }
 
     if (!formData.poi_id || !formData.title || !formData.audio_file_url || formData.duration_seconds === 0) {
-      alert("Veuillez remplir tous les champs obligatoires (POI, titre, fichier audio, durée)");
+      alert("Veuillez remplir tous les champs obligatoires");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const podcastData = {
+      await contentService.createPodcast({
         user_id: user.userId,
         poi_id: formData.poi_id,
         title: formData.title,
@@ -96,26 +143,12 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
         cover_image_url: formData.cover_image_url || "",
         audio_file_url: formData.audio_file_url,
         duration_seconds: formData.duration_seconds,
-      };
-
-      await contentService.createPodcast(podcastData);
+      });
       
       alert("✅ Podcast créé avec succès !");
-      
-      // Reset form
-      setFormData({
-        poi_id: "",
-        title: "",
-        description: "",
-        audio_file_url: "",
-        cover_image_url: "",
-        duration_seconds: 0,
-      });
-
+      handleClose();
       if (onSuccess) onSuccess();
-      onClose();
     } catch (error: any) {
-      console.error("Erreur création podcast:", error);
       alert(`❌ Erreur: ${error.message}`);
     } finally {
       setIsLoading(false);
@@ -132,6 +165,9 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
         cover_image_url: "",
         duration_seconds: 0,
       });
+      setAudioFile(null);
+      setAudioPreview(null);
+      setIsPlaying(false);
       onClose();
     }
   };
@@ -140,16 +176,14 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100]"
             onClick={handleClose}
           />
 
-          {/* Modal */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -159,10 +193,10 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
           >
             <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
               
-              {/* Header */}
+              {/* HEADER */}
               <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-purple-500 rounded-2xl">
+                  <div className="p-3 bg-purple-700 rounded-2xl">
                     <Mic size={28} className="text-white" />
                   </div>
                   <div>
@@ -170,26 +204,90 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
                       Créer un Podcast
                     </h2>
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                      Partagez une expérience audio sur un lieu
+                      Partagez une expérience audio
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={handleClose}
                   disabled={isLoading}
-                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors disabled:opacity-50"
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
                 >
                   <X size={24} className="text-zinc-600 dark:text-zinc-400" />
                 </button>
               </div>
 
-              {/* Body */}
+              {/* BODY */}
               <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
                 
+                {/* AUDIO PLAYER */}
+                {audioPreview ? (
+                  <div className="bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 rounded-2xl p-6 border border-purple-200 dark:border-purple-800">
+                    <div className="flex items-center gap-4 mb-4">
+                      <button
+                        type="button"
+                        onClick={togglePlayPause}
+                        className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white shadow-lg hover:scale-105 active:scale-95 transition-transform"
+                      >
+                        {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-1" />}
+                      </button>
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-bold text-purple-900 dark:text-purple-100">
+                            {audioFile?.name || 'Audio.mp3'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => { setAudioPreview(null); setAudioFile(null); }}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <div className="relative w-full h-2 bg-purple-200 dark:bg-purple-800 rounded-full overflow-hidden">
+                          <div
+                            className="absolute h-full bg-gradient-to-r from-purple-500 to-pink-600 rounded-full transition-all"
+                            style={{ width: `${(currentTime / duration) * 100}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-xs text-purple-700 dark:text-purple-300 mt-1">
+                          <span>{formatTime(currentTime)}</span>
+                          <span>{formatTime(duration)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <audio ref={audioRef} src={audioPreview} className="hidden" />
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => audioInputRef.current?.click()}
+                    className="relative h-30 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-2xl border-2 border-dashed border-purple-300 dark:border-purple-700 flex flex-col items-center justify-center cursor-pointer group hover:border-purple-500 transition-all"
+                  >
+                    <div className="p-2 bg-white dark:bg-zinc-800 rounded-2xl shadow-lg group-hover:scale-110 transition-transform">
+                      <Upload size={28} className="text-purple-500" />
+                    </div>
+                    <p className="mt-4 text-sm font-bold text-purple-900 dark:text-purple-100">
+                      Parcourir et importer un fichier audio
+                    </p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                      MP3, WAV, M4A (max 50MB)
+                    </p>
+                    <input
+                      ref={audioInputRef}
+                      type="file"
+                      accept="audio/*"
+                      onChange={handleAudioUpload}
+                      className="hidden"
+                    />
+                  </div>
+                )}
+
                 {/* POI Selection */}
                 <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    Point d'intérêt * {selectedPoi && <span className="text-primary">(Pré-sélectionné)</span>}
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                    Point d'intérêt *
                   </label>
                   <select
                     name="poi_id"
@@ -197,117 +295,50 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
                     onChange={handleChange}
                     required
                     disabled={!!selectedPoi}
-                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-60"
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                   >
                     <option value="">-- Sélectionner un POI --</option>
                     {availablePois.map(poi => (
                       <option key={poi.poi_id} value={poi.poi_id}>
-                        {poi.poi_name} ({poi.address_city})
+                        {poi.poi_name}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Title */}
-                <FormInput
-                  label="Titre du podcast *"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleChange}
-                  icon={<Type size={18} />}
-                  placeholder="Ex: Histoire culinaire de Yaoundé"
-                  required
-                />
+                {/* Titre */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                    Titre du podcast *
+                  </label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={formData.title}
+                    onChange={handleChange}
+                    required
+                    placeholder="Ex: Histoire culinaire de Yaoundé"
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
 
                 {/* Description */}
-                <FormInput
-                  label="Description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  icon={<AlignLeft size={18} />}
-                  placeholder="Résumé du contenu audio (optionnel)"
-                />
-
-                {/* Audio File URL */}
                 <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    URL Fichier Audio * (MP3, WAV, etc.)
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                    Description
                   </label>
-                  <div className="relative">
-                    <Upload className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                    <input
-                      type="url"
-                      name="audio_file_url"
-                      value={formData.audio_file_url}
-                      onChange={handleChange}
-                      required
-                      placeholder="https://example.com/podcast.mp3"
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Cover Image URL */}
-                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    URL Image de couverture
-                  </label>
-                  <div className="relative">
-                    <ImagePlus className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                    <input
-                      type="url"
-                      name="cover_image_url"
-                      value={formData.cover_image_url}
-                      onChange={handleChange}
-                      placeholder="https://example.com/cover.jpg (optionnel)"
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Duration */}
-                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    Durée (en secondes) *
-                  </label>
-                  <div className="relative">
-                    <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                    <input
-                      type="number"
-                      name="duration_seconds"
-                      value={formData.duration_seconds}
-                      onChange={handleChange}
-                      required
-                      min="1"
-                      placeholder="120"
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                    />
-                  </div>
-                  {formData.duration_seconds > 0 && (
-                    <p className="text-xs text-primary mt-1 ml-1 font-medium">
-                      ≈ {formatDuration(formData.duration_seconds)}
-                    </p>
-                  )}
-                </div>
-
-                {/* Info Box */}
-                <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <Mic size={20} className="text-purple-600 dark:text-purple-400 mt-0.5 shrink-0" />
-                    <div className="text-xs text-purple-800 dark:text-purple-200">
-                      <p className="font-bold mb-1">💡 Conseils</p>
-                      <ul className="space-y-1 list-disc list-inside">
-                        <li>Hébergez votre fichier audio sur un service cloud (Google Drive, Dropbox, etc.)</li>
-                        <li>Assurez-vous que l'URL est accessible publiquement</li>
-                        <li>Format recommandé: MP3 pour une meilleure compatibilité</li>
-                      </ul>
-                    </div>
-                  </div>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleChange}
+                    rows={1}
+                    placeholder="Résumé du contenu audio (optionnel)"
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                  />
                 </div>
               </form>
 
-              {/* Footer */}
+              {/* FOOTER */}
               <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex gap-3">
                 <Button
                   type="button"
@@ -321,7 +352,7 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
                 <Button
                   onClick={handleSubmit}
                   disabled={isLoading}
-                  className="flex-1 gap-2 bg-purple-600 hover:bg-purple-700"
+                  className="flex-1 gap-2 bg-purple-700 hover:bg-purple-800"
                 >
                   {isLoading ? (
                     <>
