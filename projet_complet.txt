@@ -1421,7 +1421,6 @@ export default function AdminLayout({
 FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\app\profile\page.tsx
 ================================================================================
 
-// app/profile/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -1432,7 +1431,9 @@ import {
   MapPin, Route, Star, ChevronRight, 
   Settings, Building2, Calendar, TrendingUp,
   MessageSquare, FileText, Mic, Plus,
-  Edit, Trash2, Eye, Send, Loader2
+  Edit, Trash2, Eye, Send, Loader2, X,
+  BarChart3, Award, Heart, Clock, Grid,
+  List, Image as ImageIcon, Video, Music
 } from "lucide-react";
 import { authService } from "@/services/authService";
 import { useUserProfile } from "@/hooks/useUserProfile";
@@ -1440,7 +1441,11 @@ import { Button } from "@/components/ui/Button";
 import { Loader } from "@/components/ui/Loader";
 import { BlogModal } from "@/components/content/BlogModal";
 import { PodcastModal } from "@/components/content/PodcastModal";
+import { AddPoiPanel } from "@/components/profile/AddPoiPanel";
 import { clsx } from "clsx";
+import { motion, AnimatePresence } from "framer-motion";
+
+type TabType = 'overview' | 'pois' | 'reviews' | 'blogs' | 'podcasts' | 'activity' | 'add-poi';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -1461,11 +1466,12 @@ export default function ProfilePage() {
     deletePodcast,
   } = useUserProfile();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'pois' | 'reviews' | 'blogs' | 'podcasts' | 'activity'>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editForm, setEditForm] = useState({ email: '', phone: '' });
-    const [isBlogModalOpen, setIsBlogModalOpen] = useState(false);
+  const [isBlogModalOpen, setIsBlogModalOpen] = useState(false);
   const [isPodcastModalOpen, setIsPodcastModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   useEffect(() => {
     const session = authService.getSession();
@@ -1498,7 +1504,6 @@ export default function ProfilePage() {
     alert("Contenu publié avec succès !");
   };
 
-
   const handleSaveProfile = async () => {
     try {
       await updateProfile(editForm);
@@ -1509,239 +1514,453 @@ export default function ProfilePage() {
     }
   };
 
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+  };
+
   if (isLoading) return <Loader />;
   if (error) return <div className="min-h-screen flex items-center justify-center text-red-600">Erreur: {error}</div>;
   if (!profile) return <div className="min-h-screen flex items-center justify-center">Profil non trouvé</div>;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col lg:flex-row font-sans">
+    <div className="min-h-screen bg-img bg-gradient-to-br from-zinc-50 via-white to-zinc-50 dark:from-black dark:via-zinc-950 dark:to-black">
       
-      {/* SIDEBAR GAUCHE - Responsive */}
-      <div className="w-full lg:w-[350px] bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 p-6 lg:p-8 flex flex-col shrink-0 overflow-y-auto max-h-screen">
+      {/* HERO HEADER avec Avatar */}
+      <div 
+        className="relative h-72 w-full overflow-hidden bg-cover bg-center"
+        style={{ 
+          backgroundImage: "url('images/fond1.jpg')",
+        }}
+      >
+        {/* Overlay sombre pour la lisibilité (indispensable) */}
+        <div className="absolute inset-0 bg-black/40 shadow-inner" />
         
-        {/* Photo de Profil */}
-        <div className="relative w-32 h-32 mx-auto mb-6 group">
-            <div className="w-full h-full rounded-3xl bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-primary/20">
-               <span className="text-4xl font-black text-primary">
-                 {profile.username.charAt(0).toUpperCase()}
-               </span>
-            </div>
-            <button className="absolute -bottom-2 -right-2 p-2.5 bg-primary text-white rounded-xl shadow-lg hover:scale-110 transition-transform">
-                <Camera size={18} />
-            </button>
+        {/* Dégradé vers le bas pour faire ressortir le nom d'utilisateur */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+        {/* Effet de grille animée */}
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute inset-0" style={{
+            backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
+            backgroundSize: '30px 30px'
+          }} />
         </div>
+        
+        {/* Cercles flottants */}
+        <motion.div 
+          animate={{ 
+            scale: [1, 1.2, 1],
+            rotate: [0, 180, 360]
+          }}
+          transition={{ duration: 20, repeat: Infinity }}
+          className="absolute -top-20 -left-20 w-96 h-96 bg-white/10 rounded-full blur-3xl"
+        />
+        <motion.div 
+          animate={{ 
+            scale: [1, 1.3, 1],
+            rotate: [360, 180, 0]
+          }}
+          transition={{ duration: 25, repeat: Infinity }}
+          className="absolute -bottom-20 -right-20 -top-20 w-96 h-96 bg-white/10 rounded-full blur-3xl"
+        />
 
-        <div className="text-center mb-8">
-            <h1 className="text-2xl font-black text-zinc-900 dark:text-white">{profile.username}</h1>
-            <p className="text-xs font-bold text-primary uppercase tracking-widest mt-1 bg-primary/5 py-1 px-3 rounded-full inline-block">
-                Explorateur Navigoo
-            </p>
-        </div>
-
-        {/* Statistiques */}
-        {stats && (
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <StatBox label="POIs" value={stats.totalPois} icon={<MapPin size={16}/>} />
-            <StatBox label="Avis" value={stats.totalReviews} icon={<MessageSquare size={16}/>} />
-            <StatBox label="Blogs" value={stats.totalBlogs} icon={<FileText size={16}/>} />
-            <StatBox label="Podcasts" value={stats.totalPodcasts} icon={<Mic size={16}/>} />
-          </div>
-        )}
-
-        {/* Infos Profil */}
-        <div className="space-y-4 flex-1 overflow-y-auto">
-            {isEditingProfile ? (
-              <div className="space-y-3">
-                <input 
-                  type="email" 
-                  value={editForm.email}
-                  onChange={(e) => setEditForm({...editForm, email: e.target.value})}
-                  className="w-full p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-sm"
-                  placeholder="Email"
-                />
-                <input 
-                  type="tel" 
-                  value={editForm.phone}
-                  onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
-                  className="w-full p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-sm"
-                  placeholder="Téléphone"
-                />
-                <div className="flex gap-2">
-                  <Button onClick={handleSaveProfile} className="flex-1" size="sm">Sauvegarder</Button>
-                  <Button onClick={() => setIsEditingProfile(false)} variant="outline" size="sm">Annuler</Button>
+        {/* Contenu Header */}
+        <div className="relative max-w-7xl mx-auto px-4 h-full flex items-end pb-8">
+          <div className="flex items-end gap-6 w-full">
+            
+            {/* Avatar */}
+            <motion.div 
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: "spring", duration: 0.8 }}
+              className="relative group"
+            >
+              <div className="relative w-32 h-32 md:w-40 md:h-40">
+                <div className="absolute inset-0 bg-gradient-to-tr from-primary to-purple-400 rounded-3xl rotate-6 group-hover:rotate-12 transition-transform duration-300" />
+                <div className="relative w-full h-full bg-white dark:bg-zinc-900 rounded-3xl overflow-hidden border-4 border-white dark:border-zinc-800 shadow-2xl flex items-center justify-center">
+                  <span className="text-6xl font-black bg-gradient-to-br from-primary to-purple-600 bg-clip-text text-transparent">
+                    {profile.username.charAt(0).toUpperCase()}
+                  </span>
                 </div>
+                <button className="absolute -bottom-2 -right-2 p-3 bg-primary text-white rounded-2xl shadow-lg hover:scale-110 active:scale-95 transition-transform">
+                  <Camera size={20} />
+                </button>
               </div>
-            ) : (
-              <div className="space-y-3">
-                <InfoBox icon={<Mail size={18}/>} label="Email" value={profile.email} />
-                <InfoBox icon={<Phone size={18}/>} label="Téléphone" value={profile.phone || "Non renseigné"} />
-                <InfoBox icon={<Lock size={18}/>} label="Mot de passe" value="••••••••••••" />
-                <InfoBox icon={<Calendar size={18}/>} label="Membre depuis" value={new Date(profile.createdAt).toLocaleDateString('fr-FR', {month: 'long', year: 'numeric'})} />
-                <Button onClick={() => setIsEditingProfile(true)} variant="outline" className="w-full gap-2" size="sm">
-                  <Edit size={16}/> Modifier le profil
-                </Button>
-              </div>
-            )}
-        </div>
+            </motion.div>
 
-        {/* Actions */}
-        <div className="mt-auto space-y-3 pt-6 border-t border-zinc-100 dark:border-zinc-800">
-            <Button variant="outline" className="w-full justify-start gap-3 h-12" onClick={() => router.push("/")} size="md">
-                <MapPin size={20}/> Retour à la carte
-            </Button>
-            <Button onClick={handleLogout} className="w-full justify-start gap-3 h-12 bg-red-50 text-red-600 hover:bg-red-100 border-none shadow-none font-bold" size="md">
-                <LogOut size={20}/> Se déconnecter
-            </Button>
+            {/* Infos Profil */}
+            <div className="flex-1 pb-4">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <h1 className="text-4xl md:text-5xl font-black text-white mb-2 drop-shadow-lg">
+                  {profile.username}
+                </h1>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="px-4 py-1.5 bg-white/20 backdrop-blur-md text-white text-sm font-bold rounded-full border border-white/30">
+                    🌟 Explorateur Navigoo
+                  </span>
+                  <span className="px-4 py-1.5 bg-white/20 backdrop-blur-md text-white text-sm font-bold rounded-full border border-white/30">
+                    Membre depuis {new Date(profile.createdAt).getFullYear()}
+                  </span>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Actions Rapides */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+              className="hidden lg:flex items-center gap-3 pb-4"
+            >
+              <Button
+                onClick={() => setIsEditingProfile(true)}
+                className="bg-white/20 backdrop-blur-md text-white border-2 border-white/30 hover:bg-white/30"
+              >
+                <Edit size={18} /> Modifier
+              </Button>
+              <Button
+                onClick={handleLogout}
+                className="bg-red-500/20 backdrop-blur-md text-white border-2 border-red-300/30 hover:bg-red-500/30"
+              >
+                <LogOut size={18} /> Déconnexion
+              </Button>
+            </motion.div>
+          </div>
         </div>
       </div>
 
-      {/* CONTENU CENTRAL - Responsive avec scroll */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 space-y-8 pb-24">
-        
-        {/* Header avec Tabs */}
-        <div className="max-w-6xl">
-            <h2 className="text-3xl md:text-4xl font-black text-zinc-900 dark:text-white mb-6">Tableau de Bord</h2>
-            
-            {/* Tabs - Scrollable horizontalement sur mobile */}
-            <div className="flex gap-2 border-b border-zinc-200 dark:border-zinc-800 mb-8 overflow-x-auto pb-2 scrollbar-hide">
-              <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} label="Vue d'ensemble" />
-              <TabButton active={activeTab === 'pois'} onClick={() => setActiveTab('pois')} label={`Mes POIs (${myPois.length})`} />
-              <TabButton active={activeTab === 'reviews'} onClick={() => setActiveTab('reviews')} label={`Avis (${myReviews.length})`} />
-              <TabButton active={activeTab === 'blogs'} onClick={() => setActiveTab('blogs')} label={`Blogs (${myBlogs.length})`} />
-              <TabButton active={activeTab === 'podcasts'} onClick={() => setActiveTab('podcasts')} label={`Podcasts (${myPodcasts.length})`} />
-              <TabButton active={activeTab === 'activity'} onClick={() => setActiveTab('activity')} label="Activité" />
-            </div>
+      {/* STATISTIQUES RAPIDES */}
+      {stats && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="max-w-7xl mx-auto px-4 -mt-8 mb-8"
+        >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard
+              icon={<MapPin className="text-blue-500" />}
+              label="POIs"
+              value={stats.totalPois}
+              color="from-blue-500/10 to-blue-500/5"
+            />
+            <StatCard
+              icon={<MessageSquare className="text-green-500" />}
+              label="Avis"
+              value={stats.totalReviews}
+              color="from-green-500/10 to-green-500/5"
+            />
+            <StatCard
+              icon={<FileText className="text-purple-500" />}
+              label="Blogs"
+              value={stats.totalBlogs}
+              color="from-purple-500/10 to-purple-500/5"
+            />
+            <StatCard
+              icon={<Mic className="text-orange-500" />}
+              label="Podcasts"
+              value={stats.totalPodcasts}
+              color="from-orange-500/10 to-orange-500/5"
+            />
+          </div>
+        </motion.div>
+      )}
 
-            {/* Contenu des Tabs */}
-            <div className="max-h-[calc(100vh-300px)] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
-              {activeTab === 'overview' && (
-                <OverviewTab 
-                  stats={stats}
-                  myPois={myPois}
-                  recentPois={recentPois}
-                  recentTrips={recentTrips}
-                  router={router}
-                />
-              )}
-
-              {activeTab === 'pois' && (
-                <PoisTab 
-                  myPois={myPois}
-                  router={router}
-                />
-              )}
-
-              {activeTab === 'reviews' && (
-                <ReviewsTab 
-                  myReviews={myReviews}
-                  onDelete={deleteReview}
-                  router={router}
-                />
-              )}
-
-
-              {activeTab === 'blogs' && (
-                <BlogsTab 
-                  myBlogs={myBlogs} 
-                  onDelete={deleteBlog} 
-                  onAdd={() => setIsBlogModalOpen(true)} // Action pour ouvrir la modal
-                />
-              )}
-
-              {activeTab === 'podcasts' && (
-                <PodcastsTab 
-                  myPodcasts={myPodcasts} 
-                  onDelete={deletePodcast}
-                  onAdd={() => setIsPodcastModalOpen(true)} // Action pour ouvrir la modal
-                />
-              )}
-              
-
-              {activeTab === 'activity' && (
-                <ActivityTab 
-                  recentPois={recentPois}
-                  recentTrips={recentTrips}
-                  router={router}
-                />
-              )}
-            </div>
+      {/* TABS NAVIGATION */}
+      <div className="max-w-7xl mx-auto px-4 mb-8">
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
+          <div className="flex gap-2 p-2">
+            <TabButton
+              active={activeTab === 'overview'}
+              onClick={() => handleTabChange('overview')}
+              icon={<BarChart3 size={18} />}
+              label="Vue d'ensemble"
+            />
+            <TabButton
+              active={activeTab === 'pois'}
+              onClick={() => handleTabChange('pois')}
+              icon={<Building2 size={18} />}
+              label={`Mes POIs (${myPois.length})`}
+            />
+            <TabButton
+              active={activeTab === 'reviews'}
+              onClick={() => handleTabChange('reviews')}
+              icon={<Star size={18} />}
+              label={`Avis (${myReviews.length})`}
+            />
+            <TabButton
+              active={activeTab === 'blogs'}
+              onClick={() => handleTabChange('blogs')}
+              icon={<FileText size={18} />}
+              label={`Blogs (${myBlogs.length})`}
+            />
+            <TabButton
+              active={activeTab === 'podcasts'}
+              onClick={() => handleTabChange('podcasts')}
+              icon={<Mic size={18} />}
+              label={`Podcasts (${myPodcasts.length})`}
+            />
+            <TabButton
+              active={activeTab === 'activity'}
+              onClick={() => handleTabChange('activity')}
+              icon={<Clock size={18} />}
+              label="Activité"
+            />
+          </div>
         </div>
-      </main>
-            {/* MODALS GLOBALES */}
-      <BlogModal 
-        isOpen={isBlogModalOpen} 
-        onClose={() => setIsBlogModalOpen(false)} 
-        onSuccess={handleContentSuccess} 
+      </div>
+
+      {/* CONTENU DES TABS */}
+      <div className="max-w-7xl mx-auto px-4 pb-24">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            {activeTab === 'overview' && (
+              <OverviewTab
+                stats={stats}
+                myPois={myPois}
+                recentPois={recentPois}
+                recentTrips={recentTrips}
+                router={router}
+                onAddPoi={() => handleTabChange('add-poi')}
+              />
+            )}
+
+            {activeTab === 'pois' && (
+              <PoisTab
+                myPois={myPois}
+                router={router}
+                onAddPoi={() => handleTabChange('add-poi')}
+                viewMode={viewMode}
+                setViewMode={setViewMode}
+              />
+            )}
+
+            {activeTab === 'reviews' && (
+              <ReviewsTab
+                myReviews={myReviews}
+                onDelete={deleteReview}
+                router={router}
+              />
+            )}
+
+            {activeTab === 'blogs' && (
+              <BlogsTab
+                myBlogs={myBlogs}
+                onDelete={deleteBlog}
+                onAdd={() => setIsBlogModalOpen(true)}
+              />
+            )}
+
+            {activeTab === 'podcasts' && (
+              <PodcastsTab
+                myPodcasts={myPodcasts}
+                onDelete={deletePodcast}
+                onAdd={() => setIsPodcastModalOpen(true)}
+              />
+            )}
+
+            {activeTab === 'activity' && (
+              <ActivityTab
+                recentPois={recentPois}
+                recentTrips={recentTrips}
+                router={router}
+              />
+            )}
+
+            {activeTab === 'add-poi' && (
+              <AddPoiPanel onClose={() => handleTabChange('pois')} />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* MODALS */}
+      <BlogModal
+        isOpen={isBlogModalOpen}
+        onClose={() => setIsBlogModalOpen(false)}
+        onSuccess={handleContentSuccess}
       />
-      <PodcastModal 
-        isOpen={isPodcastModalOpen} 
-        onClose={() => setIsPodcastModalOpen(false)} 
-        onSuccess={handleContentSuccess} 
+      <PodcastModal
+        isOpen={isPodcastModalOpen}
+        onClose={() => setIsPodcastModalOpen(false)}
+        onSuccess={handleContentSuccess}
       />
+
+      {/* MODAL ÉDITION PROFIL */}
+      <AnimatePresence>
+        {isEditingProfile && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setIsEditingProfile(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl max-w-md w-full p-6"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold dark:text-white">Modifier le profil</h3>
+                <button
+                  onClick={() => setIsEditingProfile(false)}
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Email</label>
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Téléphone</label>
+                  <input
+                    type="tel"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <Button
+                  onClick={() => setIsEditingProfile(false)}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Annuler
+                </Button>
+                <Button
+                  onClick={handleSaveProfile}
+                  className="flex-1"
+                >
+                  Sauvegarder
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-// --- COMPOSANTS TABS ---
+// ============================================
+// COMPOSANTS TABS
+// ============================================
 
-const OverviewTab = ({ stats, myPois, recentPois, recentTrips, router }: any) => (
-  <div className="space-y-8">
-    {/* Stats Grid - Responsive */}
-    {stats && (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatsCard icon={<MapPin/>} label="Points d'intérêt" value={stats.totalPois} color="bg-blue-500" />
-        <StatsCard icon={<MessageSquare/>} label="Avis publiés" value={stats.totalReviews} color="bg-green-500" />
-        <StatsCard icon={<Eye/>} label="Vues (7j)" value={stats.recentViews} color="bg-primary" />
-        <StatsCard icon={<TrendingUp/>} label="Contenu créé" value={stats.totalBlogs + stats.totalPodcasts} color="bg-orange-500" />
-      </div>
-    )}
+const OverviewTab = ({ stats, myPois, recentPois, recentTrips, router, onAddPoi }: any) => (
+  <div className="space-y-6">
+    {/* Actions Rapides */}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <QuickActionCard
+        icon={<Plus />}
+        title="Nouveau POI"
+        description="Créer un point d'intérêt"
+        onClick={onAddPoi}
+        color="from-blue-500 to-blue-600"
+      />
+      <QuickActionCard
+        icon={<FileText />}
+        title="Nouveau Blog"
+        description="Partager une expérience"
+        onClick={() => {}}
+        color="from-purple-500 to-purple-600"
+      />
+      <QuickActionCard
+        icon={<Mic />}
+        title="Nouveau Podcast"
+        description="Enregistrer un audio"
+        onClick={() => {}}
+        color="from-orange-500 to-orange-600"
+      />
+    </div>
 
-    {/* Mes POIs */}
+    {/* Mes POIs Récents */}
     {myPois.length > 0 && (
       <section>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold dark:text-white">Mes établissements</h3>
-          <button onClick={() => router.push("/add-poi")} className="text-primary text-sm font-bold hover:underline flex items-center gap-1">
-            <Plus size={16}/> Ajouter
-          </button>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {myPois.slice(0, 4).map(poi => (
+        <h3 className="text-xl font-bold mb-4 dark:text-white">Mes derniers établissements</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {myPois.slice(0, 6).map(poi => (
             <PoiCard key={poi.poi_id} poi={poi} onClick={() => router.push(`/?poi=${poi.poi_id}`)} />
           ))}
         </div>
       </section>
     )}
 
-    {/* Activité Récente - Responsive Grid */}
+    {/* Activité Récente */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <RecentSection title="Consultés récemment" items={recentPois} type="poi" router={router} />
+      <RecentSection title="Lieux consultés" items={recentPois} type="poi" router={router} />
       <RecentSection title="Derniers trajets" items={recentTrips} type="trip" router={router} />
     </div>
   </div>
 );
 
-const PoisTab = ({ myPois, router }: any) => (
+const PoisTab = ({ myPois, router, onAddPoi, viewMode, setViewMode }: any) => (
   <div className="space-y-4">
-    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+    <div className="flex justify-between items-center">
       <p className="text-zinc-500">{myPois.length} établissement(s)</p>
-      <Button onClick={() => router.push("/add-poi")} className="gap-2 w-full sm:w-auto">
-        <Plus size={18}/> Nouveau POI
-      </Button>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setViewMode('grid')}
+          className={clsx(
+            "p-2 rounded-lg transition-colors",
+            viewMode === 'grid' ? "bg-primary text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600"
+          )}
+        >
+          <Grid size={20} />
+        </button>
+        <button
+          onClick={() => setViewMode('list')}
+          className={clsx(
+            "p-2 rounded-lg transition-colors",
+            viewMode === 'list' ? "bg-primary text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600"
+          )}
+        >
+          <List size={20} />
+        </button>
+        <Button onClick={onAddPoi} className="gap-2 ml-4">
+          <Plus size={18} /> Nouveau POI
+        </Button>
+      </div>
     </div>
-    
+
     {myPois.length > 0 ? (
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className={clsx(
+        "grid gap-4",
+        viewMode === 'grid' ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" : "grid-cols-1"
+      )}>
         {myPois.map(poi => (
           <PoiCard key={poi.poi_id} poi={poi} onClick={() => router.push(`/add-poi?id=${poi.poi_id}`)} showEdit />
         ))}
       </div>
     ) : (
-      <EmptyState 
-        icon={<Building2 size={48}/>}
+      <EmptyState
+        icon={<Building2 size={48} />}
         title="Aucun point d'intérêt"
         description="Créez votre premier établissement"
-        action={<Button onClick={() => router.push("/add-poi")}>Créer un POI</Button>}
+        action={<Button onClick={onAddPoi}>Créer un POI</Button>}
       />
     )}
   </div>
@@ -1750,33 +1969,14 @@ const PoisTab = ({ myPois, router }: any) => (
 const ReviewsTab = ({ myReviews, onDelete, router }: any) => (
   <div className="space-y-4">
     <p className="text-zinc-500 mb-6">{myReviews.length} avis publié(s)</p>
-    
+
     {myReviews.length > 0 ? (
       myReviews.map((review: any) => (
-        <div key={review.reviewId} className="bg-white dark:bg-zinc-900 p-4 md:p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-          <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-3">
-            <div className="flex items-center gap-2">
-              <div className="flex">
-                {[1,2,3,4,5].map(s => (
-                  <Star key={s} size={14} className={s <= review.rating ? "fill-primary text-primary" : "text-zinc-300"} />
-                ))}
-              </div>
-              <span className="text-xs text-zinc-500">{new Date(review.createdAt).toLocaleDateString()}</span>
-            </div>
-            <button onClick={() => onDelete(review.reviewId)} className="text-red-500 hover:text-red-700">
-              <Trash2 size={16}/>
-            </button>
-          </div>
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">{review.reviewText || "Pas de commentaire"}</p>
-          <div className="flex items-center gap-4 mt-3 text-xs text-zinc-500">
-            <span className="flex items-center gap-1">👍 {review.likes}</span>
-            <span className="flex items-center gap-1">👎 {review.dislikes}</span>
-          </div>
-        </div>
+        <ReviewCard key={review.reviewId} review={review} onDelete={onDelete} />
       ))
     ) : (
-      <EmptyState 
-        icon={<MessageSquare size={48}/>}
+      <EmptyState
+        icon={<MessageSquare size={48} />}
         title="Aucun avis"
         description="Partagez votre expérience sur vos lieux préférés"
       />
@@ -1784,72 +1984,53 @@ const ReviewsTab = ({ myReviews, onDelete, router }: any) => (
   </div>
 );
 
-const BlogsTab = ({ myBlogs, onDelete, router, onAdd }: any) => (
+const BlogsTab = ({ myBlogs, onDelete, onAdd }: any) => (
   <div className="space-y-4">
-    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-      <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
-        <FileText size={20}/> Mes Blogs ({myBlogs.length})
-      </h3>
-      <Button onClick={() => router.push("/add-content?type=blog")} size="sm" className="gap-2 w-full sm:w-auto">
-        <Plus size={16}/> Nouveau Blog
+    <div className="flex justify-between items-center mb-6">
+      <h3 className="text-lg font-bold dark:text-white">Mes Blogs ({myBlogs.length})</h3>
+      <Button onClick={onAdd} size="sm" className="gap-2">
+        <Plus size={16} /> Nouveau Blog
       </Button>
     </div>
-    
+
     {myBlogs.length > 0 ? (
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {myBlogs.map((blog: any) => (
-          <ContentCard 
-            key={blog.blog_id}
-            title={blog.title}
-            description={blog.description}
-            date={blog.created_at}
-            onDelete={() => onDelete(blog.blog_id)}
-            type="blog"
-          />
+          <ContentCard key={blog.blog_id} content={blog} onDelete={() => onDelete(blog.blog_id)} type="blog" />
         ))}
       </div>
     ) : (
-      <EmptyState 
-        icon={<FileText size={48}/>}
+      <EmptyState
+        icon={<FileText size={48} />}
         title="Aucun blog"
         description="Créez votre premier article de blog"
-        action={<Button onClick={() => router.push("/add-content?type=blog")}>Créer un Blog</Button>}
+        action={<Button onClick={onAdd}>Créer un Blog</Button>}
       />
     )}
   </div>
 );
 
-const PodcastsTab = ({ myPodcasts, onDelete, router, onAdd }: any) => (
+const PodcastsTab = ({ myPodcasts, onDelete, onAdd }: any) => (
   <div className="space-y-4">
-    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-      <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
-        <Mic size={20}/> Mes Podcasts ({myPodcasts.length})
-      </h3>
-      <Button onClick={() => router.push("/add-content?type=podcast")} size="sm" className="gap-2 w-full sm:w-auto">
-        <Plus size={16}/> Nouveau Podcast
+    <div className="flex justify-between items-center mb-6">
+      <h3 className="text-lg font-bold dark:text-white">Mes Podcasts ({myPodcasts.length})</h3>
+      <Button onClick={onAdd} size="sm" className="gap-2">
+        <Plus size={16} /> Nouveau Podcast
       </Button>
     </div>
-    
+
     {myPodcasts.length > 0 ? (
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {myPodcasts.map((podcast: any) => (
-          <ContentCard 
-            key={podcast.podcast_id}
-            title={podcast.title}
-            description={podcast.description}
-            date={podcast.created_at}
-            duration={podcast.duration_seconds}
-            onDelete={() => onDelete(podcast.podcast_id)}
-            type="podcast"
-          />
+          <ContentCard key={podcast.podcast_id} content={podcast} onDelete={() => onDelete(podcast.podcast_id)} type="podcast" />
         ))}
       </div>
     ) : (
-      <EmptyState 
-        icon={<Mic size={48}/>}
+      <EmptyState
+        icon={<Mic size={48} />}
         title="Aucun podcast"
         description="Créez votre premier épisode de podcast"
-        action={<Button onClick={() => router.push("/add-content?type=podcast")}>Créer un Podcast</Button>}
+        action={<Button onClick={onAdd}>Créer un Podcast</Button>}
       />
     )}
   </div>
@@ -1862,96 +2043,150 @@ const ActivityTab = ({ recentPois, recentTrips, router }: any) => (
   </div>
 );
 
-// --- COMPOSANTS RÉUTILISABLES ---
+// ============================================
+// COMPOSANTS RÉUTILISABLES
+// ============================================
 
-const TabButton = ({ active, onClick, label }: any) => (
-  <button 
+const TabButton = ({ active, onClick, icon, label }: any) => (
+  <button
     onClick={onClick}
     className={clsx(
-      "px-4 py-3 text-sm font-bold transition-colors whitespace-nowrap shrink-0",
-      active 
-        ? "text-primary border-b-2 border-primary" 
-        : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+      "flex items-center gap-2 px-4 py-3 rounded-xl font-medium transition-all whitespace-nowrap",
+      active
+        ? "bg-primary text-white shadow-lg shadow-primary/20"
+        : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
     )}
   >
-    {label}
+    {icon}
+    <span className="hidden sm:inline">{label}</span>
   </button>
 );
 
-const InfoBox = ({ icon, label, value }: any) => (
-    <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl flex items-center gap-4">
-        <div className="text-zinc-400 shrink-0">{icon}</div>
-        <div className="overflow-hidden flex-1 min-w-0">
-            <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">{label}</p>
-            <p className="text-sm font-bold text-zinc-700 dark:text-zinc-300 truncate">{value}</p>
-        </div>
+const StatCard = ({ icon, label, value, color }: any) => (
+  <motion.div
+    whileHover={{ y: -5, scale: 1.02 }}
+    className={clsx(
+      "bg-gradient-to-br backdrop-blur-sm p-6 rounded-2xl shadow-xl border border-white dark:border-zinc-800",
+      color
+    )}
+  >
+    <div className="flex items-center justify-between mb-3">
+      {icon}
+      <span className="text-3xl font-black dark:text-white">{value}</span>
     </div>
+    <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{label}</p>
+  </motion.div>
 );
 
-const StatBox = ({ label, value, icon }: any) => (
-  <div className="p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl">
-    <div className="flex items-center gap-2 text-zinc-400 mb-1">
-      {icon}
-      <span className="text-[10px] font-black uppercase">{label}</span>
+const QuickActionCard = ({ icon, title, description, onClick, color }: any) => (
+  <motion.button
+    whileHover={{ scale: 1.02, y: -5 }}
+    whileTap={{ scale: 0.98 }}
+    onClick={onClick}
+    className={clsx(
+      "p-6 rounded-2xl shadow-lg bg-gradient-to-br text-white text-left group overflow-hidden relative",
+      color
+    )}
+  >
+    <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500" />
+    <div className="relative">
+      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mb-4 group-hover:rotate-12 transition-transform">
+        {icon}
+      </div>
+      <h4 className="font-bold text-lg mb-1">{title}</h4>
+      <p className="text-sm opacity-90">{description}</p>
     </div>
-    <p className="text-2xl font-black text-primary">{value}</p>
-  </div>
-);
-
-const StatsCard = ({ icon, label, value, color }: any) => (
-  <div className="bg-white dark:bg-zinc-900 p-4 md:p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800">
-    <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center text-white mb-4`}>
-      {icon}
-    </div>
-    <p className="text-2xl md:text-3xl font-black text-zinc-900 dark:text-white mb-1">{value}</p>
-    <p className="text-xs md:text-sm text-zinc-500">{label}</p>
-  </div>
+  </motion.button>
 );
 
 const PoiCard = ({ poi, onClick, showEdit }: any) => (
-  <div 
+  <motion.div
+    whileHover={{ y: -5 }}
     onClick={onClick}
-    className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 hover:border-primary cursor-pointer transition-all group"
+    className="bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 cursor-pointer group"
   >
-    <div className="flex gap-3">
-      <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-zinc-200">
-        {poi.poi_images_urls?.[0] && (
-          <Image src={poi.poi_images_urls[0]} alt="" width={64} height={64} className="object-cover w-full h-full" />
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <h3 className="font-bold text-zinc-900 dark:text-white line-clamp-1">{poi.poi_name}</h3>
-        <p className="text-xs text-zinc-500 mt-1">{poi.poi_category} • {poi.address_city}</p>
-        {showEdit && (
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">Actif</span>
-            <span className="text-xs text-primary group-hover:underline">Modifier</span>
-          </div>
-        )}
+    <div className="relative h-48 bg-zinc-200">
+      {poi.poi_images_urls?.[0] && (
+        <Image src={poi.poi_images_urls[0]} alt="" fill className="object-cover group-hover:scale-110 transition-transform duration-300" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+      <div className="absolute bottom-3 left-3 right-3">
+        <h3 className="font-bold text-white line-clamp-1">{poi.poi_name}</h3>
+        <p className="text-xs text-white/80">{poi.poi_category} • {poi.address_city}</p>
       </div>
     </div>
-  </div>
+    {showEdit && (
+      <div className="p-3 flex items-center justify-between">
+        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold">Actif</span>
+        <span className="text-xs text-primary font-bold group-hover:underline">Modifier →</span>
+      </div>
+    )}
+  </motion.div>
+);
+
+const ReviewCard = ({ review, onDelete }: any) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm"
+  >
+    <div className="flex justify-between items-start mb-3">
+      <div className="flex items-center gap-2">
+        <div className="flex">
+          {[1, 2, 3, 4, 5].map(s => (
+            <Star key={s} size={14} className={s <= review.rating ? "fill-primary text-primary" : "text-zinc-300"} />
+          ))}
+        </div>
+        <span className="text-xs text-zinc-500">{new Date(review.createdAt).toLocaleDateString()}</span>
+      </div>
+      <button onClick={() => onDelete(review.reviewId)} className="text-red-500 hover:text-red-700">
+        <Trash2 size={16} />
+      </button>
+    </div>
+    <p className="text-sm text-zinc-700 dark:text-zinc-300">{review.reviewText || "Pas de commentaire"}</p>
+  </motion.div>
+);
+
+const ContentCard = ({ content, onDelete, type }: any) => (
+  <motion.div
+    whileHover={{ y: -5 }}
+    className="bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800"
+  >
+    <div className="relative h-48 bg-gradient-to-br from-primary/10 to-purple-500/10 flex items-center justify-center">
+      {type === 'blog' ? <FileText size={48} className="text-primary/30" /> : <Mic size={48} className="text-primary/30" />}
+    </div>
+    <div className="p-4">
+      <h4 className="font-bold mb-2 line-clamp-1 dark:text-white">{content.title}</h4>
+      {content.description && <p className="text-xs text-zinc-500 line-clamp-2 mb-3">{content.description}</p>}
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-zinc-400">{new Date(content.created_at).toLocaleDateString()}</span>
+        <button onClick={() => onDelete()} className="text-red-500 hover:text-red-700">
+          <Trash2 size={16} />
+        </button>
+      </div>
+    </div>
+  </motion.div>
 );
 
 const RecentSection = ({ title, items, type, router }: any) => (
-  <section>
+  <section className="bg-white dark:bg-zinc-900 rounded-2xl p-6 border border-zinc-200 dark:border-zinc-800 shadow-sm">
     <h3 className="text-lg font-bold dark:text-white mb-4">{title}</h3>
-    <div className="space-y-3 max-h-96 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
+    <div className="space-y-3">
       {items.length > 0 ? (
         items.slice(0, 5).map((item: any) => (
-          <div key={item.poi_id || item.id} className="flex items-center gap-3 p-3 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-primary cursor-pointer transition-colors">
-            <div className="w-10 h-10 rounded-lg bg-zinc-100 flex items-center justify-center shrink-0">
-              {type === 'poi' ? <MapPin size={18} className="text-primary"/> : <Route size={18} className="text-primary"/>}
+          <div key={item.poi_id || item.id} className="flex items-center gap-3 p-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl cursor-pointer transition-colors">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              {type === 'poi' ? <MapPin size={18} className="text-primary" /> : <Route size={18} className="text-primary" />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm text-zinc-900 dark:text-white truncate">
+              <p className="font-semibold text-sm dark:text-white truncate">
                 {type === 'poi' ? item.poi_name : item.arriveName || 'Destination'}
               </p>
               <p className="text-xs text-zinc-500">
                 {type === 'poi' ? item.address_city : `${Math.round((item.distance || 0) / 1000)} km`}
               </p>
             </div>
-            <ChevronRight size={16} className="text-zinc-300 shrink-0"/>
+            <ChevronRight size={16} className="text-zinc-300 shrink-0" />
           </div>
         ))
       ) : (
@@ -1961,27 +2196,8 @@ const RecentSection = ({ title, items, type, router }: any) => (
   </section>
 );
 
-const ContentCard = ({ title, description, date, duration, onDelete, type }: any) => (
-  <div className="flex flex-col sm:flex-row justify-between items-start gap-4 p-4 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2 mb-2">
-        {type === 'blog' ? <FileText size={16} className="text-primary shrink-0" /> : <Mic size={16} className="text-primary shrink-0" />}
-        <h4 className="font-semibold text-sm dark:text-white truncate">{title}</h4>
-      </div>
-      {description && <p className="text-xs text-zinc-500 line-clamp-2 mb-2">{description}</p>}
-      <div className="flex items-center gap-2 text-xs text-zinc-500">
-        <span>{new Date(date).toLocaleDateString()}</span>
-        {duration && <><span>•</span><span>{Math.floor(duration / 60)} min</span></>}
-      </div>
-    </div>
-    <button onClick={onDelete} className="text-red-500 hover:text-red-700 p-2 shrink-0">
-      <Trash2 size={16}/>
-    </button>
-  </div>
-);
-
 const EmptyState = ({ icon, title, description, action }: any) => (
-  <div className="flex flex-col items-center justify-center py-12 text-center">
+  <div className="flex flex-col items-center justify-center py-16 text-center">
     <div className="text-zinc-300 mb-4">{icon}</div>
     <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">{title}</h3>
     <p className="text-sm text-zinc-500 mb-6 max-w-sm">{description}</p>
@@ -6128,7 +6344,7 @@ export const ReviewsSection = ({ poiId, onReviewSubmitted }: ReviewsSectionProps
         <div className="flex items-center gap-4">
           <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
             <MessageSquare size={20} className="text-primary" />
-            Avis et commentaires
+            Avis
           </h3>
           
           {stats && (
@@ -6137,7 +6353,6 @@ export const ReviewsSection = ({ poiId, onReviewSubmitted }: ReviewsSectionProps
                 <Star size={14} className="text-primary fill-primary" />
                 <span className="font-bold text-primary">{stats.averageRating.toFixed(1)}</span>
               </div>
-              <span className="text-zinc-500">({stats.reviewCount} avis)</span>
             </div>
           )}
         </div>
@@ -6149,8 +6364,8 @@ export const ReviewsSection = ({ poiId, onReviewSubmitted }: ReviewsSectionProps
             variant="outline"
             className="gap-2"
           >
-            <Cloud size={16} />
-            {showForm ? 'Annuler' : 'Donner mon avis'}
+            <Send size={16} />
+            {showForm ? 'Annuler' : 'Commenter'}
           </Button>
         )}
       </div>
@@ -6341,14 +6556,15 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\components\content\BlogModal.tsx
 
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, FileText, Save, Loader2, ImagePlus, Type, AlignLeft } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, FileText, Save, Loader2, ImagePlus, Type, AlignLeft, Video, Camera, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { FormInput } from "@/components/ui/form/FormInput";
 import { motion, AnimatePresence } from "framer-motion";
 import { authService } from "@/services/authService";
 import { contentService } from "@/services/contentService";
 import { POI } from "@/types";
+import Image from "next/image";
+import { clsx } from "clsx";
 
 interface BlogModalProps {
   isOpen: boolean;
@@ -6360,6 +6576,10 @@ interface BlogModalProps {
 export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModalProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [availablePois, setAvailablePois] = useState<POI[]>([]);
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [formData, setFormData] = useState({
     poi_id: "",
     title: "",
@@ -6398,9 +6618,25 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      setMediaPreview(result);
+      setFormData(prev => ({ ...prev, cover_image_url: result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.poi_id || !formData.title || !formData.content) return alert("Champs obligatoires manquants");
+    if (!formData.poi_id || !formData.title || !formData.content) {
+      alert("Champs obligatoires manquants");
+      return;
+    }
     
     setIsLoading(true);
     try {
@@ -6409,13 +6645,14 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
         user_id: user?.userId
       });
       if (onSuccess) onSuccess();
-      onClose();
+      handleClose();
     } catch (error) {
       alert("Erreur lors de la création");
     } finally {
       setIsLoading(false);
     }
   };
+
   const handleClose = () => {
     if (!isLoading) {
       setFormData({
@@ -6425,6 +6662,7 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
         content: "",
         cover_image_url: "",
       });
+      setMediaPreview(null);
       onClose();
     }
   };
@@ -6433,16 +6671,14 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100]"
             onClick={handleClose}
           />
 
-          {/* Modal */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -6450,117 +6686,176 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
             transition={{ type: "spring", duration: 0.3 }}
             className="fixed inset-0 z-[101] flex items-center justify-center p-4"
           >
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
               
-              {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-blue-50 to-violet-50 dark:from-blue-950/30 dark:to-violet-950/30">
+              {/* HEADER */}
+              <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-blue-500 rounded-2xl">
+                  <div className="p-3 bg-purple-700 rounded-2xl">
                     <FileText size={28} className="text-white" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-black text-zinc-900 dark:text-white">
-                      Créer un Blog
+                      Créer un blog
                     </h2>
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                      Partagez votre expérience sur un lieu
+                      Photo et Vidéo
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={handleClose}
                   disabled={isLoading}
-                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors disabled:opacity-50"
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
                 >
                   <X size={24} className="text-zinc-600 dark:text-zinc-400" />
                 </button>
               </div>
 
-              {/* Body */}
-              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
-                
-                {/* POI Selection */}
-                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    Point d'intérêt * {selectedPoi && <span className="text-primary">(Pré-sélectionné)</span>}
-                  </label>
-                  <select
-                    name="poi_id"
-                    value={formData.poi_id}
-                    onChange={handleChange}
-                    required
-                    disabled={!!selectedPoi}
-                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-60"
-                  >
-                    <option value="">-- Sélectionner un POI --</option>
-                    {availablePois.map(poi => (
-                      <option key={poi.poi_id} value={poi.poi_id}>
-                        {poi.poi_name} ({poi.address_city})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Title */}
-                <FormInput
-                  label="Titre du blog *"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleChange}
-                  icon={<Type size={18} />}
-                  placeholder="Ex: Mon expérience au Restaurant Le Délice"
-                  required
-                />
-
-                {/* Description */}
-                <FormInput
-                  label="Description courte"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  icon={<AlignLeft size={18} />}
-                  placeholder="Résumé en quelques mots (optionnel)"
-                />
-
-                {/* Cover Image URL */}
-                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    URL Image de couverture
-                  </label>
-                  <div className="relative">
-                    <ImagePlus className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                    <input
-                      type="url"
-                      name="cover_image_url"
-                      value={formData.cover_image_url}
-                      onChange={handleChange}
-                      placeholder="https://example.com/image.jpg (optionnel)"
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                    />
+              {/* BODY */}
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 h-full">
+                  
+                  {/* GAUCHE : MÉDIA */}
+                  <div className="relative bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center min-h-[400px] md:min-h-full">
+                    {mediaPreview ? (
+                      <div className="relative w-full h-full">
+                        {mediaType === 'image' ? (
+                          <Image src={mediaPreview} alt="Preview" fill className="object-contain" />
+                        ) : (
+                          <video src={mediaPreview} controls className="w-full h-full object-contain" />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => { setMediaPreview(null); setFormData(prev => ({ ...prev, cover_image_url: '' })); }}
+                          className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-6 p-8">
+                        <div className="flex gap-4">
+                          <button
+                            type="button"
+                            onClick={() => { setMediaType('image'); fileInputRef.current?.click(); }}
+                            className={clsx(
+                              "flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-dashed transition-all",
+                              mediaType === 'image' ? "border-primary bg-primary/5" : "border-zinc-300 dark:border-zinc-700"
+                            )}
+                          >
+                            <div className="p-4 bg-blue-100 dark:bg-blue-900/30 rounded-2xl">
+                              <ImageIcon size={32} className="text-blue-600" />
+                            </div>
+                            <span className="font-bold text-sm">Photo</span>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={() => { setMediaType('video'); fileInputRef.current?.click(); }}
+                            className={clsx(
+                              "flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-dashed transition-all",
+                              mediaType === 'video' ? "border-primary bg-primary/5" : "border-zinc-300 dark:border-zinc-700"
+                            )}
+                          >
+                            <div className="p-4 bg-purple-100 dark:bg-purple-900/30 rounded-2xl">
+                              <Video size={32} className="text-purple-600" />
+                            </div>
+                            <span className="font-bold text-sm">Vidéo</span>
+                          </button>
+                        </div>
+                        
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept={mediaType === 'image' ? 'image/*' : 'video/*'}
+                          onChange={handleMediaUpload}
+                          className="hidden"
+                        />
+                        
+                        <p className="text-sm text-zinc-500 text-center">
+                          ou glissez votre fichier ici
+                        </p>
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                {/* Content */}
-                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    Contenu de l'article *
-                  </label>
-                  <textarea
-                    name="content"
-                    value={formData.content}
-                    onChange={handleChange}
-                    required
-                    rows={12}
-                    placeholder="Rédigez votre article ici... Partagez votre expérience, vos impressions, vos recommandations..."
-                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
-                  />
-                  <p className="text-xs text-zinc-500 mt-1 ml-1">
-                    {formData.content.length} caractères
-                  </p>
+                  {/* DROITE : FORMULAIRE */}
+                  <div className="p-6 space-y-4 overflow-y-auto">
+                    
+                    {/* POI Selection */}
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                        Lieu *
+                      </label>
+                      <select
+                        name="poi_id"
+                        value={formData.poi_id}
+                        onChange={handleChange}
+                        required
+                        disabled={!!selectedPoi}
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                      >
+                        <option value="">-- Sélectionner --</option>
+                        {availablePois.map(poi => (
+                          <option key={poi.poi_id} value={poi.poi_id}>
+                            {poi.poi_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Titre */}
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                        Titre *
+                      </label>
+                      <input
+                        type="text"
+                        name="title"
+                        value={formData.title}
+                        onChange={handleChange}
+                        required
+                        placeholder="Ex: Une soirée mémorable..."
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                      />
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                        Légende
+                      </label>
+                      <textarea
+                        name="description"
+                        value={formData.description}
+                        onChange={handleChange}
+                        rows={2}
+                        placeholder="Ajoutez une légende..."
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                      />
+                    </div>
+
+                    {/* Contenu */}
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                        Contenu détaillé *
+                      </label>
+                      <textarea
+                        name="content"
+                        value={formData.content}
+                        onChange={handleChange}
+                        required
+                        rows={2}
+                        placeholder="Racontez votre expérience..."
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                      />
+                    </div>
+                  </div>
                 </div>
               </form>
 
-              {/* Footer */}
+              {/* FOOTER */}
               <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex gap-3">
                 <Button
                   type="button"
@@ -6574,7 +6869,7 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
                 <Button
                   onClick={handleSubmit}
                   disabled={isLoading}
-                  className="flex-1 gap-2"
+                  className="flex-1 gap-2 bg-purple-700"
                 >
                   {isLoading ? (
                     <>
@@ -6584,7 +6879,7 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
                   ) : (
                     <>
                       <Save size={18} />
-                      Publier le Blog
+                      Publier
                     </>
                   )}
                 </Button>
@@ -6604,14 +6899,14 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\components\content\PodcastModal.tsx
 
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, Mic, Save, Loader2, ImagePlus, Type, AlignLeft, Upload, Clock } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Mic, Save, Loader2, ImagePlus, Type, AlignLeft, Upload, Clock, Play, Pause, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { FormInput } from "@/components/ui/form/FormInput";
 import { motion, AnimatePresence } from "framer-motion";
 import { authService } from "@/services/authService";
 import { contentService } from "@/services/contentService";
 import { POI } from "@/types";
+import Image from "next/image";
 
 interface PodcastModalProps {
   isOpen: boolean;
@@ -6623,6 +6918,15 @@ interface PodcastModalProps {
 export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: PodcastModalProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [availablePois, setAvailablePois] = useState<POI[]>([]);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioPreview, setAudioPreview] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  
   const [formData, setFormData] = useState({
     poi_id: "",
     title: "",
@@ -6643,6 +6947,27 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
     }
   }, [isOpen, selectedPoi]);
 
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const updateTime = () => setCurrentTime(audio.currentTime);
+    const updateDuration = () => {
+      setDuration(audio.duration);
+      setFormData(prev => ({ ...prev, duration_seconds: Math.floor(audio.duration) }));
+    };
+
+    audio.addEventListener('timeupdate', updateTime);
+    audio.addEventListener('loadedmetadata', updateDuration);
+    audio.addEventListener('ended', () => setIsPlaying(false));
+
+    return () => {
+      audio.removeEventListener('timeupdate', updateTime);
+      audio.removeEventListener('loadedmetadata', updateDuration);
+      audio.removeEventListener('ended', () => setIsPlaying(false));
+    };
+  }, [audioPreview]);
+
   const loadUserPois = async () => {
     if (!user?.userId) return;
     
@@ -6659,21 +6984,38 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
-    if (name === "duration_seconds") {
-      setFormData(prev => ({ ...prev, [name]: parseInt(value) || 0 }));
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    }
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const formatDuration = (seconds: number): string => {
-    if (seconds < 60) return `${seconds} sec`;
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return remainingSeconds > 0 
-      ? `${minutes} min ${remainingSeconds} sec` 
-      : `${minutes} min`;
+  const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAudioFile(file);
+    const url = URL.createObjectURL(file);
+    setAudioPreview(url);
+    
+    // Simuler upload (en production, uploader vers CDN)
+    setFormData(prev => ({ ...prev, audio_file_url: url }));
+  };
+
+  const togglePlayPause = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const formatTime = (seconds: number): string => {
+    if (!seconds || isNaN(seconds)) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -6685,14 +7027,14 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
     }
 
     if (!formData.poi_id || !formData.title || !formData.audio_file_url || formData.duration_seconds === 0) {
-      alert("Veuillez remplir tous les champs obligatoires (POI, titre, fichier audio, durée)");
+      alert("Veuillez remplir tous les champs obligatoires");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const podcastData = {
+      await contentService.createPodcast({
         user_id: user.userId,
         poi_id: formData.poi_id,
         title: formData.title,
@@ -6700,26 +7042,12 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
         cover_image_url: formData.cover_image_url || "",
         audio_file_url: formData.audio_file_url,
         duration_seconds: formData.duration_seconds,
-      };
-
-      await contentService.createPodcast(podcastData);
+      });
       
       alert("✅ Podcast créé avec succès !");
-      
-      // Reset form
-      setFormData({
-        poi_id: "",
-        title: "",
-        description: "",
-        audio_file_url: "",
-        cover_image_url: "",
-        duration_seconds: 0,
-      });
-
+      handleClose();
       if (onSuccess) onSuccess();
-      onClose();
     } catch (error: any) {
-      console.error("Erreur création podcast:", error);
       alert(`❌ Erreur: ${error.message}`);
     } finally {
       setIsLoading(false);
@@ -6736,6 +7064,9 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
         cover_image_url: "",
         duration_seconds: 0,
       });
+      setAudioFile(null);
+      setAudioPreview(null);
+      setIsPlaying(false);
       onClose();
     }
   };
@@ -6744,16 +7075,14 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100]"
             onClick={handleClose}
           />
 
-          {/* Modal */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -6763,10 +7092,10 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
           >
             <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
               
-              {/* Header */}
+              {/* HEADER */}
               <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-purple-500 rounded-2xl">
+                  <div className="p-3 bg-purple-700 rounded-2xl">
                     <Mic size={28} className="text-white" />
                   </div>
                   <div>
@@ -6774,26 +7103,90 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
                       Créer un Podcast
                     </h2>
                     <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                      Partagez une expérience audio sur un lieu
+                      Partagez une expérience audio
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={handleClose}
                   disabled={isLoading}
-                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors disabled:opacity-50"
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
                 >
                   <X size={24} className="text-zinc-600 dark:text-zinc-400" />
                 </button>
               </div>
 
-              {/* Body */}
+              {/* BODY */}
               <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
                 
+                {/* AUDIO PLAYER */}
+                {audioPreview ? (
+                  <div className="bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 rounded-2xl p-6 border border-purple-200 dark:border-purple-800">
+                    <div className="flex items-center gap-4 mb-4">
+                      <button
+                        type="button"
+                        onClick={togglePlayPause}
+                        className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white shadow-lg hover:scale-105 active:scale-95 transition-transform"
+                      >
+                        {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-1" />}
+                      </button>
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-bold text-purple-900 dark:text-purple-100">
+                            {audioFile?.name || 'Audio.mp3'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => { setAudioPreview(null); setAudioFile(null); }}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <div className="relative w-full h-2 bg-purple-200 dark:bg-purple-800 rounded-full overflow-hidden">
+                          <div
+                            className="absolute h-full bg-gradient-to-r from-purple-500 to-pink-600 rounded-full transition-all"
+                            style={{ width: `${(currentTime / duration) * 100}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-xs text-purple-700 dark:text-purple-300 mt-1">
+                          <span>{formatTime(currentTime)}</span>
+                          <span>{formatTime(duration)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <audio ref={audioRef} src={audioPreview} className="hidden" />
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => audioInputRef.current?.click()}
+                    className="relative h-30 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-2xl border-2 border-dashed border-purple-300 dark:border-purple-700 flex flex-col items-center justify-center cursor-pointer group hover:border-purple-500 transition-all"
+                  >
+                    <div className="p-2 bg-white dark:bg-zinc-800 rounded-2xl shadow-lg group-hover:scale-110 transition-transform">
+                      <Upload size={28} className="text-purple-500" />
+                    </div>
+                    <p className="mt-4 text-sm font-bold text-purple-900 dark:text-purple-100">
+                      Parcourir et importer un fichier audio
+                    </p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                      MP3, WAV, M4A (max 50MB)
+                    </p>
+                    <input
+                      ref={audioInputRef}
+                      type="file"
+                      accept="audio/*"
+                      onChange={handleAudioUpload}
+                      className="hidden"
+                    />
+                  </div>
+                )}
+
                 {/* POI Selection */}
                 <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    Point d'intérêt * {selectedPoi && <span className="text-primary">(Pré-sélectionné)</span>}
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                    Point d'intérêt *
                   </label>
                   <select
                     name="poi_id"
@@ -6801,117 +7194,50 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
                     onChange={handleChange}
                     required
                     disabled={!!selectedPoi}
-                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-60"
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                   >
                     <option value="">-- Sélectionner un POI --</option>
                     {availablePois.map(poi => (
                       <option key={poi.poi_id} value={poi.poi_id}>
-                        {poi.poi_name} ({poi.address_city})
+                        {poi.poi_name}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Title */}
-                <FormInput
-                  label="Titre du podcast *"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleChange}
-                  icon={<Type size={18} />}
-                  placeholder="Ex: Histoire culinaire de Yaoundé"
-                  required
-                />
+                {/* Titre */}
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                    Titre du podcast *
+                  </label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={formData.title}
+                    onChange={handleChange}
+                    required
+                    placeholder="Ex: Histoire culinaire de Yaoundé"
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
 
                 {/* Description */}
-                <FormInput
-                  label="Description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  icon={<AlignLeft size={18} />}
-                  placeholder="Résumé du contenu audio (optionnel)"
-                />
-
-                {/* Audio File URL */}
                 <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    URL Fichier Audio * (MP3, WAV, etc.)
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
+                    Description
                   </label>
-                  <div className="relative">
-                    <Upload className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                    <input
-                      type="url"
-                      name="audio_file_url"
-                      value={formData.audio_file_url}
-                      onChange={handleChange}
-                      required
-                      placeholder="https://example.com/podcast.mp3"
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Cover Image URL */}
-                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    URL Image de couverture
-                  </label>
-                  <div className="relative">
-                    <ImagePlus className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                    <input
-                      type="url"
-                      name="cover_image_url"
-                      value={formData.cover_image_url}
-                      onChange={handleChange}
-                      placeholder="https://example.com/cover.jpg (optionnel)"
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Duration */}
-                <div>
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">
-                    Durée (en secondes) *
-                  </label>
-                  <div className="relative">
-                    <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                    <input
-                      type="number"
-                      name="duration_seconds"
-                      value={formData.duration_seconds}
-                      onChange={handleChange}
-                      required
-                      min="1"
-                      placeholder="120"
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                    />
-                  </div>
-                  {formData.duration_seconds > 0 && (
-                    <p className="text-xs text-primary mt-1 ml-1 font-medium">
-                      ≈ {formatDuration(formData.duration_seconds)}
-                    </p>
-                  )}
-                </div>
-
-                {/* Info Box */}
-                <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <Mic size={20} className="text-purple-600 dark:text-purple-400 mt-0.5 shrink-0" />
-                    <div className="text-xs text-purple-800 dark:text-purple-200">
-                      <p className="font-bold mb-1">💡 Conseils</p>
-                      <ul className="space-y-1 list-disc list-inside">
-                        <li>Hébergez votre fichier audio sur un service cloud (Google Drive, Dropbox, etc.)</li>
-                        <li>Assurez-vous que l'URL est accessible publiquement</li>
-                        <li>Format recommandé: MP3 pour une meilleure compatibilité</li>
-                      </ul>
-                    </div>
-                  </div>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleChange}
+                    rows={1}
+                    placeholder="Résumé du contenu audio (optionnel)"
+                    className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                  />
                 </div>
               </form>
 
-              {/* Footer */}
+              {/* FOOTER */}
               <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex gap-3">
                 <Button
                   type="button"
@@ -6925,7 +7251,7 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
                 <Button
                   onClick={handleSubmit}
                   disabled={isLoading}
-                  className="flex-1 gap-2 bg-purple-600 hover:bg-purple-700"
+                  className="flex-1 gap-2 bg-purple-700 hover:bg-purple-800"
                 >
                   {isLoading ? (
                     <>
@@ -6945,6 +7271,390 @@ export const PodcastModal = ({ isOpen, onClose, selectedPoi, onSuccess }: Podcas
         </>
       )}
     </AnimatePresence>
+  );
+};
+
+
+================================================================================
+FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\components\profile\AddPoiPanel.tsx
+================================================================================
+
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { X, Save, Loader2, Camera, MapPin, Hash, Globe, Phone, Type, Sparkles, CheckCircle2, CircleDashed, ImagePlus, LocateFixed, Maximize, Check } from "lucide-react";
+import Map, { Marker, NavigationControl, ScaleControl, MapRef } from "react-map-gl/maplibre";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { POI, Location } from "@/types";
+import { CATEGORIES } from "@/data/categories";
+import { Button } from "@/components/ui/Button";
+import { FormInput } from "@/components/ui/form/FormInput";
+import { FormSelect } from "@/components/ui/form/FormSelect";
+import Image from "next/image";
+import { clsx } from "clsx";
+import { poiService } from "@/services/poiService";
+import { motion } from "framer-motion";
+
+const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9";
+
+const AMENITIES_OPTIONS = [
+  "Wi-Fi", "Parking", "Climatisé", "Terrasse", "Mobile Money",
+  "Traiteur", "Sécurité", "Vue", "Handicap", "Bar", "24h/24"
+];
+
+interface AddPoiPanelProps {
+  onClose: () => void;
+}
+
+export const AddPoiPanel = ({ onClose }: AddPoiPanelProps) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [keywordsString, setKeywordsString] = useState("");
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  const [formData, setFormData] = useState<Partial<POI>>({
+    poi_name: "",
+    poi_category: "",
+    poi_description: "",
+    poi_amenities: [],
+    location: { latitude: 3.86667, longitude: 11.51667 },
+    address_informal: "",
+    address_city: "Yaoundé",
+    address_country: "Cameroun",
+    poi_contacts: { phone: "", website: "" },
+    poi_images_urls: [],
+    poi_keywords: []
+  });
+
+  const [tempLocation, setTempLocation] = useState<Location>({ latitude: 3.86667, longitude: 11.51667 });
+  const mapRef = useRef<MapRef>(null);
+
+  useEffect(() => {
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        setFormData(prev => ({ ...prev, location: loc }));
+        setTempLocation(loc);
+      });
+    }
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    if (name === "phone" || name === "website") {
+      setFormData(prev => ({ ...prev, poi_contacts: { ...prev.poi_contacts, [name]: value } }));
+    } else if (name === "latitude" || name === "longitude") {
+      const val = parseFloat(value) || 0;
+      setFormData(prev => ({ ...prev, location: { ...prev.location!, [name]: val } }));
+      setTempLocation(prev => ({ ...prev, [name]: val }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleAmenityToggle = (amenity: string) => {
+    const current = formData.poi_amenities || [];
+    const newAmenities = current.includes(amenity)
+      ? current.filter(a => a !== amenity)
+      : [...current, amenity];
+    setFormData(prev => ({ ...prev, poi_amenities: newAmenities }));
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const res = reader.result as string;
+        setPreviewImage(res);
+        setFormData(prev => ({ ...prev, poi_images_urls: [res] }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleMapClick = (evt: any) => {
+    setTempLocation({ latitude: evt.lngLat.lat, longitude: evt.lngLat.lng });
+  };
+
+  const handleDragEnd = (evt: any) => {
+    setTempLocation({ latitude: evt.lngLat.lat, longitude: evt.lngLat.lng });
+  };
+
+  const saveMapLocation = () => {
+    setFormData(prev => ({ ...prev, location: tempLocation }));
+    setIsMapOpen(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formData.poi_name || !formData.poi_category) {
+      alert("Veuillez renseigner au moins le nom et la catégorie.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const dataToSubmit = {
+        ...formData,
+        poi_keywords: keywordsString
+          ? keywordsString.split(',').map(k => k.trim()).filter(k => k.length > 0)
+          : [],
+        address_state_province: "Adamaoua"
+      };
+
+      await poiService.createPoi(dataToSubmit);
+      alert("Nouveau point d'intérêt publié sur Navigoo !");
+      onClose();
+    } catch (err: any) {
+      console.error("❌ Erreur Backend:", err);
+      alert(`Erreur lors de l'enregistrement : ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
+    >
+      {/* HEADER */}
+      <div className="bg-gradient-to-r from-primary to-purple-600 p-6 text-white">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-sm">
+              <Sparkles size={24} />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black">Nouveau Point d'Intérêt</h2>
+              <p className="text-sm opacity-90">Partagez votre découverte avec la communauté</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition-colors">
+            <X size={24} />
+          </button>
+        </div>
+      </div>
+
+      {/* FORMULAIRE */}
+      <form onSubmit={handleSubmit} className="p-6 space-y-6 max-h-[calc(100vh-250px)] overflow-y-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* GAUCHE : INFOS */}
+          <div className="space-y-6">
+            {/* Upload Photo */}
+            <div className="relative h-48 w-full bg-zinc-100 dark:bg-zinc-800 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 overflow-hidden group cursor-pointer">
+              {previewImage ? (
+                <Image src={previewImage} alt="Cover" fill className="object-cover group-hover:scale-105 transition-transform" />
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400">
+                  <ImagePlus size={32} className="mb-2" />
+                  <span className="text-sm font-semibold">Ajouter une couverture</span>
+                </div>
+              )}
+              <input type="file" onChange={handleImageChange} accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+            </div>
+
+            <FormInput
+              label="Nom du lieu"
+              name="poi_name"
+              value={formData.poi_name}
+              onChange={handleChange}
+              icon={<Type size={16} />}
+              placeholder="Ex: Restaurant Le Délice"
+            />
+
+            <FormSelect
+              label="Catégorie"
+              name="poi_category"
+              value={formData.poi_category}
+              onChange={handleChange}
+              icon={<Hash size={16} />}
+              options={CATEGORIES.map(c => ({ id: c.id, label: c.label }))}
+            />
+
+            <FormInput
+              as="textarea"
+              label="Description"
+              name="poi_description"
+              value={formData.poi_description}
+              onChange={handleChange}
+              icon={<Type size={16} />}
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormInput
+                label="Téléphone"
+                name="phone"
+                value={formData.poi_contacts?.phone}
+                onChange={handleChange}
+                icon={<Phone size={16} />}
+              />
+              <FormInput
+                label="Site Web"
+                name="website"
+                value={formData.poi_contacts?.website}
+                onChange={handleChange}
+                icon={<Globe size={16} />}
+              />
+            </div>
+
+            <FormInput
+              label="Mots-clés"
+              name="keywords"
+              value={keywordsString}
+              onChange={(e) => setKeywordsString(e.target.value)}
+              icon={<Hash size={16} />}
+              placeholder="tag1, tag2..."
+            />
+
+            <div>
+              <label className="text-xs font-bold text-zinc-500 uppercase mb-2 block">Équipements</label>
+              <div className="flex flex-wrap gap-2">
+                {AMENITIES_OPTIONS.map(am => (
+                  <button
+                    key={am}
+                    type="button"
+                    onClick={() => handleAmenityToggle(am)}
+                    className={clsx(
+                      "px-3 py-1.5 rounded-lg text-xs font-bold border transition-all",
+                      formData.poi_amenities?.includes(am)
+                        ? "bg-primary text-white border-primary"
+                        : "bg-white dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700"
+                    )}
+                  >
+                    {formData.poi_amenities?.includes(am) ? <CheckCircle2 size={12} className="inline mr-1" /> : <CircleDashed size={12} className="inline mr-1" />}
+                    {am}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* DROITE : CARTE */}
+          <div className="space-y-6">
+            <div className="relative w-full h-64 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 group cursor-pointer" onClick={() => setIsMapOpen(true)}>
+              <Map
+                initialViewState={{
+                  longitude: formData.location?.longitude || 11.5,
+                  latitude: formData.location?.latitude || 3.8,
+                  zoom: 14
+                }}
+                mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_API_KEY}`}
+                scrollZoom={false}
+                dragPan={false}
+                attributionControl={false}
+              >
+                <Marker longitude={formData.location?.longitude || 0} latitude={formData.location?.latitude || 0}>
+                  <MapPin size={32} className="text-primary fill-primary/20" />
+                </Marker>
+              </Map>
+              <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                <button type="button" className="bg-white px-5 py-2.5 rounded-full font-bold shadow-xl flex items-center gap-2 border-2 border-primary/20">
+                  <Maximize size={16} className="text-primary" />
+                  Choisir sur la carte
+                </button>
+              </div>
+            </div>
+
+            <FormInput
+              label="Adresse"
+              name="address_informal"
+              value={formData.address_informal}
+              onChange={handleChange}
+              icon={<MapPin size={16} />}
+              placeholder="Ex: Bastos, Face ambassade..."
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <FormInput
+                label="Ville"
+                name="address_city"
+                value={formData.address_city}
+                onChange={handleChange}
+                icon={<MapPin size={16} />}
+              />
+              <FormInput
+                label="Pays"
+                name="address_country"
+                value={formData.address_country}
+                onChange={handleChange}
+                icon={<Globe size={16} />}
+              />
+            </div>
+          </div>
+        </div>
+      </form>
+
+      {/* FOOTER */}
+      <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex gap-3">
+        <Button onClick={onClose} variant="outline" className="flex-1">
+          Annuler
+        </Button>
+        <Button onClick={handleSubmit} disabled={isLoading} className="flex-1 gap-2">
+          {isLoading ? <Loader2 className="animate-spin" /> : <><Save size={18} /> Publier</>}
+        </Button>
+      </div>
+
+      {/* MODAL CARTE PLEIN ÉCRAN */}
+      {isMapOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-900 w-full h-full rounded-3xl overflow-hidden relative shadow-2xl flex flex-col">
+            <div className="absolute top-4 left-4 right-4 z-10 flex justify-between pointer-events-none">
+              <div className="bg-white/90 dark:bg-zinc-800/90 backdrop-blur px-4 py-2 rounded-full shadow-lg border border-zinc-200 dark:border-zinc-700 pointer-events-auto">
+                <h3 className="text-sm font-bold flex items-center gap-2">
+                  <MapPin size={16} className="text-primary" />
+                  Glissez le marqueur ou cliquez
+                </h3>
+              </div>
+              <button onClick={() => setIsMapOpen(false)} className="bg-white p-2 rounded-full shadow-lg pointer-events-auto hover:bg-zinc-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 w-full h-full relative bg-zinc-100">
+              <Map
+                initialViewState={{
+                  longitude: tempLocation.longitude,
+                  latitude: tempLocation.latitude,
+                  zoom: 15
+                }}
+                mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_API_KEY}`}
+                onClick={handleMapClick}
+              >
+                <NavigationControl position="bottom-left" showCompass={false} />
+                <ScaleControl position="bottom-right" />
+                <Marker
+                  longitude={tempLocation.longitude}
+                  latitude={tempLocation.latitude}
+                  draggable
+                  onDragEnd={handleDragEnd}
+                  anchor="bottom"
+                >
+                  <MapPin size={40} className="text-red-600 fill-red-600 cursor-move" />
+                </Marker>
+              </Map>
+            </div>
+
+            <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 p-4 flex justify-between items-center">
+              <div className="flex items-center gap-2 text-zinc-500 text-xs font-mono">
+                <LocateFixed size={14} />
+                Lat: <span className="text-zinc-800 dark:text-zinc-200 font-bold">{tempLocation.latitude.toFixed(6)}</span>
+                Lon: <span className="text-zinc-800 dark:text-zinc-200 font-bold">{tempLocation.longitude.toFixed(6)}</span>
+              </div>
+              <Button onClick={saveMapLocation} className="gap-2">
+                <Check size={18} /> Valider
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </motion.div>
   );
 };
 
@@ -7088,8 +7798,8 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\services\poiService.ts
 import { CreatePoiDTO, POI } from "@/types";
 import { authService } from "./authService";
 
-const API_BASE_URL = "https://poi-navigoo.pynfi.com";
-
+// Nouveau : utilise le proxy définit dans next.config.ts
+const API_BASE_URL = typeof window !== 'undefined' ? "/remote-api" : "https://poi-navigoo.pynfi.com";
 /**
  * Fonction utilitaire pour transformer le format à plat du Backend Java
  * vers le format imbriqué { location: { latitude, longitude } } attendu par le Frontend.
@@ -9627,6 +10337,14 @@ const nextConfig: NextConfig = {
         hostname: "localhost",
       }
     ],
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/remote-api/:path*',
+        destination: 'https://poi-navigoo.pynfi.com/:path*',
+      },
+    ];
   },
 };
 

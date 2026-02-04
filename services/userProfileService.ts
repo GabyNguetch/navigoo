@@ -1,3 +1,5 @@
+import { UserRole } from "@/types";
+
 // services/userProfileService.ts
 const API_BASE_URL = "https://poi-navigoo.pynfi.com";
 
@@ -7,7 +9,7 @@ export interface UserProfile {
   email: string;
   phone?: string;
   organizationId: string;
-  role: string;
+  role: UserRole;
   isActive: boolean;
   createdAt: string;
 }

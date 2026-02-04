@@ -154,7 +154,7 @@ export const ReviewsSection = ({ poiId, onReviewSubmitted }: ReviewsSectionProps
         <div className="flex items-center gap-4">
           <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
             <MessageSquare size={20} className="text-primary" />
-            Avis et commentaires
+            Avis
           </h3>
           
           {stats && (
@@ -163,7 +163,6 @@ export const ReviewsSection = ({ poiId, onReviewSubmitted }: ReviewsSectionProps
                 <Star size={14} className="text-primary fill-primary" />
                 <span className="font-bold text-primary">{stats.averageRating.toFixed(1)}</span>
               </div>
-              <span className="text-zinc-500">({stats.reviewCount} avis)</span>
             </div>
           )}
         </div>
@@ -175,8 +174,8 @@ export const ReviewsSection = ({ poiId, onReviewSubmitted }: ReviewsSectionProps
             variant="outline"
             className="gap-2"
           >
-            <Cloud size={16} />
-            {showForm ? 'Annuler' : 'Donner mon avis'}
+            <Send size={16} />
+            {showForm ? 'Annuler' : 'Commenter'}
           </Button>
         )}
       </div>

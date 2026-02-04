@@ -230,14 +230,14 @@ function MapComponent({
     }).filter(Boolean);
   }, [pois, selectedPoi?.poi_id, onSelectPoi, handleHover]);
 
-  // NOUVEAU: GeoJSON du chemin parcouru
+  // PAR CELUI-CI :
   const traveledPathGeoJSON = useMemo(() => {
     if (traveledPath.length < 2) return null;
     return {
-      type: 'Feature',
+      type: 'Feature' as const, // <--- AJOUTER as const ICI
       properties: {},
       geometry: {
-        type: 'LineString',
+        type: 'LineString' as const, // <--- AJOUTER as const ICI
         coordinates: traveledPath.map(p => [p.longitude, p.latitude])
       }
     };
