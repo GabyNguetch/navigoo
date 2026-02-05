@@ -10,7 +10,9 @@ import {
   MessageSquare, FileText, Mic, Plus,
   Edit, Trash2, Eye, Send, Loader2, X,
   BarChart3, Award, Heart, Clock, Grid,
-  List, Image as ImageIcon, Video, Music
+  List, Image as ImageIcon, Video, Music,
+  Store,
+  MapPinHouse
 } from "lucide-react";
 import { authService } from "@/services/authService";
 import { useUserProfile } from "@/hooks/useUserProfile";
@@ -166,7 +168,7 @@ export default function ProfilePage() {
             </motion.div>
 
             {/* Infos Profil */}
-            <div className="flex-1 pb-4">
+            <div className="flex-1 pb-16">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -194,10 +196,10 @@ export default function ProfilePage() {
               className="hidden lg:flex items-center gap-3 pb-4"
             >
               <Button
-                onClick={() => setIsEditingProfile(true)}
+                onClick={() => router.push("/")}
                 className="bg-white/20 backdrop-blur-md text-white border-2 border-white/30 hover:bg-white/30"
               >
-                <Edit size={18} /> Modifier
+                <MapPinHouse size={18} /> Retour à la carte
               </Button>
               <Button
                 onClick={handleLogout}
@@ -216,7 +218,7 @@ export default function ProfilePage() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="max-w-7xl mx-auto px-4 -mt-8 mb-8"
+          className="max-w-7xl mx-auto px-4 -mt-4 mb-8"
         >
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard
@@ -453,25 +455,25 @@ const OverviewTab = ({ stats, myPois, recentPois, recentTrips, router, onAddPoi 
     {/* Actions Rapides */}
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <QuickActionCard
-        icon={<Plus />}
+        icon={<Store />}
         title="Nouveau POI"
         description="Créer un point d'intérêt"
         onClick={onAddPoi}
-        color="from-blue-500 to-blue-600"
+        color="from-black to-purple-900"
       />
       <QuickActionCard
         icon={<FileText />}
         title="Nouveau Blog"
         description="Partager une expérience"
         onClick={() => {}}
-        color="from-purple-500 to-purple-600"
+        color="from-purple-900 to-purple-700"
       />
       <QuickActionCard
         icon={<Mic />}
         title="Nouveau Podcast"
         description="Enregistrer un audio"
         onClick={() => {}}
-        color="from-orange-500 to-orange-600"
+        color="from-purple-700 to-purple-500"
       />
     </div>
 
