@@ -22,6 +22,7 @@ import { FormSelect } from "@/components/ui/form/FormSelect";
 import Image from "next/image";
 import { clsx } from "clsx";
 import { poiService } from "@/services/poiService";
+import { mediaService } from "@/services/mediaService";
 
 // Clé API MapTiler (la même que dans page.tsx)
 const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9"; 
@@ -112,16 +113,28 @@ function AddPoiContent() {
     setFormData(prev => ({ ...prev, poi_amenities: newAmenities }));
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const res = reader.result as string;
-            setPreviewImage(res);
-            setFormData(prev => ({ ...prev, poi_images_urls: [res] }));
-        };
-        reader.readAsDataURL(file);
+        setIsLoading(true); // Afficher loading pendant upload
+        try {
+            // Upload vers le service media
+            const media = await mediaService.uploadFile(file, "poi");
+            
+            // On stocke l'URL publique fournie par le proxy
+            const imageUrl = mediaService.getMediaUrl(media.id);
+            
+            setPreviewImage(imageUrl);
+            setFormData(prev => ({ 
+                ...prev, 
+                poi_images_urls: [imageUrl] 
+            }));
+        } catch (e) {
+            console.error(e);
+            alert("Erreur upload image");
+        } finally {
+            setIsLoading(false);
+        }
     }
   };
 

@@ -22,10 +22,73 @@ export const useUserProfile = () => {
   const currentUser = authService.getSession();
 
   // ==========================================
-  // CHARGEMENT INITIAL
+  // CHARGEMENT INITIAL - ✅ SANS loadUserData dans les dépendances
   // ==========================================
 
-  const loadUserData = useCallback(async (userId: string) => {
+  useEffect(() => {
+    const loadData = async () => {
+      if (!currentUser?.userId) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        console.log("🔄 Chargement profil pour:", currentUser.userId);
+
+        const [
+          profileData,
+          statsData,
+          poisData,
+          reviewsData,
+          blogsData,
+          podcastsData,
+          recentPoisData,
+          savedPoisData,
+          tripsData,
+        ] = await Promise.all([
+          userProfileService.getUserProfile(currentUser.userId),
+          userProfileService.getUserStats(currentUser.userId),
+          userProfileService.getUserPois(currentUser.userId),
+          userProfileService.getUserReviews(currentUser.userId),
+          userProfileService.getUserBlogs(currentUser.userId),
+          userProfileService.getUserPodcasts(currentUser.userId),
+          userProfileService.getRecentPois(currentUser.userId, 10),
+          userProfileService.getSavedPois(currentUser.userId),
+          userProfileService.getRecentTrips(currentUser.userId, 10),
+        ]);
+
+        console.log("✅ Données chargées:", { profileData, statsData });
+
+        setProfile(profileData);
+        setStats(statsData);
+        setMyPois(poisData);
+        setMyReviews(reviewsData);
+        setMyBlogs(blogsData);
+        setMyPodcasts(podcastsData);
+        setRecentPois(recentPoisData);
+        setSavedPois(savedPoisData);
+        setRecentTrips(tripsData);
+      } catch (err: any) {
+        console.error("❌ Erreur chargement profil:", err);
+        setError(err.message || "Erreur de chargement");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [currentUser?.userId]); // ✅ Seulement userId comme dépendance
+
+  // ==========================================
+  // REFRESH MANUEL - ✅ Version simplifiée
+  // ==========================================
+
+  const refresh = useCallback(async () => {
+    if (!currentUser?.userId) return;
+
     try {
       setIsLoading(true);
       setError(null);
@@ -41,15 +104,15 @@ export const useUserProfile = () => {
         savedPoisData,
         tripsData,
       ] = await Promise.all([
-        userProfileService.getUserProfile(userId),
-        userProfileService.getUserStats(userId),
-        userProfileService.getUserPois(userId),
-        userProfileService.getUserReviews(userId),
-        userProfileService.getUserBlogs(userId),
-        userProfileService.getUserPodcasts(userId),
-        userProfileService.getRecentPois(userId, 10),
-        userProfileService.getSavedPois(userId),
-        userProfileService.getRecentTrips(userId, 10),
+        userProfileService.getUserProfile(currentUser.userId),
+        userProfileService.getUserStats(currentUser.userId),
+        userProfileService.getUserPois(currentUser.userId),
+        userProfileService.getUserReviews(currentUser.userId),
+        userProfileService.getUserBlogs(currentUser.userId),
+        userProfileService.getUserPodcasts(currentUser.userId),
+        userProfileService.getRecentPois(currentUser.userId, 10),
+        userProfileService.getSavedPois(currentUser.userId),
+        userProfileService.getRecentTrips(currentUser.userId, 10),
       ]);
 
       setProfile(profileData);
@@ -62,19 +125,12 @@ export const useUserProfile = () => {
       setSavedPois(savedPoisData);
       setRecentTrips(tripsData);
     } catch (err: any) {
-      console.error("Erreur chargement profil:", err);
+      console.error("Erreur refresh:", err);
       setError(err.message || "Erreur de chargement");
     } finally {
       setIsLoading(false);
     }
-  }, []);
-
-  // Chargement automatique au montage
-  useEffect(() => {
-    if (currentUser?.userId) {
-      loadUserData(currentUser.userId);
-    }
-  }, [currentUser?.userId, loadUserData]);
+  }, [currentUser?.userId]); // ✅ Pas de dépendances circulaires
 
   // ==========================================
   // ACTIONS PROFIL
@@ -86,10 +142,7 @@ export const useUserProfile = () => {
     try {
       const updated = await userProfileService.updateUserProfile(currentUser.userId, data);
       setProfile(updated);
-      
-    // PAR CELLE-CI (Ajout de "as AppUser") :
-    authService.saveSession({ ...currentUser, ...updated } as AppUser);
-      
+      authService.saveSession({ ...currentUser, ...updated } as AppUser);
       return updated;
     } catch (err: any) {
       console.error("Erreur mise à jour profil:", err);
@@ -115,18 +168,14 @@ export const useUserProfile = () => {
       });
 
       setMyReviews(prev => [review, ...prev]);
-      
-      // Mettre à jour les stats
-      if (stats) {
-        setStats({ ...stats, totalReviews: stats.totalReviews + 1 });
-      }
+      setStats(prev => prev ? { ...prev, totalReviews: prev.totalReviews + 1 } : null);
 
       return review;
     } catch (err: any) {
       console.error("Erreur création avis:", err);
       throw err;
     }
-  }, [currentUser, stats]);
+  }, [currentUser]);
 
   const updateReview = useCallback(async (reviewId: string, data: Partial<any>) => {
     try {
@@ -143,15 +192,12 @@ export const useUserProfile = () => {
     try {
       await userProfileService.deleteReview(reviewId);
       setMyReviews(prev => prev.filter(r => r.reviewId !== reviewId));
-      
-      if (stats) {
-        setStats({ ...stats, totalReviews: Math.max(0, stats.totalReviews - 1) });
-      }
+      setStats(prev => prev ? { ...prev, totalReviews: Math.max(0, prev.totalReviews - 1) } : null);
     } catch (err: any) {
       console.error("Erreur suppression avis:", err);
       throw err;
     }
-  }, [stats]);
+  }, []);
 
   // ==========================================
   // ACTIONS BLOGS
@@ -171,17 +217,14 @@ export const useUserProfile = () => {
       });
 
       setMyBlogs(prev => [blog, ...prev]);
-      
-      if (stats) {
-        setStats({ ...stats, totalBlogs: stats.totalBlogs + 1 });
-      }
+      setStats(prev => prev ? { ...prev, totalBlogs: prev.totalBlogs + 1 } : null);
 
       return blog;
     } catch (err: any) {
       console.error("Erreur création blog:", err);
       throw err;
     }
-  }, [currentUser, stats]);
+  }, [currentUser]);
 
   const updateBlog = useCallback(async (blogId: string, data: Partial<any>) => {
     try {
@@ -198,15 +241,12 @@ export const useUserProfile = () => {
     try {
       await userProfileService.deleteBlog(blogId);
       setMyBlogs(prev => prev.filter(b => b.blog_id !== blogId));
-      
-      if (stats) {
-        setStats({ ...stats, totalBlogs: Math.max(0, stats.totalBlogs - 1) });
-      }
+      setStats(prev => prev ? { ...prev, totalBlogs: Math.max(0, prev.totalBlogs - 1) } : null);
     } catch (err: any) {
       console.error("Erreur suppression blog:", err);
       throw err;
     }
-  }, [stats]);
+  }, []);
 
   // ==========================================
   // ACTIONS PODCASTS
@@ -227,17 +267,14 @@ export const useUserProfile = () => {
       });
 
       setMyPodcasts(prev => [podcast, ...prev]);
-      
-      if (stats) {
-        setStats({ ...stats, totalPodcasts: stats.totalPodcasts + 1 });
-      }
+      setStats(prev => prev ? { ...prev, totalPodcasts: prev.totalPodcasts + 1 } : null);
 
       return podcast;
     } catch (err: any) {
       console.error("Erreur création podcast:", err);
       throw err;
     }
-  }, [currentUser, stats]);
+  }, [currentUser]);
 
   const updatePodcast = useCallback(async (podcastId: string, data: Partial<any>) => {
     try {
@@ -254,15 +291,12 @@ export const useUserProfile = () => {
     try {
       await userProfileService.deletePodcast(podcastId);
       setMyPodcasts(prev => prev.filter(p => p.podcast_id !== podcastId));
-      
-      if (stats) {
-        setStats({ ...stats, totalPodcasts: Math.max(0, stats.totalPodcasts - 1) });
-      }
+      setStats(prev => prev ? { ...prev, totalPodcasts: Math.max(0, prev.totalPodcasts - 1) } : null);
     } catch (err: any) {
       console.error("Erreur suppression podcast:", err);
       throw err;
     }
-  }, [stats]);
+  }, []);
 
   // ==========================================
   // ACTIONS ACCÈS (Logs)
@@ -280,7 +314,6 @@ export const useUserProfile = () => {
         accessType: "VIEW",
       });
 
-      // Rafraîchir les POIs récents
       const updated = await userProfileService.getRecentPois(currentUser.userId, 10);
       setRecentPois(updated);
     } catch (err) {
@@ -301,23 +334,12 @@ export const useUserProfile = () => {
         metadata: tripData,
       });
 
-      // Rafraîchir les trajets récents
       const updated = await userProfileService.getRecentTrips(currentUser.userId, 10);
       setRecentTrips(updated);
     } catch (err) {
       console.warn("Échec log trajet");
     }
   }, [currentUser]);
-
-  // ==========================================
-  // REFRESH MANUEL
-  // ==========================================
-
-  const refresh = useCallback(async () => {
-    if (currentUser?.userId) {
-      await loadUserData(currentUser.userId);
-    }
-  }, [currentUser, loadUserData]);
 
   return {
     // État

@@ -4,18 +4,16 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { 
-  User, Mail, Phone, Lock, Camera, LogOut, 
-  MapPin, Route, Star, ChevronRight, 
-  Settings, Building2, Calendar, TrendingUp,
-  MessageSquare, FileText, Mic, Plus,
-  Edit, Trash2, Eye, Send, Loader2, X,
-  BarChart3, Award, Heart, Clock, Grid,
-  List, Image as ImageIcon, Video, Music,
-  Store,
+  LogOut, 
+  MapPin, 
+  BarChart3, Building2, Star, FileText, Mic, Clock, 
+  Store, Grid, List, Plus, X, Camera, Trash2, ChevronRight, Route,
+  MessageSquare,
   MapPinHouse
 } from "lucide-react";
 import { authService } from "@/services/authService";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { userProfileService } from "@/services/userProfileService"; // Ajout de l'import manquant
 import { Button } from "@/components/ui/Button";
 import { Loader } from "@/components/ui/Loader";
 import { BlogModal } from "@/components/content/BlogModal";
@@ -23,15 +21,16 @@ import { PodcastModal } from "@/components/content/PodcastModal";
 import { AddPoiPanel } from "@/components/profile/AddPoiPanel";
 import { clsx } from "clsx";
 import { motion, AnimatePresence } from "framer-motion";
-import { POI } from "@/types";
+import { AppUser } from "@/types";
+import { mediaService } from "@/services/mediaService";
 
 type TabType = 'overview' | 'pois' | 'reviews' | 'blogs' | 'podcasts' | 'activity' | 'add-poi';
+
 
 export default function ProfilePage() {
   const router = useRouter();
   const {
     profile,
-    stats,
     myPois,
     myReviews,
     myBlogs,
@@ -52,19 +51,46 @@ export default function ProfilePage() {
   const [isBlogModalOpen, setIsBlogModalOpen] = useState(false);
   const [isPodcastModalOpen, setIsPodcastModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
+  // Fonction de chargement
+  const loadData = async (sessionUser: AppUser) => {
+    try {
+      console.log("🔄 Chargement des stats pour:", sessionUser.id);
+      const statsData = await userProfileService.getUserStats(sessionUser.id);
+      console.log("✅ Stats chargées:", statsData);
+      setStats(statsData);
+    } catch (e) {
+      console.error("❌ Erreur chargement stats:", e);
+      setStats(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Vérification session
   useEffect(() => {
+    console.log("🔍 Vérification session...");
     const session = authService.getSession();
     
     if (!session) {
+      console.log("⚠️ Pas de session, redirection signin");
       router.push("/signin");
       return;
     }
 
     if (session.role === "SUPER_ADMIN") {
+      console.log("⚠️ Admin détecté, redirection");
       router.push("/admin");
       return;
     }
+    
+    console.log("✅ Session valide:", session.username);
+    setUser(session);
+    loadData(session);
   }, [router]);
 
   useEffect(() => {
@@ -75,6 +101,49 @@ export default function ProfilePage() {
       });
     }
   }, [profile]);
+
+  // ✅ CHANGEMENT ICI : Condition de chargement améliorée
+  if (isLoading || loading) {
+    console.log("⏳ Chargement...", { isLoading, loading, hasProfile: !!profile, hasUser: !!user });
+    return <Loader />;
+  }
+  
+  if (error) {
+    console.error("❌ Erreur dans useUserProfile:", error);
+    return (
+      <div className="min-h-screen flex items-center justify-center text-red-600">
+        Erreur: {error}
+      </div>
+    );
+  }
+  
+  // ✅ CHANGEMENT ICI : Utiliser profile OU user pour décider
+  if (!user) {
+    console.log("⚠️ Pas de user", { user, profile });
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Session invalide, redirection...
+      </div>
+    );
+  }
+
+  // ✅ NOUVEAU : Si pas de profile, utiliser user comme fallback
+  const displayProfile = profile || {
+    email: user.email,
+    phone: user.phone || '',
+    firstName: user.firstName,
+    lastName: user.lastName,
+    username: user.username,
+  };
+
+  console.log("✅ Affichage profil:", { user, profile, displayProfile });
+
+  // Calcul de l'URL de la photo de profil
+  const profilePic = user.photoUri 
+    ? user.photoUri 
+    : user.photoId 
+        ? mediaService.getMediaUrl(user.photoId) 
+        : "/images/placeholder-avatar.png"; 
 
   const handleLogout = () => {
     authService.logout();
@@ -98,116 +167,106 @@ export default function ProfilePage() {
     setActiveTab(tab);
   };
 
-  if (isLoading) return <Loader />;
-  if (error) return <div className="min-h-screen flex items-center justify-center text-red-600">Erreur: {error}</div>;
-  if (!profile) return <div className="min-h-screen flex items-center justify-center">Profil non trouvé</div>;
-
   return (
-    <div className="min-h-screen bg-img bg-gradient-to-br from-zinc-50 via-white to-zinc-50 dark:from-black dark:via-zinc-950 dark:to-black">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black font-sans pb-20">
       
-      {/* HERO HEADER avec Avatar */}
-      <div 
-        className="relative h-72 w-full overflow-hidden bg-cover bg-center"
-        style={{ 
-          backgroundImage: "url('images/fond1.jpg')",
-        }}
-      >
-        {/* Overlay sombre pour la lisibilité (indispensable) */}
-        <div className="absolute inset-0 bg-black/40 shadow-inner" />
-        
-        {/* Dégradé vers le bas pour faire ressortir le nom d'utilisateur */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-        {/* Effet de grille animée */}
-        <div className="absolute inset-0 opacity-30">
-          <div className="absolute inset-0" style={{
-            backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
-            backgroundSize: '30px 30px'
-          }} />
-        </div>
-        
-        {/* Cercles flottants */}
-        <motion.div 
-          animate={{ 
-            scale: [1, 1.2, 1],
-            rotate: [0, 180, 360]
+      {/* HERO HEADER - Pleine largeur garantie */}
+      <div className="w-full">
+        <div 
+          className="relative h-72 w-full overflow-hidden bg-cover bg-center"
+          style={{ 
+            backgroundImage: "url('/images/fond1.jpg')", // Ajout du slash initial pour robustesse
           }}
-          transition={{ duration: 20, repeat: Infinity }}
-          className="absolute -top-20 -left-20 w-96 h-96 bg-white/10 rounded-full blur-3xl"
-        />
-        <motion.div 
-          animate={{ 
-            scale: [1, 1.3, 1],
-            rotate: [360, 180, 0]
-          }}
-          transition={{ duration: 25, repeat: Infinity }}
-          className="absolute -bottom-20 -right-20 -top-20 w-96 h-96 bg-white/10 rounded-full blur-3xl"
-        />
-
-        {/* Contenu Header */}
-        <div className="relative max-w-7xl mx-auto px-4 h-full flex items-end pb-8">
-          <div className="flex items-end gap-6 w-full">
-            
-            {/* Avatar */}
-            <motion.div 
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: "spring", duration: 0.8 }}
-              className="relative group"
-            >
-              <div className="relative w-32 h-32 md:w-40 md:h-40">
-                <div className="absolute inset-0 bg-gradient-to-tr from-primary to-purple-400 rounded-3xl rotate-6 group-hover:rotate-12 transition-transform duration-300" />
-                <div className="relative w-full h-full bg-white dark:bg-zinc-900 rounded-3xl overflow-hidden border-4 border-white dark:border-zinc-800 shadow-2xl flex items-center justify-center">
-                  <span className="text-6xl font-black bg-gradient-to-br from-primary to-purple-600 bg-clip-text text-transparent">
-                    {profile.username.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <button className="absolute -bottom-2 -right-2 p-3 bg-primary text-white rounded-2xl shadow-lg hover:scale-110 active:scale-95 transition-transform">
-                  <Camera size={20} />
-                </button>
-              </div>
-            </motion.div>
-
-            {/* Infos Profil */}
-            <div className="flex-1 pb-16">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
+        >
+          {/* Overlay sombre */}
+          <div className="absolute inset-0 bg-black/40 shadow-inner" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+          
+          {/* Effets visuels */}
+          <div className="absolute inset-0 opacity-30 pointer-events-none">
+            <div className="absolute inset-0" style={{
+              backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
+              backgroundSize: '30px 30px'
+            }} />
+          </div>
+          
+          {/* Contenu Header - Centré avec contraintes */}
+          <div className="relative max-w-7xl mx-auto px-4 h-full flex items-end pb-8">
+            <div className="flex items-end gap-6 w-full">
+              
+              {/* Avatar */}
+              <motion.div 
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", duration: 0.8 }}
+                className="relative group shrink-0"
               >
-                <h1 className="text-4xl md:text-5xl font-black text-white mb-2 drop-shadow-lg">
-                  {profile.username}
-                </h1>
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="px-4 py-1.5 bg-white/20 backdrop-blur-md text-white text-sm font-bold rounded-full border border-white/30">
-                    🌟 Explorateur Navigoo
-                  </span>
-                  <span className="px-4 py-1.5 bg-white/20 backdrop-blur-md text-white text-sm font-bold rounded-full border border-white/30">
-                    Membre depuis {new Date(profile.createdAt).getFullYear()}
-                  </span>
+                <div className="relative w-32 h-32 md:w-40 md:h-40">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-primary to-purple-400 rounded-full md:rounded-3xl rotate-6 group-hover:rotate-12 transition-transform duration-300 blur-sm" />
+                  <div className="relative w-full h-full bg-white dark:bg-zinc-900 rounded-full md:rounded-3xl overflow-hidden border-4 border-white dark:border-zinc-800 shadow-2xl flex items-center justify-center">
+                    <Image 
+                        src={profilePic} 
+                        alt="Profile" 
+                        fill 
+                        className="object-cover"
+                        unoptimized
+                        onError={(e) => { e.currentTarget.src = "https://ui-avatars.com/api/?name=" + user.username }}
+                    />
+                  </div>
+                  {/* Bouton pour changer la photo */}
+                  <button 
+                    onClick={() => console.log("Upload photo dialog")} 
+                    className="absolute -bottom-2 -right-2 p-2 bg-primary text-white rounded-full md:rounded-2xl shadow-lg hover:scale-110 active:scale-95 transition-transform"
+                  >
+                    <Camera size={18} />
+                  </button>
                 </div>
               </motion.div>
-            </div>
 
-            {/* Actions Rapides */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-              className="hidden lg:flex items-center gap-3 pb-4"
-            >
-              <Button
-                onClick={() => router.push("/")}
-                className="bg-white/20 backdrop-blur-md text-white border-2 border-white/30 hover:bg-white/30"
+              {/* Infos Profil */}
+              <div className="flex-1 pb-1 md:pb-2">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <h1 className="text-3xl md:text-5xl font-black text-white mb-2 drop-shadow-lg leading-none">
+                    {user.firstName} {user.lastName}
+                  </h1>
+                  <p className="text-zinc-300 font-medium text-lg mb-3">@{user.username}</p>
+                  
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="px-4 py-1.5 bg-white/20 backdrop-blur-md text-white text-xs font-bold rounded-full border border-white/30 uppercase tracking-wide">
+                      {user.service || "Explorateur"}
+                    </span>
+                    <span className="px-4 py-1.5 bg-black/40 backdrop-blur-md text-zinc-200 text-xs font-bold rounded-full border border-white/10">
+                      {user.email}
+                    </span>
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Actions Rapides Desktop */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
+                className="hidden lg:flex flex-col items-end gap-3 pb-2"
               >
-                <MapPinHouse size={18} /> Retour à la carte
-              </Button>
-              <Button
-                onClick={handleLogout}
-                className="bg-red-500/20 backdrop-blur-md text-white border-2 border-red-300/30 hover:bg-red-500/30"
-              >
-                <LogOut size={18} /> Déconnexion
-              </Button>
-            </motion.div>
+                <Button
+                  onClick={() => router.push("/")}
+                  className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/30"
+                >
+                  <MapPinHouse size={18} className="mr-2" /> Carte
+                </Button>
+                <Button
+                  onClick={handleLogout}
+                  className="bg-red-500/20 hover:bg-red-500/40 backdrop-blur-md text-white border border-red-500/30"
+                >
+                  <LogOut size={18} className="mr-2" /> Déconnexion
+                </Button>
+              </motion.div>
+            </div>
           </div>
         </div>
       </div>
@@ -218,31 +277,31 @@ export default function ProfilePage() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="max-w-7xl mx-auto px-4 -mt-4 mb-8"
+          className="max-w-7xl mx-auto px-4 -mt-8 mb-8 relative z-10"
         >
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard
               icon={<MapPin className="text-blue-500" />}
               label="POIs"
-              value={stats.totalPois}
+              value={stats.totalPois || 0}
               color="from-blue-500/10 to-blue-500/5"
             />
             <StatCard
               icon={<MessageSquare className="text-green-500" />}
               label="Avis"
-              value={stats.totalReviews}
+              value={stats.totalReviews || 0}
               color="from-green-500/10 to-green-500/5"
             />
             <StatCard
               icon={<FileText className="text-purple-500" />}
               label="Blogs"
-              value={stats.totalBlogs}
+              value={stats.totalBlogs || 0}
               color="from-purple-500/10 to-purple-500/5"
             />
             <StatCard
               icon={<Mic className="text-orange-500" />}
               label="Podcasts"
-              value={stats.totalPodcasts}
+              value={stats.totalPodcasts || 0}
               color="from-orange-500/10 to-orange-500/5"
             />
           </div>
@@ -251,8 +310,8 @@ export default function ProfilePage() {
 
       {/* TABS NAVIGATION */}
       <div className="max-w-7xl mx-auto px-4 mb-8">
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
-          <div className="flex gap-2 p-2">
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-x-auto scrollbar-hide">
+          <div className="flex p-2 gap-2 min-w-max">
             <TabButton
               active={activeTab === 'overview'}
               onClick={() => handleTabChange('overview')}
