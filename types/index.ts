@@ -10,13 +10,22 @@ export interface Location {
 }
 
 export interface AppUser {
+  id: string; // UUID du Auth Service
   userId: string;
   organizationId: string;
   username: string;
   email: string;
   phone?: string;
+  firstName?: string;
+  lastName?: string;
   password?: string;
   role: UserRole;
+  service?: "LETS_GO" | "RIDE_AND_GO" | "FLEET_MANAGEMENT" | "SYNDICAT" | "NAVIGOO" | "PAYMENT" | "FARE_CALCULATOR";
+  photoId?: string;
+  photoUri?: string;
+  roles?: string[];
+  permissions?: string[];
+  accessToken?: string; // Ajouté côté client pour la session
   isActive: boolean;
   createdAt?: string;
 }
@@ -134,3 +143,13 @@ export interface Podcast {
   is_active: boolean;
   created_at?: string;
 }
+
+// DTO Media Service
+export interface MediaDto {
+  id: string;
+  uri: string;
+  mime: string;
+  name: string;
+}
+
+
