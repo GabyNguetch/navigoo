@@ -5,15 +5,16 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  size?: 'default' | 'large';
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
+export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'default' }) => {
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-all">
       <div 
-        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800 animate-in fade-in zoom-in duration-200 border border-gray-100 dark:border-gray-700"
+        className={`w-full ${size === 'large' ? 'max-w-4xl' : 'max-w-lg'} rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800 animate-in fade-in zoom-in duration-200 border border-gray-100 dark:border-gray-700`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6 border-b border-gray-100 dark:border-gray-700 pb-4">
