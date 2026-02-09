@@ -7,7 +7,8 @@ import {
   FileText, Mic, Grid, List, X, ChevronRight,
   Phone, Globe, Clock, Navigation, Heart, MessageCircle,
   Building2, Utensils, Hotel, ShoppingBag, Coffee, Landmark,
-  ExternalLink, HandCoins, Car, Truck, PenTool, StoreIcon, Settings
+  ExternalLink, HandCoins, Car, Truck, PenTool, StoreIcon, Settings,
+  Loader
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
@@ -19,7 +20,10 @@ import { POI } from "@/types";
 import dynamic from "next/dynamic";
 
 // Import dynamique de la carte pour éviter les erreurs SSR
-const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapContainer), { ssr: false });
+const MapComponent = dynamic(() => import("@/components/map/Map"), {
+  ssr: false,
+  loading: () => <Loader className="h-[600px] rounded-2xl relative" />,
+});
 const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
 const Popup = dynamic(() => import("react-leaflet").then(mod => mod.Popup), { ssr: false });
@@ -460,29 +464,17 @@ export default function MarketplacePage() {
               )}
 
               {viewMode === "map" && (
-                <div className="h-[600px] rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
-                  <MapContainer center={mapCenter} zoom={13} className="h-full w-full">
-                    <TileLayer
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                      attribution='&copy; OpenStreetMap contributors'
-                    />
-                    {filteredPois.map((poi) => (
-                      poi.location && (
-                        <Marker
-                          key={poi.poi_id}
-                          position={[poi.location.latitude, poi.location.longitude]}
-                          eventHandlers={{ click: () => openPoiDetails(poi) }}
-                        >
-                          <Popup>
-                            <div className="p-2">
-                              <h3 className="font-bold">{poi.poi_name}</h3>
-                              <p className="text-sm text-zinc-600">{poi.address_city}</p>
-                            </div>
-                          </Popup>
-                        </Marker>
-                      )
-                    ))}
-                  </MapContainer>
+                <div className="h-[600px] rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 relative">
+                  <MapComponent
+                    apiKey="Lr72DkH8TYyjpP7RNZS9"
+                    pois={filteredPois}
+                    selectedPoi={selectedPoi}
+                    onSelectPoi={setSelectedPoi}
+                    userLocation={{ latitude: mapCenter[0], longitude: mapCenter[1] }} // Utiliser le centre actuel comme "userLocation" pour centrer
+                    routeGeometry={null}
+                    mapStyleType="streets-v2"
+                    onMapEmptyClick={() => {}}
+                  />
                 </div>
               )}
             </>
