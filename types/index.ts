@@ -35,27 +35,36 @@ export interface POI {
   poi_id: string; 
   organization_id?: string;
   created_by_user_id?: string;
+  created_by?: string;
   poi_name: string;
   poi_description?: string;
   poi_category: string; 
   poi_type?: string;
+  
+  // Champs additionnels requis par le compilateur
+  poi_long_name?: string;
+  poi_short_name?: string;
+  poi_friendly_name?: string;
+  poi_logo?: string;
+  poi_type_tags?: string[];
 
   created_at?: string;
-  created_by?: string; // AJOUTEZ CETTE LIGNE
-  
-  // Supporte les deux formats pour la transition
-  latitude?: number;
-  longitude?: number;
+  updated_at?: string;
   
   location: {
     latitude: number;
     longitude: number;
   };
+  latitude?: number;
+  longitude?: number;
 
   address_city: string;
   address_informal?: string;
   address_country?: string;
   address_state_province?: string;
+  address_street_number?: string;
+  address_street_name?: string;
+  address_postal_code?: string;
 
   poi_images_urls: string[]; 
   poi_amenities?: string[];
@@ -65,15 +74,15 @@ export interface POI {
   review_count: number;
   popularity_score: number;
   is_active?: boolean;
+  approval_status?: string; // Ajouté pour le panel admin
 
   poi_contacts?: {
     phone?: string;
     website?: string;
     email?: string;
   };
-    website_url?: string; // NOUVEAU
-  
-  operation_time_plan?: OperationTimePlan; // NOUVEAU pour fixer l'autre erreur possible avec Open
+  website_url?: string;
+  operation_time_plan?: OperationTimePlan;
 }
 
 export interface CreatePoiDTO {
