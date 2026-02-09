@@ -133,10 +133,10 @@ export default function Home() {
             let approvedData = data.filter(poi => poi.is_active);
             
             // Ajouter mes POIs même s'ils ne sont pas actifs
-            if (currentUser?.userId) {
-              const myUserPois = data.filter(poi => 
-                (poi.created_by === currentUser.userId || poi.created_by_user_id === currentUser.userId)
-              );
+              if (currentUser?.userId) {
+                const myUserPois = data.filter(poi => 
+                  poi.created_by_user_id === currentUser.userId
+                );
               myUserPois.forEach(poi => {
                 if (!approvedData.find(p => p.poi_id === poi.poi_id)) {
                   approvedData.push(poi);
