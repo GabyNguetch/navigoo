@@ -27,6 +27,7 @@ export const useUserProfile = () => {
 
   useEffect(() => {
     const loadData = async () => {
+      const currentUser = authService.getSession();
       if (!currentUser?.userId) {
         setIsLoading(false);
         return;
@@ -34,53 +35,53 @@ export const useUserProfile = () => {
 
       try {
         setIsLoading(true);
-        setError(null);
-
-        console.log("🔄 Chargement profil pour:", currentUser.userId);
-
-        const [
-          profileData,
-          statsData,
-          poisData,
-          reviewsData,
-          blogsData,
-          podcastsData,
-          recentPoisData,
-          savedPoisData,
-          tripsData,
-        ] = await Promise.all([
-          userProfileService.getUserProfile(currentUser.userId),
-          userProfileService.getUserStats(currentUser.userId),
-          userProfileService.getUserPois(currentUser.userId),
-          userProfileService.getUserReviews(currentUser.userId),
-          userProfileService.getUserBlogs(currentUser.userId),
-          userProfileService.getUserPodcasts(currentUser.userId),
-          userProfileService.getRecentPois(currentUser.userId, 10),
-          userProfileService.getSavedPois(currentUser.userId),
-          userProfileService.getRecentTrips(currentUser.userId, 10),
+        console.group("🔄 Profil: Tentative de Liaison Backend");
+        
+        // 1. On lance les appels data (POIs, Blogs...) qui fonctionnent
+        const [statsData, poisData, reviewsData, blogsData, podcastsData, recentPoisData] = 
+        await Promise.all([
+          userProfileService.getUserStats(currentUser.userId).catch(e => null),
+          userProfileService.getUserPois(currentUser.userId).catch(e => []),
+          userProfileService.getUserReviews(currentUser.userId).catch(e => []),
+          userProfileService.getUserBlogs(currentUser.userId).catch(e => []),
+          userProfileService.getUserPodcasts(currentUser.userId).catch(e => []),
+          userProfileService.getRecentPois(currentUser.userId).catch(e => []),
         ]);
 
-        console.log("✅ Données chargées:", { profileData, statsData });
+        // 2. On tente de récupérer le profil complet mais sans faire planter l'app si 500
+        let remoteProfile = null;
+        try {
+           remoteProfile = await userProfileService.getUserProfile(currentUser.userId);
+           console.log("✅ Profil distant récupéré");
+        } catch (err) {
+           console.warn("⚠️ Backend POI non synchronisé. Utilisation du cache Auth Session.");
+           // Fallback sur les infos de session (email, username, etc.)
+           remoteProfile = {
+             ...currentUser,
+             isActive: true,
+             createdAt: new Date().toISOString()
+           };
+        }
 
-        setProfile(profileData);
-        setStats(statsData);
+        setProfile(remoteProfile);
+        setStats(statsData || { totalPois: 0, totalReviews: 0, totalBlogs: 0, totalPodcasts: 0, recentViews: 0 });
         setMyPois(poisData);
         setMyReviews(reviewsData);
         setMyBlogs(blogsData);
         setMyPodcasts(podcastsData);
         setRecentPois(recentPoisData);
-        setSavedPois(savedPoisData);
-        setRecentTrips(tripsData);
+        
+        console.groupEnd();
       } catch (err: any) {
-        console.error("❌ Erreur chargement profil:", err);
-        setError(err.message || "Erreur de chargement");
+        console.error("❌ Erreur critique:", err);
+        setError("Une erreur est survenue lors de la liaison de données.");
       } finally {
         setIsLoading(false);
       }
     };
 
     loadData();
-  }, [currentUser?.userId]); // ✅ Seulement userId comme dépendance
+  }, [currentUser?.userId]);
 
   // ==========================================
   // REFRESH MANUEL - ✅ Version simplifiée

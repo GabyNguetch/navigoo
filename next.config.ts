@@ -4,30 +4,23 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
-      { protocol: "https", hostname: "poi-navigoo.pynfi.com" }, // Images du POI Service
-      { protocol: "https", hostname: "media-service.pynfi.com" } // Images du Media Service
+      { protocol: "https", hostname: "poi-navigoo.pynfi.com" },
+      { protocol: "https", hostname: "media-service.pynfi.com" }
     ],
   },
   async rewrites() {
     return [
-      // 1. POI & Access Logs Service (Backend Initial)
-      // Utilisé pour: Organisations, POIs, Reviews, Logs
+      // ✅ PROXY UNIQUE pour le Backend POI
+      // Gère: Auth (/api/auth/*), POIs (/api/pois/*), Organizations (/api/organizations/*), etc.
       {
         source: '/remote-api/:path*',
         destination: 'https://poi-navigoo.pynfi.com/:path*',
       },
-      // 2. Auth Service (Authentification Centralisée)
-      // Utilisé pour: Login, Register, User Profile
-      {
-        source: '/auth-api/:path*',
-        destination: 'https://auth-service.pynfi.com/:path*',
-      },
-      // 3. Media Service (Gestion des fichiers)
-      // Utilisé pour: Upload, Download images
+      
+      // ✅ OPTIONNEL : Si vous avez vraiment un Media Service séparé
+      // Sinon, commentez cette section
       {
         source: '/media-api/:path*',
-        // Note: J'ai retiré "/webjars" car c'est généralement pour l'UI Swagger. 
-        // L'API est sans doute à la racine (ex: /media/upload).
         destination: 'https://media-service.pynfi.com/:path*', 
       },
     ];

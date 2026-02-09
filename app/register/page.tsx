@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   User, Mail, Phone, Lock, Eye, EyeOff,
-  ArrowRight, Loader2, Building, Camera
+  ArrowRight, Loader2, Building, AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { authService, DEFAULT_ORG_ID, Organization } from "@/services/authService";
@@ -20,18 +20,17 @@ export default function RegisterPage() {
   // State pour les organisations
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loadingOrgs, setLoadingOrgs] = useState(true);
-  const [profilePreview, setProfilePreview] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     username: "",
-    firstName: "",
-    lastName: "",
     email: "",
     phone: "",
     password: "",
-    organizationId: DEFAULT_ORG_ID, // Organisation par défaut
-    file: null as File | null // Fichier photo
+    organizationId: DEFAULT_ORG_ID,
   });
+
+  // Validation du formulaire
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   // Chargement des organisations au montage
   useEffect(() => {
@@ -53,29 +52,109 @@ export default function RegisterPage() {
     } else {
       setFormData({ ...formData, [name]: value });
     }
+
+    // Réinitialiser l'erreur de validation pour ce champ
+    if (validationErrors[name]) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFormData({ ...formData, file });
-      setProfilePreview(URL.createObjectURL(file));
+  // Validation côté client
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    // Username (3-50 caractères, alphanumériques et certains caractères spéciaux)
+    if (!formData.username || formData.username.trim().length < 3) {
+      errors.username = "Le nom d'utilisateur doit contenir au moins 3 caractères";
+    } else if (formData.username.length > 50) {
+      errors.username = "Le nom d'utilisateur ne doit pas dépasser 50 caractères";
+    } else if (!/^[a-zA-Z0-9_.-]+$/.test(formData.username)) {
+      errors.username = "Le nom d'utilisateur ne peut contenir que des lettres, chiffres, points, tirets et underscores";
     }
+
+    // Email
+    if (!formData.email) {
+      errors.email = "L'email est requis";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = "Email invalide";
+    } else if (formData.email.length > 100) {
+      errors.email = "L'email ne doit pas dépasser 100 caractères";
+    }
+
+    // Téléphone (optionnel mais si rempli, doit être valide)
+    if (formData.phone && formData.phone.trim()) {
+      if (!/^[+]?[0-9]{10,15}$/.test(formData.phone)) {
+        errors.phone = "Numéro de téléphone invalide (10-15 chiffres, peut commencer par +)";
+      }
+    }
+
+    // Mot de passe (min 8 caractères avec exigences)
+    if (!formData.password || formData.password.length < 8) {
+      errors.password = "Le mot de passe doit contenir au moins 8 caractères";
+    } else if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(formData.password)) {
+      errors.password = "Le mot de passe doit contenir au moins une majuscule, une minuscule, un chiffre et un caractère spécial (@$!%*?&)";
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError(null);
 
+    // Validation côté client
+    if (!validateForm()) {
+      setError("Veuillez corriger les erreurs du formulaire");
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      await authService.register(formData);
-      alert("Compte créé avec succès ! Connectez-vous.");
+      // ✅ Construire le payload en omettant phone s'il est vide
+      const registerData: any = {
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        organizationId: formData.organizationId
+      };
+
+      // N'ajouter phone que s'il est rempli
+      if (formData.phone && formData.phone.trim()) {
+        registerData.phone = formData.phone;
+      }
+
+      await authService.register(registerData);
+      
+      // Succès
+      alert("✅ Compte créé avec succès ! Vous pouvez maintenant vous connecter.");
       router.push("/signin");
       
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Erreur inconnue");
+      console.error("❌ Erreur inscription:", err);
+      
+      // Extraction du message d'erreur
+      let errorMessage = "Une erreur s'est produite lors de l'inscription";
+      
+      if (err.message) {
+        errorMessage = err.message;
+        
+        // Messages d'erreur spécifiques du backend
+        if (errorMessage.toLowerCase().includes("email") && errorMessage.toLowerCase().includes("already")) {
+          errorMessage = "Cet email est déjà utilisé";
+        } else if (errorMessage.toLowerCase().includes("username") && errorMessage.toLowerCase().includes("already")) {
+          errorMessage = "Ce nom d'utilisateur est déjà pris";
+        } else if (errorMessage.toLowerCase().includes("password")) {
+          errorMessage = "Le mot de passe ne respecte pas les critères de sécurité";
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -127,120 +206,151 @@ export default function RegisterPage() {
             <p className="text-zinc-500 mt-2">Rejoignez une communauté de passionnés.</p>
           </div>
 
+          {/* Message d'erreur global */}
           {error && (
-            <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-sm flex items-center gap-2 border border-red-100 dark:border-red-900">
-              <span>⚠️</span> {error}
+            <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-sm flex items-start gap-3 border border-red-100 dark:border-red-900">
+              <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
           )}
 
-          {/* Photo de profil Uploader */}
-          <div className="flex justify-center mb-6">
-            <div className="relative group">
-                <div className="w-24 h-24 rounded-full bg-zinc-100 dark:bg-zinc-900 border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center overflow-hidden">
-                    {profilePreview ? (
-                        <Image src={profilePreview} alt="Preview" fill className="object-cover" />
-                    ) : (
-                        <User className="text-zinc-400" size={32} />
-                    )}
-                </div>
-                <label className="absolute bottom-0 right-0 p-2 bg-primary text-white rounded-full cursor-pointer hover:bg-primary-dark transition-colors shadow-lg">
-                    <Camera size={16} />
-                    <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
-                </label>
-            </div>
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-4">
             
-            {/* Prénom & Nom */}
-            <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                    <input 
-                      type="text" name="firstName" required
-                      value={formData.firstName} onChange={handleChange}
-                      placeholder="Prénom"
-                      className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white transition-all"
-                    />
-                </div>
-                <div className="space-y-1.5">
-                    <input 
-                      type="text" name="lastName" required
-                      value={formData.lastName} onChange={handleChange}
-                      placeholder="Nom"
-                      className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white transition-all"
-                    />
-                </div>
-            </div>
-
             {/* Username */}
-            <div className="relative group">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 ml-1">
+                Nom d'utilisateur <span className="text-red-500">*</span>
+              </label>
+              <div className="relative group">
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
                 <input 
-                  type="text" name="username" required
-                  value={formData.username} onChange={handleChange}
-                  placeholder="Nom d'utilisateur (ex: KmerExplorer)"
-                  className="w-full pl-12 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white transition-all"
+                  type="text" 
+                  name="username" 
+                  required
+                  value={formData.username} 
+                  onChange={handleChange}
+                  placeholder="VotreNom (ex: KmerExplorer)"
+                  className={`w-full pl-12 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border ${
+                    validationErrors.username 
+                      ? 'border-red-500 focus:border-red-500' 
+                      : 'border-zinc-200 dark:border-zinc-800 focus:border-primary'
+                  } outline-none text-zinc-900 dark:text-white transition-all`}
                 />
+              </div>
+              {validationErrors.username && (
+                <p className="text-xs text-red-500 ml-1 flex items-center gap-1">
+                  <AlertCircle size={12} />
+                  {validationErrors.username}
+                </p>
+              )}
             </div>
 
-            {/* Email & Phone */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Email */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 ml-1">
+                Email <span className="text-red-500">*</span>
+              </label>
               <div className="relative group">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
-                  <input 
-                    type="email" name="email" required
-                    value={formData.email} onChange={handleChange}
-                    placeholder="Email"
-                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white transition-all"
-                  />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
+                <input 
+                  type="email" 
+                  name="email" 
+                  required
+                  value={formData.email} 
+                  onChange={handleChange}
+                  placeholder="votre@email.com"
+                  className={`w-full pl-12 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border ${
+                    validationErrors.email 
+                      ? 'border-red-500 focus:border-red-500' 
+                      : 'border-zinc-200 dark:border-zinc-800 focus:border-primary'
+                  } outline-none text-zinc-900 dark:text-white transition-all`}
+                />
               </div>
+              {validationErrors.email && (
+                <p className="text-xs text-red-500 ml-1 flex items-center gap-1">
+                  <AlertCircle size={12} />
+                  {validationErrors.email}
+                </p>
+              )}
+            </div>
 
+            {/* Téléphone (Optionnel) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 ml-1">
+                Téléphone <span className="text-zinc-400">(optionnel)</span>
+              </label>
               <div className="relative group">
-                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
-                  <input 
-                    type="tel" name="phone"
-                    value={formData.phone} onChange={handleChange}
-                    placeholder="Tél: +237..."
-                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white transition-all"
-                  />
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
+                <input 
+                  type="tel" 
+                  name="phone"
+                  value={formData.phone} 
+                  onChange={handleChange}
+                  placeholder="+237699123456"
+                  className={`w-full pl-12 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border ${
+                    validationErrors.phone 
+                      ? 'border-red-500 focus:border-red-500' 
+                      : 'border-zinc-200 dark:border-zinc-800 focus:border-primary'
+                  } outline-none text-zinc-900 dark:text-white transition-all`}
+                />
               </div>
+              {validationErrors.phone && (
+                <p className="text-xs text-red-500 ml-1 flex items-center gap-1">
+                  <AlertCircle size={12} />
+                  {validationErrors.phone}
+                </p>
+              )}
             </div>
 
             {/* Organization Selector */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-500 ml-1">Organisation</label>
+              <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 ml-1">
+                Organisation <span className="text-red-500">*</span>
+              </label>
               <div className="relative group">
-                <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
+                <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 z-10" size={20} />
                 <select
-                    name="organizationId"
-                    value={formData.organizationId}
-                    onChange={handleChange}
-                    disabled={loadingOrgs}
-                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white appearance-none cursor-pointer"
+                  name="organizationId"
+                  value={formData.organizationId}
+                  onChange={handleChange}
+                  disabled={loadingOrgs}
+                  className="w-full pl-12 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white appearance-none cursor-pointer"
                 >
-                    <option value={DEFAULT_ORG_ID}>Utilisateur Standard (Par défaut)</option>
-                    {organizations
-                        .filter(org => org.organizationId !== DEFAULT_ORG_ID)
-                        .map(org => (
-                            <option key={org.organizationId} value={org.organizationId}>
-                                {org.organizationName}
-                            </option>
-                        ))
-                    }
+                  <option value={DEFAULT_ORG_ID}>Utilisateur Standard (Par défaut)</option>
+                  {organizations
+                    .filter(org => org.organizationId !== DEFAULT_ORG_ID)
+                    .map(org => (
+                      <option key={org.organizationId} value={org.organizationId}>
+                        {org.organizationName}
+                      </option>
+                    ))
+                  }
                 </select>
-                {loadingOrgs && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-primary" size={16} />}
+                {loadingOrgs && (
+                  <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-primary" size={16} />
+                )}
               </div>
             </div>
 
             {/* Password */}
-            <div className="relative group">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 ml-1">
+                Mot de passe <span className="text-red-500">*</span>
+              </label>
+              <div className="relative group">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
                 <input 
                   type={showPassword ? "text" : "password"} 
-                  name="password" required
-                  value={formData.password} onChange={handleChange}
-                  placeholder="Mot de passe"
-                  className="w-full pl-12 pr-12 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white transition-all"
+                  name="password" 
+                  required
+                  value={formData.password} 
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  className={`w-full pl-12 pr-12 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border ${
+                    validationErrors.password 
+                      ? 'border-red-500 focus:border-red-500' 
+                      : 'border-zinc-200 dark:border-zinc-800 focus:border-primary'
+                  } outline-none text-zinc-900 dark:text-white transition-all`}
                 />
                 <button 
                   type="button" 
@@ -249,6 +359,18 @@ export default function RegisterPage() {
                 >
                   {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
                 </button>
+              </div>
+              {validationErrors.password && (
+                <p className="text-xs text-red-500 ml-1 flex items-start gap-1">
+                  <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
+                  <span>{validationErrors.password}</span>
+                </p>
+              )}
+              {!validationErrors.password && (
+                <p className="text-xs text-zinc-400 ml-1">
+                  Min. 8 caractères avec majuscule, minuscule, chiffre et caractère spécial
+                </p>
+              )}
             </div>
 
             {/* Submit Button */}
@@ -257,7 +379,13 @@ export default function RegisterPage() {
                 disabled={isLoading}
                 className="w-full h-12 bg-primary hover:bg-primary-dark text-white rounded-xl font-bold text-lg hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-3 shadow-lg shadow-primary/20"
               >
-                {isLoading ? <Loader2 className="animate-spin" /> : <>Créer mon compte <ArrowRight size={20}/></>}
+                {isLoading ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <>
+                    Créer mon compte <ArrowRight size={20}/>
+                  </>
+                )}
               </Button>
             </div>
           </form>
@@ -265,7 +393,7 @@ export default function RegisterPage() {
           {/* Footer */}
           <div className="mt-8 text-center space-y-4">
             <p className="text-xs text-zinc-400">
-              En vous inscrivant, vous acceptez nos <span className="text-primary cursor-pointer">Conditions</span>.
+              En vous inscrivant, vous acceptez nos <span className="text-primary cursor-pointer hover:underline">Conditions d'utilisation</span>.
             </p>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Vous avez déjà un compte ? 

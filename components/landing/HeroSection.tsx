@@ -63,7 +63,7 @@ export const HeroSection = () => {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 mb-12">
-              <Link href="/">
+              <Link href="/navigoo">
                 <Button className="w-full sm:w-auto bg-primary hover:bg-primary-dark text-white px-8 py-6 text-lg gap-2 shadow-xl shadow-primary/20">
                   Commencer l'exploration
                   <ArrowRight size={20} />

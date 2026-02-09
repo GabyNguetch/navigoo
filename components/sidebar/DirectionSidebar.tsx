@@ -54,7 +54,7 @@ export const DirectionsSidebar = ({
       animate={{ x: isOpen ? "0%" : "-100%" }}
       exit={{ x: "-100%" }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className="fixed top-0 left-0 md:left-[72px] h-full w-full md:w-[400px] bg-white dark:bg-zinc-900 shadow-2xl z-[60] flex flex-col border-r border-zinc-200 dark:border-zinc-800 font-sans overflow-hidden"
+      className="fixed top-16 left-0 md:left-[72px] h-full w-full md:w-[400px] bg-white dark:bg-zinc-900 shadow-2xl z-[60] flex flex-col border-r border-zinc-200 dark:border-zinc-800 font-sans overflow-hidden"
     >
       {/* HEADER */}
       <div className="bg-primary px-4 py-4 shadow-md text-white z-10 shrink-0">

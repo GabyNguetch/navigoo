@@ -10,7 +10,7 @@ import {
   ArrowLeft, Save, Loader2, Camera, MapPin, 
   Hash, Globe, Phone, Building2, Flag, Mail, 
   ScanLine, Type, Sparkles, CheckCircle2, CircleDashed,
-  Target, ImagePlus, LocateFixed, Maximize, Check
+  Target, ImagePlus, LocateFixed, Maximize, Check, Upload, X
 } from "lucide-react";
 
 // Imports pour la carte
@@ -26,8 +26,9 @@ import { FormSelect } from "@/components/ui/form/FormSelect";
 import Image from "next/image";
 import { clsx } from "clsx";
 import { poiService } from "@/services/poiService";
+import { mediaService } from "@/services/mediaService";
 
-// Clé API MapTiler (la même que dans page.tsx)
+// Clé API MapTiler
 const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9"; 
 
 const AMENITIES_OPTIONS = [
@@ -42,7 +43,9 @@ function AddPoiContent() {
   
   // States
   const [isLoading, setIsLoading] = useState(true);
-  const [isMapOpen, setIsMapOpen] = useState(false); // Modal Carte
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const [postalCode, setPostalCode] = useState(""); 
   const [keywordsString, setKeywordsString] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -55,7 +58,7 @@ function AddPoiContent() {
     poi_category: "",
     poi_description: "",
     poi_amenities: [],
-    location: { latitude: 3.86667, longitude: 11.51667 }, // Défaut: Yaoundé
+    location: { latitude: 3.86667, longitude: 11.51667 },
     address_informal: "",
     address_city: "Yaoundé",
     address_country: "Cameroun",
@@ -116,17 +119,48 @@ function AddPoiContent() {
     setFormData(prev => ({ ...prev, poi_amenities: newAmenities }));
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const res = reader.result as string;
-            setPreviewImage(res);
-            setFormData(prev => ({ ...prev, poi_images_urls: [res] }));
-        };
-        reader.readAsDataURL(file);
+        setIsUploadingImage(true);
+        
+        // Créer un preview local immédiatement
+        const localPreview = URL.createObjectURL(file);
+        setPreviewImage(localPreview);
+        
+        try {
+            // 1. Upload vers Media Service
+            const media = await mediaService.uploadFile(file, "pois_galleries");
+            
+            // 2. Récupérer l'URL propre
+            const imageUrl = mediaService.getMediaUrl(media.id);
+            
+            // Conversion localhost -> URL Réelle si nécessaire
+            const finalUrl = imageUrl.replace('http://localhost:3000/media-api', 'https://media-service.pynfi.com');
+
+            // Révoquer l'URL locale et utiliser l'URL finale
+            URL.revokeObjectURL(localPreview);
+            setPreviewImage(finalUrl);
+            
+            setFormData(prev => ({ 
+                ...prev, 
+                poi_images_urls: [finalUrl]
+            }));
+
+            console.log("📸 Image liée avec succès:", finalUrl);
+        } catch (error) {
+            console.error("Erreur upload:", error);
+            alert("Erreur lors de l'upload de l'image");
+            setPreviewImage(null);
+        } finally {
+            setIsUploadingImage(false);
+        }
     }
+  };
+
+  const handleRemoveImage = () => {
+    setPreviewImage(null);
+    setFormData(prev => ({ ...prev, poi_images_urls: [] }));
   };
 
   // Gestion Carte
@@ -151,68 +185,117 @@ function AddPoiContent() {
     }));
     setIsMapOpen(false);
   };
+
 const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation basique
-    if (!formData.poi_name || !formData.poi_category) {
-        alert("Veuillez renseigner au moins le nom et la catégorie.");
+    // Validation des champs requis
+    if (!formData.poi_name?.trim()) {
+        alert("❌ Le nom du lieu est requis.");
         return;
     }
 
-    setIsLoading(true);
+    if (!formData.poi_category) {
+        alert("❌ La catégorie est requise.");
+        return;
+    }
+
+    if (!formData.location?.latitude || !formData.location?.longitude) {
+        alert("❌ Veuillez définir la position sur la carte.");
+        return;
+    }
+
+    setIsSubmitting(true);
 
     try {
-        // Préparer les données avec keywords convertis
-        const dataToSubmit = {
-            ...formData,
-            poi_keywords: keywordsString 
-                ? keywordsString.split(',').map(k => k.trim()).filter(k => k.length > 0)
-                : [],
-            address_state_province: "Adamaoua" // Province de Ngaoundéré
+        // Nettoyage des mots-clés
+        const cleanKeywords = keywordsString
+            .split(/[,\s]+/) // Split par virgule OU espace
+            .map(k => k.trim())
+            .filter(k => k.length > 0);
+
+        // Préparation du payload avec tous les champs requis
+        const submissionData = {
+            poi_name: formData.poi_name.trim(),
+            poi_category: formData.poi_category,
+            poi_type: formData.poi_type || "OTHER",
+            poi_description: formData.poi_description || "",
+            location: formData.location,
+            address_informal: formData.address_informal || "",
+            address_city: formData.address_city || "Ngaoundéré",
+            address_state_province: "Adamaoua", // REQUIS par le backend
+            address_country: formData.address_country || "Cameroun",
+            poi_contacts: {
+                phone: formData.poi_contacts?.phone || "",
+                website: formData.poi_contacts?.website || ""
+            },
+            poi_images_urls: formData.poi_images_urls || [],
+            poi_amenities: formData.poi_amenities || [],
+            poi_keywords: cleanKeywords,
+            postalCode: postalCode || "0000"
         };
 
-        if (editId) {
-            await poiService.updatePoi(editId, dataToSubmit);
-            alert("Lieu mis à jour avec succès !");
-        } else {
-            await poiService.createPoi(dataToSubmit);
-            alert("Nouveau point d'intérêt publié sur Navigoo !");
-        }
+        console.log("📤 Données à envoyer:", submissionData);
+
+        // Appel au service
+        const result = await poiService.createPoi(submissionData);
         
-        router.push("/");
-        router.refresh();
+        console.log("✅ POI créé:", result);
+        
+        // Message de succès
+        alert("🎉 Félicitations ! Votre lieu a été créé avec succès.\n\nIl sera visible sur la carte après validation par notre équipe.");
+        
+        // Redirection automatique au profil
+        router.push("/profile");
+        router.refresh(); 
+
     } catch (err: any) {
-        console.error("❌ Erreur Backend:", err);
-        alert(`Erreur lors de l'enregistrement : ${err.message}`);
+        console.error("❌ Erreur lors de la création:", err);
+        
+        // Message d'erreur détaillé
+        const errorMessage = err.message || "Une erreur inconnue est survenue";
+        alert(`❌ Échec de la création du lieu :\n\n${errorMessage}\n\nVeuillez réessayer ou contacter le support.`);
     } finally {
-        setIsLoading(false);
+        setIsSubmitting(false);
     }
 };
-  if (isLoading) return <div className="h-screen w-full bg-zinc-50 dark:bg-black flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40}/></div>;
+  
+  if (isLoading) {
+    return (
+      <div className="h-screen w-full bg-zinc-50 dark:bg-black flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="animate-spin text-violet-600 mx-auto" size={48}/>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="h-screen w-full bg-zinc-50 dark:bg-black font-sans overflow-y-auto">
+    <div className="min-h-screen w-full bg-gradient-to-br from-zinc-50 via-violet-50/30 to-zinc-100 dark:from-black dark:via-violet-950/20 dark:to-zinc-950 font-sans overflow-y-auto">
       
       {/* HEADER FIXE */}
-      <div className="sticky top-0 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 z-40 py-3 shadow-sm">
+      <div className="sticky top-0 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border-b border-zinc-200 dark:border-zinc-800 z-40 py-4 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 lg:px-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => router.back()} className="p-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700">
+                    <button 
+                      onClick={() => router.back()} 
+                      className="p-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-all duration-200 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 hover:scale-105 active:scale-95"
+                    >
                         <ArrowLeft size={20} className="text-zinc-600 dark:text-zinc-400" />
                     </button>
                     <div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-primary uppercase tracking-wider bg-primary/10 px-2 py-0.5 rounded-full">
+                        <div className="flex items-center gap-2.5">
+                            <span className="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider bg-violet-100 dark:bg-violet-900/30 px-2.5 py-1 rounded-full">
                                 {editId ? "Édition" : "Nouveau"}
                             </span>
                             <h1 className="text-lg md:text-xl font-bold text-zinc-900 dark:text-white leading-none">
                                 Bienvenue, Explorateur
                             </h1>
                         </div>
-                        <p className="text-xs md:text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 mt-1">
-                            <Sparkles size={12} className="text-yellow-500 fill-yellow-500" /> 
+                        <p className="text-xs md:text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 mt-1.5">
+                            <Sparkles size={12} className="text-amber-500 fill-amber-500" /> 
                             Partagez vos meilleures découvertes et enrichissez la carte.
                         </p>
                     </div>
@@ -220,10 +303,21 @@ const handleSubmit = async (e: React.FormEvent) => {
                 <div className="flex items-center justify-end">
                     <Button 
                         onClick={handleSubmit} 
+                        disabled={isSubmitting || isUploadingImage}
                         variant="primary" 
-                        className="px-6 py-2 h-11 text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-transform flex items-center gap-2"
+                        className="px-6 py-2.5 h-12 text-sm font-bold shadow-lg shadow-violet-600/20 hover:shadow-violet-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center gap-2.5 bg-gradient-to-r from-violet-600 to-violet-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                     >
-                        <Save size={18} /> {editId ? "Mettre à jour" : "Publier le lieu"}
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 size={18} className="animate-spin" />
+                            Envoi en cours...
+                          </>
+                        ) : (
+                          <>
+                            <Save size={18} /> 
+                            {editId ? "Mettre à jour" : "Publier le lieu"}
+                          </>
+                        )}
                     </Button>
                 </div>
             </div>
@@ -234,9 +328,9 @@ const handleSubmit = async (e: React.FormEvent) => {
         <form className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
             {/* GAUCHE : INFOS */}
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-5 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-5">
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 border border-zinc-200 dark:border-zinc-800 shadow-lg shadow-zinc-200/50 dark:shadow-zinc-950/50 space-y-6 transition-all duration-300 hover:shadow-xl hover:shadow-zinc-300/50 dark:hover:shadow-zinc-900/50">
                 <div className="flex items-center gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800">
-                    <div className="p-2.5 bg-violet-100 dark:bg-violet-900/30 rounded-xl text-primary">
+                    <div className="p-2.5 bg-gradient-to-br from-violet-100 to-violet-50 dark:from-violet-900/30 dark:to-violet-800/20 rounded-xl text-violet-600 dark:text-violet-400">
                         <ScanLine size={20} />
                     </div>
                     <div>
@@ -245,71 +339,153 @@ const handleSubmit = async (e: React.FormEvent) => {
                     </div>
                 </div>
 
-                {/* Upload Photo */}
-                <div className="relative h-40 w-full bg-zinc-100 dark:bg-zinc-800 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 overflow-hidden group cursor-pointer transition-colors hover:border-primary hover:bg-primary/5">
+                {/* Upload Photo avec Preview Amélioré */}
+                <div className="relative h-48 w-full bg-gradient-to-br from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 overflow-hidden group transition-all duration-300 hover:border-violet-400 dark:hover:border-violet-600 hover:shadow-lg">
                     {previewImage ? (
-                        <Image src={previewImage} alt="Cover" fill className="object-cover transition-transform group-hover:scale-105" />
+                        <>
+                            {/* Image avec effet de chargement */}
+                            <div className="relative w-full h-full">
+                                <Image 
+                                  src={previewImage} 
+                                  alt="Cover" 
+                                  fill 
+                                  className={clsx(
+                                    "object-cover transition-all duration-500",
+                                    isUploadingImage ? "blur-md scale-105" : "blur-0 scale-100"
+                                  )} 
+                                />
+                                
+                                {/* Overlay de chargement */}
+                                {isUploadingImage && (
+                                  <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center z-10 animate-in fade-in duration-300">
+                                    <Loader2 className="animate-spin text-white mb-3" size={40} />
+                                    <p className="text-white text-sm font-semibold">Upload en cours...</p>
+                                  </div>
+                                )}
+                                
+                                {/* Bouton de suppression */}
+                                {!isUploadingImage && (
+                                  <button
+                                    type="button"
+                                    onClick={handleRemoveImage}
+                                    className="absolute top-3 right-3 p-2 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 transition-all duration-200 hover:scale-110 active:scale-95 z-20 opacity-0 group-hover:opacity-100"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                )}
+
+                                {/* Badge de succès */}
+                                {!isUploadingImage && (
+                                  <div className="absolute bottom-3 left-3 bg-green-600 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                    <CheckCircle2 size={14} />
+                                    Image chargée
+                                  </div>
+                                )}
+                            </div>
+                        </>
                     ) : (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400">
-                            <ImagePlus size={24} className="mb-2 group-hover:text-primary" />
-                            <span className="text-xs font-semibold">Ajouter une couverture</span>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400 cursor-pointer">
+                            <div className="p-4 bg-violet-100 dark:bg-violet-900/30 rounded-full mb-3 group-hover:scale-110 transition-transform duration-300">
+                              <ImagePlus size={28} className="text-violet-600 dark:text-violet-400" />
+                            </div>
+                            <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Ajouter une photo de couverture</span>
+                            <span className="text-xs text-zinc-400 mt-1">Cliquez ou glissez une image</span>
                         </div>
                     )}
-                    <input type="file" onChange={handleImageChange} accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                    <input 
+                      type="file" 
+                      onChange={handleImageChange} 
+                      accept="image/*" 
+                      disabled={isUploadingImage}
+                      className="absolute inset-0 opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed" 
+                    />
                 </div>
 
-                <div className="space-y-12">
+                <div className="space-y-5">
                     <FormInput 
-                        label="Nom du lieu" name="poi_name" 
-                        value={formData.poi_name} onChange={handleChange} 
-                        icon={<Type size={16}/>} className="h-11" placeholder="Ex: Restaurant Le Délice"
+                        label="Nom du lieu" 
+                        name="poi_name" 
+                        value={formData.poi_name} 
+                        onChange={handleChange} 
+                        icon={<Type size={16}/>} 
+                        className="h-12 transition-all duration-200 focus-within:ring-2 focus-within:ring-violet-500/20" 
+                        placeholder="Ex: Restaurant Le Délice"
+                        required
                     />
                     
                     <FormSelect 
-                        label="Catégorie" name="poi_category" 
-                        value={formData.poi_category} onChange={handleChange}
+                        label="Catégorie" 
+                        name="poi_category" 
+                        value={formData.poi_category} 
+                        onChange={handleChange}
                         icon={<Hash size={16}/>}
                         options={CATEGORIES.map(c => ({ id: c.id, label: c.label }))}
+                        required
                     />
 
                     <FormInput 
-                        as="textarea" label="Courte description" name="poi_description"
-                        value={formData.poi_description} onChange={handleChange} 
-                        icon={<Type size={16}/>} style={{ minHeight: '80px', maxHeight: '120px' }}
+                        as="textarea" 
+                        label="Courte description" 
+                        name="poi_description"
+                        value={formData.poi_description} 
+                        onChange={handleChange} 
+                        icon={<Type size={16}/>} 
+                        style={{ minHeight: '100px', maxHeight: '150px' }}
+                        placeholder="Décrivez brièvement ce lieu..."
+                        className="transition-all duration-200 focus-within:ring-2 focus-within:ring-violet-500/20"
                     />
 
                     <div className="grid grid-cols-2 gap-3">
                         <FormInput 
-                            label="Téléphone" name="phone" 
-                            value={formData.poi_contacts?.phone} onChange={handleChange}
-                            icon={<Phone size={16}/>} className="h-11" 
+                            label="Téléphone" 
+                            name="phone" 
+                            value={formData.poi_contacts?.phone} 
+                            onChange={handleChange}
+                            icon={<Phone size={16}/>} 
+                            className="h-12" 
+                            placeholder="+237 6XX XXX XXX"
                         />
                         <FormInput 
-                            label="Site Web" name="website" 
-                            value={formData.poi_contacts?.website} onChange={handleChange}
-                            icon={<Globe size={16}/>} className="h-11" placeholder="facultatif"
+                            label="Site Web" 
+                            name="website" 
+                            value={formData.poi_contacts?.website} 
+                            onChange={handleChange}
+                            icon={<Globe size={16}/>} 
+                            className="h-12" 
+                            placeholder="www.exemple.com"
                         />
                     </div>
 
                     <FormInput 
-                        label="Mots-clés" name="keywords" 
-                        value={keywordsString} onChange={(e) => setKeywordsString(e.target.value)}
-                        icon={<Hash size={16}/>} className="h-11" placeholder="tag1, tag2..."
+                        label="Mots-clés" 
+                        name="keywords" 
+                        value={keywordsString} 
+                        onChange={(e) => setKeywordsString(e.target.value)}
+                        icon={<Hash size={16}/>} 
+                        className="h-12" 
+                        placeholder="restaurant, africain, bastos..."
                     />
 
                     <div>
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">Équipements</label>
-                        <div className="flex flex-wrap gap-1.5">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-3 ml-1 block">Équipements & Services</label>
+                        <div className="flex flex-wrap gap-2">
                             {AMENITIES_OPTIONS.map(am => (
-                                <button key={am} type="button" onClick={() => handleAmenityToggle(am)}
-                                    className={clsx(
-                                        "px-3 py-1.5 rounded-lg text-[11px] font-bold border flex items-center gap-1.5 transition-all",
-                                        formData.poi_amenities?.includes(am)
-                                        ? "bg-zinc-800 text-white border-zinc-800 dark:bg-white dark:text-black shadow-sm" 
-                                        : "bg-white dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50"
-                                    )}
+                                <button 
+                                  key={am} 
+                                  type="button" 
+                                  onClick={() => handleAmenityToggle(am)}
+                                  className={clsx(
+                                      "px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-2 transition-all duration-200 hover:scale-105 active:scale-95",
+                                      formData.poi_amenities?.includes(am)
+                                      ? "bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow-md shadow-violet-600/20" 
+                                      : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-violet-300 dark:hover:border-violet-600"
+                                  )}
                                 >
-                                    {formData.poi_amenities?.includes(am) ? <CheckCircle2 size={12}/> : <CircleDashed size={12}/>}
+                                    {formData.poi_amenities?.includes(am) ? (
+                                      <CheckCircle2 size={14} className="shrink-0"/>
+                                    ) : (
+                                      <CircleDashed size={14} className="shrink-0"/>
+                                    )}
                                     {am}
                                 </button>
                             ))}
@@ -319,23 +495,20 @@ const handleSubmit = async (e: React.FormEvent) => {
             </div>
 
             {/* DROITE : COORDONNÉES */}
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-5 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-5 h-full flex flex-col">
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 border border-zinc-200 dark:border-zinc-800 shadow-lg shadow-zinc-200/50 dark:shadow-zinc-950/50 space-y-6 h-full flex flex-col transition-all duration-300 hover:shadow-xl hover:shadow-zinc-300/50 dark:hover:shadow-zinc-900/50">
                 <div className="flex items-center gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800">
-                    <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl text-blue-600">
+                    <div className="p-2.5 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/30 dark:to-blue-800/20 rounded-xl text-blue-600 dark:text-blue-400">
                         <MapPin size={20} />
                     </div>
                     <div>
-                        <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Coordonnées</h2>
-                        <p className="text-[11px] text-zinc-500">Sélectionnez la position exacte sur la carte.</p>
+                        <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Localisation</h2>
+                        <p className="text-[11px] text-zinc-500">Définissez la position exacte sur la carte.</p>
                     </div>
                 </div>
 
-                {/* --- VUE MINIATURE AVEC BOUTON --- */}
-                <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-inner group">
-                    {/* Carte Miniature Statique (MapLibre avec interactivité désactivée) */}
-                    <div className="absolute inset-0 grayscale-[50%] group-hover:grayscale-0 transition-all duration-500">
-                       {/* Note: Pour éviter trop de lourdeur, on peut aussi utiliser une image statique, 
-                           mais ici j'utilise la Map désactivée pour la précision visuelle */}
+                {/* VUE MINIATURE AVEC BOUTON */}
+                <div className="relative w-full h-52 rounded-2xl overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 shadow-inner group">
+                    <div className="absolute inset-0 grayscale-[40%] group-hover:grayscale-0 transition-all duration-500">
                         <Map
                             initialViewState={{
                                 longitude: formData.location?.longitude || 11.5,
@@ -349,63 +522,78 @@ const handleSubmit = async (e: React.FormEvent) => {
                             attributionControl={false}
                         >
                             <Marker longitude={formData.location?.longitude || 0} latitude={formData.location?.latitude || 0}>
-                                <MapPin size={32} className="text-primary fill-primary/20 drop-shadow-md" />
+                                <MapPin size={36} className="text-violet-600 fill-violet-600/20 drop-shadow-lg animate-bounce" />
                             </Marker>
                         </Map>
                     </div>
 
                     {/* Overlay d'Action */}
-                    <div className="absolute inset-0 bg-black/10 hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
-                        <div className="pointer-events-auto transform transition-transform group-hover:scale-105">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent group-hover:from-black/60 transition-all duration-300 flex items-center justify-center pointer-events-none">
+                        <div className="pointer-events-auto transform transition-all duration-300 group-hover:scale-105">
                             <button 
                                 type="button"
                                 onClick={() => { setTempLocation(formData.location!); setIsMapOpen(true); }}
-                                className="bg-white text-zinc-800 px-5 py-2.5 rounded-full font-bold shadow-xl flex items-center gap-2 text-sm border-2 border-primary/20 hover:border-primary transition-all"
+                                className="bg-white text-zinc-800 px-6 py-3 rounded-full font-bold shadow-2xl flex items-center gap-2.5 text-sm border-2 border-violet-200 hover:border-violet-400 transition-all duration-200 hover:shadow-violet-400/30"
                             >
-                                <Maximize size={16} className="text-primary"/> 
-                                Choisir sur la carte
+                                <Maximize size={18} className="text-violet-600"/> 
+                                Ouvrir la carte
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <div className="space-y-12 pt-2 flex-1">
-                    {/* Bloc info GPS Rapide */}
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-950 border border-dashed border-zinc-200 dark:border-zinc-700 rounded-xl flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Target size={16} className="text-zinc-400"/>
-                            <div className="text-xs font-mono font-bold text-zinc-600 dark:text-zinc-300">
+                <div className="space-y-5 pt-2 flex-1">
+                    {/* Bloc info GPS */}
+                    <div className="p-4 bg-gradient-to-br from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-900 border-2 border-dashed border-zinc-200 dark:border-zinc-700 rounded-xl flex items-center justify-between transition-all duration-300 hover:border-violet-300 dark:hover:border-violet-700">
+                        <div className="flex items-center gap-2.5">
+                            <Target size={18} className="text-violet-600 dark:text-violet-400"/>
+                            <div className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300">
                                 {formData.location?.latitude.toFixed(6)}, {formData.location?.longitude.toFixed(6)}
                             </div>
                         </div>
-                        <span className="text-[10px] text-green-600 font-bold bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] text-green-600 font-bold bg-green-100 dark:bg-green-900/30 px-2.5 py-1 rounded-full flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 bg-green-600 rounded-full animate-pulse"></div>
                             Synchronisé
                         </span>
                     </div>
 
                     <FormInput 
-                        label="Adresse / Lieu-dit" name="address_informal"
-                        value={formData.address_informal} onChange={handleChange} 
-                        icon={<MapPin size={16}/>} className="h-11" placeholder="Ex: Bastos, Face ambassade..."
+                        label="Adresse / Lieu-dit" 
+                        name="address_informal"
+                        value={formData.address_informal} 
+                        onChange={handleChange} 
+                        icon={<MapPin size={16}/>} 
+                        className="h-12" 
+                        placeholder="Ex: Bastos, Face ambassade USA..."
                     />
 
                     <div className="grid grid-cols-2 gap-3">
                         <FormInput 
-                            label="Ville" name="address_city"
-                            value={formData.address_city} onChange={handleChange} 
-                            icon={<Building2 size={16}/>} className="h-11"
+                            label="Ville" 
+                            name="address_city"
+                            value={formData.address_city} 
+                            onChange={handleChange} 
+                            icon={<Building2 size={16}/>} 
+                            className="h-12"
                         />
                         <FormInput 
-                            label="Pays" name="address_country"
-                            value={formData.address_country} onChange={handleChange} 
-                            icon={<Flag size={16}/>} className="h-11"
+                            label="Pays" 
+                            name="address_country"
+                            value={formData.address_country} 
+                            onChange={handleChange} 
+                            icon={<Flag size={16}/>} 
+                            className="h-12"
                         />
                     </div>
 
                     <FormInput 
-                        label="Code Postal" name="postalCode"
-                        value={postalCode} onChange={(e) => setPostalCode(e.target.value)} 
-                        icon={<Mail size={16}/>} className="h-11"
+                        label="Code Postal" 
+                        name="postalCode"
+                        value={postalCode} 
+                        onChange={(e) => setPostalCode(e.target.value)} 
+                        icon={<Mail size={16}/>} 
+                        className="h-12"
+                        placeholder="Optionnel"
                     />
                 </div>
             </div>
@@ -413,24 +601,25 @@ const handleSubmit = async (e: React.FormEvent) => {
         </form>
       </div>
 
-      {/* --- MODALE CARTE PLEIN ÉCRAN --- */}
+      {/* MODALE CARTE PLEIN ÉCRAN */}
       {isMapOpen && (
-        <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 animate-in fade-in zoom-in-95 duration-200">
-            <div className="bg-white dark:bg-zinc-900 w-full h-full rounded-3xl overflow-hidden relative shadow-2xl flex flex-col">
+        <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-0 md:p-6 animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-white dark:bg-zinc-900 w-full h-full md:rounded-3xl overflow-hidden relative shadow-2xl flex flex-col">
                 
                 {/* En-tête Modal */}
-                <div className="absolute top-4 left-4 right-4 z-10 flex justify-between pointer-events-none">
-                    <div className="bg-white/90 dark:bg-zinc-800/90 backdrop-blur px-4 py-2 rounded-full shadow-lg border border-zinc-200 dark:border-zinc-700 pointer-events-auto">
-                        <h3 className="text-sm font-bold flex items-center gap-2">
-                            <MapPin size={16} className="text-primary"/>
-                            Glissez le marqueur ou cliquez pour définir
+                <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-start pointer-events-none gap-3">
+                    <div className="bg-white/95 dark:bg-zinc-800/95 backdrop-blur-lg px-5 py-3 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-700 pointer-events-auto max-w-md">
+                        <h3 className="text-sm font-bold flex items-center gap-2.5 text-zinc-800 dark:text-zinc-100">
+                            <MapPin size={18} className="text-violet-600"/>
+                            Positionnez le marqueur
                         </h3>
+                        <p className="text-xs text-zinc-500 mt-1">Glissez le marqueur ou cliquez sur la carte</p>
                     </div>
                     <button 
                         onClick={() => setIsMapOpen(false)}
-                        className="bg-white text-zinc-800 p-2 rounded-full shadow-lg pointer-events-auto hover:bg-zinc-100"
+                        className="bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 p-3 rounded-full shadow-xl pointer-events-auto hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-all duration-200 hover:scale-110 active:scale-95 border border-zinc-200 dark:border-zinc-700"
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        <X size={20} strokeWidth={2.5} />
                     </button>
                 </div>
 
@@ -456,28 +645,48 @@ const handleSubmit = async (e: React.FormEvent) => {
                             onDragEnd={handleDragEnd}
                             anchor="bottom"
                         >
-                            <div className="flex flex-col items-center cursor-move hover:scale-110 transition-transform">
-                                <Flag size={40} className="text-red-600 fill-red-600 drop-shadow-xl filter" strokeWidth={2} />
-                                <div className="w-2.5 h-2.5 bg-black/50 rounded-full blur-[2px] mt-[-2px]"></div>
+                            <div className="flex flex-col items-center cursor-move hover:scale-110 transition-transform duration-200 animate-bounce">
+                                <Flag size={44} className="text-red-600 fill-red-600 drop-shadow-2xl filter" strokeWidth={2.5} />
+                                <div className="w-3 h-3 bg-black/50 rounded-full blur-[3px] mt-[-4px]"></div>
                             </div>
                         </Marker>
                     </Map>
                 </div>
 
-                {/* Footer Modal avec Actions */}
-                <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 p-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
-                    <div className="flex items-center gap-2 text-zinc-500 text-xs font-mono">
-                       <LocateFixed size={14}/>
-                       Lat: <span className="text-zinc-800 dark:text-zinc-200 font-bold">{tempLocation.latitude.toFixed(6)}</span> 
-                       Lon: <span className="text-zinc-800 dark:text-zinc-200 font-bold">{tempLocation.longitude.toFixed(6)}</span>
+                {/* Footer Modal */}
+                <div className="bg-white dark:bg-zinc-900 border-t-2 border-zinc-200 dark:border-zinc-800 p-5 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
+                    <div className="flex items-center gap-3 text-zinc-500 text-xs font-mono bg-zinc-50 dark:bg-zinc-950 px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                       <LocateFixed size={16} className="text-violet-600"/>
+                       <span className="font-bold text-zinc-700 dark:text-zinc-300">
+                         {tempLocation.latitude.toFixed(6)}, {tempLocation.longitude.toFixed(6)}
+                       </span>
                     </div>
                     
                     <div className="flex gap-3 w-full md:w-auto">
-                        <Button variant="secondary" onClick={() => navigator.geolocation.getCurrentPosition(p => setTempLocation({latitude: p.coords.latitude, longitude: p.coords.longitude}))} size="md" className="flex-1 md:flex-none">
+                        <Button 
+                          variant="secondary" 
+                          onClick={() => {
+                            if ("geolocation" in navigator) {
+                              navigator.geolocation.getCurrentPosition(p => {
+                                setTempLocation({
+                                  latitude: p.coords.latitude, 
+                                  longitude: p.coords.longitude
+                                });
+                              });
+                            }
+                          }}
+                          size="md" 
+                          className="flex-1 md:flex-none h-12 gap-2 font-bold"
+                        >
                             <LocateFixed size={18} /> Ma position
                         </Button>
-                        <Button onClick={saveMapLocation} variant="primary" size="md" className="flex-1 md:flex-none font-bold gap-2">
-                            <Check size={18} /> Valider la position
+                        <Button 
+                          onClick={saveMapLocation} 
+                          variant="primary" 
+                          size="md" 
+                          className="flex-1 md:flex-none font-bold gap-2.5 h-12 bg-gradient-to-r from-violet-600 to-violet-500 shadow-lg shadow-violet-600/30"
+                        >
+                            <Check size={18} strokeWidth={3} /> Valider la position
                         </Button>
                     </div>
                 </div>
@@ -492,7 +701,11 @@ const handleSubmit = async (e: React.FormEvent) => {
 // Wrapper Suspense pour Next.js 
 export default function AddPoiPage() {
     return (
-        <Suspense fallback={<div className="h-screen w-full bg-white dark:bg-black" />}>
+        <Suspense fallback={
+          <div className="h-screen w-full bg-white dark:bg-black flex items-center justify-center">
+            <Loader2 className="animate-spin text-violet-600" size={48} />
+          </div>
+        }>
             <AddPoiContent />
         </Suspense>
     )
@@ -505,40 +718,66 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\app\register\page.tsx
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   User, Mail, Phone, Lock, Eye, EyeOff,
-  ArrowRight, Loader2
+  ArrowRight, Loader2, Building, Camera
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { authService } from "@/services/authService";
+import { authService, DEFAULT_ORG_ID, Organization } from "@/services/authService";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // State pour les organisations
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [loadingOrgs, setLoadingOrgs] = useState(true);
+  const [profilePreview, setProfilePreview] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     username: "",
+    firstName: "",
+    lastName: "",
     email: "",
     phone: "",
-    password: ""
+    password: "",
+    organizationId: DEFAULT_ORG_ID, // Organisation par défaut
+    file: null as File | null // Fichier photo
   });
 
+  // Chargement des organisations au montage
+  useEffect(() => {
+    const loadOrgs = async () => {
+      const orgs = await authService.getOrganizations();
+      setOrganizations(orgs);
+      setLoadingOrgs(false);
+    };
+    loadOrgs();
+  }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
-    // Nettoyage du téléphone : garder seulement +, chiffres
+    // Nettoyage du téléphone
     if (name === "phone") {
       const cleaned = value.replace(/[^\d+]/g, "");
       setFormData({ ...formData, [name]: cleaned });
     } else {
       setFormData({ ...formData, [name]: value });
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFormData({ ...formData, file });
+      setProfilePreview(URL.createObjectURL(file));
     }
   };
 
@@ -559,7 +798,6 @@ export default function RegisterPage() {
       setIsLoading(false);
     }
   };
-
 
   return (
     <div className="min-h-screen w-full bg-white dark:bg-black flex">
@@ -585,19 +823,13 @@ export default function RegisterPage() {
           priority
         />
         
-        {/* Overlay décoratif avec icônes et texte */}
+        {/* Overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 dark:from-primary/20 dark:to-primary/10">
-          
-          {/* Cercles décoratifs */}
-          <div className="absolute top-10 left-10 w-20 h-20 bg-white/20 dark:bg-white/10 rounded-full blur-2xl"></div>
-          <div className="absolute bottom-20 right-10 w-40 h-40 bg-primary/30 dark:bg-primary/20 rounded-full blur-3xl"></div>
-          
-          {/* Texte centré */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center mt-128 ml-48 px-8 z-10">
             <div className="bg-white/90 dark:bg-black/80 backdrop-blur-sm px-8 py-6 rounded-3xl border border-white/50 dark:border-zinc-800">
               <h2 className="text-3xl font-black text-primary mb-3">Rejoignez Navigoo</h2>
               <p className="text-zinc-600 dark:text-zinc-300 text-base max-w-md">
-                Explorez, partagez et découvrez les meilleurs endroits du Cameroun en communauté.
+                Explorez, partagez et découvrez les meilleurs endroits du Cameroun.
               </p>
             </div>
           </div>
@@ -605,79 +837,128 @@ export default function RegisterPage() {
       </div>
 
       {/* --- SECTION DROITE (Formulaire) --- */}
-      <div className="w-full lg:w-1/2 bg-white dark:bg-black p-8 lg:p-16 flex flex-col justify-center overflow-y-auto">
+      <div className="w-full lg:w-1/2 bg-white dark:bg-black p-8 lg:p-12 flex flex-col justify-center overflow-y-auto">
         
         <div className="max-w-md mx-auto w-full">
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="h-2 w-2 bg-primary rounded-full"></span>
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">Inscription</span>
-            </div>
+          <div className="mb-6">
             <h1 className="text-3xl lg:text-4xl font-black text-zinc-900 dark:text-white">Créer un compte</h1>
+            <p className="text-zinc-500 mt-2">Rejoignez une communauté de passionnés.</p>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-sm flex items-center gap-2">
+            <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-sm flex items-center gap-2 border border-red-100 dark:border-red-900">
               <span>⚠️</span> {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Photo de profil Uploader */}
+          <div className="flex justify-center mb-6">
+            <div className="relative group">
+                <div className="w-24 h-24 rounded-full bg-zinc-100 dark:bg-zinc-900 border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center overflow-hidden">
+                    {profilePreview ? (
+                        <Image src={profilePreview} alt="Preview" fill className="object-cover" />
+                    ) : (
+                        <User className="text-zinc-400" size={32} />
+                    )}
+                </div>
+                <label className="absolute bottom-0 right-0 p-2 bg-primary text-white rounded-full cursor-pointer hover:bg-primary-dark transition-colors shadow-lg">
+                    <Camera size={16} />
+                    <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                </label>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
             
+            {/* Prénom & Nom */}
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                    <input 
+                      type="text" name="firstName" required
+                      value={formData.firstName} onChange={handleChange}
+                      placeholder="Prénom"
+                      className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white transition-all"
+                    />
+                </div>
+                <div className="space-y-1.5">
+                    <input 
+                      type="text" name="lastName" required
+                      value={formData.lastName} onChange={handleChange}
+                      placeholder="Nom"
+                      className="w-full px-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white transition-all"
+                    />
+                </div>
+            </div>
+
             {/* Username */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 ml-1">Nom d'utilisateur</label>
-              <div className="relative group">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" size={20} />
+            <div className="relative group">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
                 <input 
                   type="text" name="username" required
                   value={formData.username} onChange={handleChange}
-                  placeholder="ex: KmerExplorer"
-                  className="w-full pl-12 pr-4 py-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white font-medium transition-all"
+                  placeholder="Nom d'utilisateur (ex: KmerExplorer)"
+                  className="w-full pl-12 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white transition-all"
                 />
-              </div>
             </div>
 
-            {/* Email & Phone Grid */}
+            {/* Email & Phone */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 ml-1">Email</label>
-                <div className="relative group">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" size={20} />
+              <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
                   <input 
                     type="email" name="email" required
                     value={formData.email} onChange={handleChange}
-                    placeholder="nom@mail.com"
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white font-medium transition-all"
+                    placeholder="Email"
+                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white transition-all"
                   />
-                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 ml-1">Téléphone</label>
-                <div className="relative group">
-                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" size={20} />
+              <div className="relative group">
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
                   <input 
                     type="tel" name="phone"
                     value={formData.phone} onChange={handleChange}
-                    placeholder="+237 ..."
-                    className="w-full pl-12 pr-4 py-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white font-medium transition-all"
+                    placeholder="Tél: +237..."
+                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white transition-all"
                   />
-                </div>
+              </div>
+            </div>
+
+            {/* Organization Selector */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-500 ml-1">Organisation</label>
+              <div className="relative group">
+                <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
+                <select
+                    name="organizationId"
+                    value={formData.organizationId}
+                    onChange={handleChange}
+                    disabled={loadingOrgs}
+                    className="w-full pl-12 pr-4 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white appearance-none cursor-pointer"
+                >
+                    <option value={DEFAULT_ORG_ID}>Utilisateur Standard (Par défaut)</option>
+                    {organizations
+                        .filter(org => org.organizationId !== DEFAULT_ORG_ID)
+                        .map(org => (
+                            <option key={org.organizationId} value={org.organizationId}>
+                                {org.organizationName}
+                            </option>
+                        ))
+                    }
+                </select>
+                {loadingOrgs && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-primary" size={16} />}
               </div>
             </div>
 
             {/* Password */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 ml-1">Mot de passe</label>
-              <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-primary transition-colors" size={20} />
+            <div className="relative group">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
                 <input 
                   type={showPassword ? "text" : "password"} 
                   name="password" required
                   value={formData.password} onChange={handleChange}
-                  placeholder="••••••••"
-                  className="w-full pl-12 pr-12 py-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white font-medium transition-all"
+                  placeholder="Mot de passe"
+                  className="w-full pl-12 pr-12 py-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-primary outline-none text-zinc-900 dark:text-white transition-all"
                 />
                 <button 
                   type="button" 
@@ -686,14 +967,13 @@ export default function RegisterPage() {
                 >
                   {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
                 </button>
-              </div>
             </div>
 
             {/* Submit Button */}
-            <div className="pt-4">
+            <div className="pt-2">
               <Button 
                 disabled={isLoading}
-                className="w-full h-14 bg-primary hover:bg-primary-dark text-white rounded-2xl font-bold text-lg hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-3"
+                className="w-full h-12 bg-primary hover:bg-primary-dark text-white rounded-xl font-bold text-lg hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-3 shadow-lg shadow-primary/20"
               >
                 {isLoading ? <Loader2 className="animate-spin" /> : <>Créer mon compte <ArrowRight size={20}/></>}
               </Button>
@@ -701,22 +981,10 @@ export default function RegisterPage() {
           </form>
 
           {/* Footer */}
-          <div className="mt-8 text-center space-y-6">
+          <div className="mt-8 text-center space-y-4">
             <p className="text-xs text-zinc-400">
-              En vous inscrivant, vous acceptez nos{" "}
-              <span className="text-primary underline cursor-pointer">Conditions</span> et{" "}
-              <span className="text-primary underline cursor-pointer">Confidentialité</span>.
+              En vous inscrivant, vous acceptez nos <span className="text-primary cursor-pointer">Conditions</span>.
             </p>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-zinc-200 dark:border-zinc-800"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-2 bg-white dark:bg-black text-zinc-500">ou</span>
-              </div>
-            </div>
-            
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Vous avez déjà un compte ? 
               <Link href="/signin" className="ml-2 font-bold text-primary hover:underline">
@@ -1427,18 +1695,16 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { 
-  User, Mail, Phone, Lock, Camera, LogOut, 
-  MapPin, Route, Star, ChevronRight, 
-  Settings, Building2, Calendar, TrendingUp,
-  MessageSquare, FileText, Mic, Plus,
-  Edit, Trash2, Eye, Send, Loader2, X,
-  BarChart3, Award, Heart, Clock, Grid,
-  List, Image as ImageIcon, Video, Music,
-  Store,
+  LogOut, 
+  MapPin, 
+  BarChart3, Building2, Star, FileText, Mic, Clock, 
+  Store, Grid, List, Plus, X, Camera, Trash2, ChevronRight, Route,
+  MessageSquare,
   MapPinHouse
 } from "lucide-react";
 import { authService } from "@/services/authService";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { userProfileService } from "@/services/userProfileService"; // Ajout de l'import manquant
 import { Button } from "@/components/ui/Button";
 import { Loader } from "@/components/ui/Loader";
 import { BlogModal } from "@/components/content/BlogModal";
@@ -1446,15 +1712,16 @@ import { PodcastModal } from "@/components/content/PodcastModal";
 import { AddPoiPanel } from "@/components/profile/AddPoiPanel";
 import { clsx } from "clsx";
 import { motion, AnimatePresence } from "framer-motion";
-import { POI } from "@/types";
+import { AppUser } from "@/types";
+import { mediaService } from "@/services/mediaService";
 
 type TabType = 'overview' | 'pois' | 'reviews' | 'blogs' | 'podcasts' | 'activity' | 'add-poi';
+
 
 export default function ProfilePage() {
   const router = useRouter();
   const {
     profile,
-    stats,
     myPois,
     myReviews,
     myBlogs,
@@ -1475,19 +1742,46 @@ export default function ProfilePage() {
   const [isBlogModalOpen, setIsBlogModalOpen] = useState(false);
   const [isPodcastModalOpen, setIsPodcastModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
+  // Fonction de chargement
+  const loadData = async (sessionUser: AppUser) => {
+    try {
+      console.log("🔄 Chargement des stats pour:", sessionUser.id);
+      const statsData = await userProfileService.getUserStats(sessionUser.id);
+      console.log("✅ Stats chargées:", statsData);
+      setStats(statsData);
+    } catch (e) {
+      console.error("❌ Erreur chargement stats:", e);
+      setStats(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Vérification session
   useEffect(() => {
+    console.log("🔍 Vérification session...");
     const session = authService.getSession();
     
     if (!session) {
+      console.log("⚠️ Pas de session, redirection signin");
       router.push("/signin");
       return;
     }
 
     if (session.role === "SUPER_ADMIN") {
+      console.log("⚠️ Admin détecté, redirection");
       router.push("/admin");
       return;
     }
+    
+    console.log("✅ Session valide:", session.username);
+    setUser(session);
+    loadData(session);
   }, [router]);
 
   useEffect(() => {
@@ -1499,8 +1793,79 @@ export default function ProfilePage() {
     }
   }, [profile]);
 
+  // ✅ CHANGEMENT ICI : Condition de chargement améliorée
+  if (isLoading || loading) {
+    console.log("⏳ Chargement...", { isLoading, loading, hasProfile: !!profile, hasUser: !!user });
+    return <Loader />;
+  }
+  
+  if (error) {
+    console.error("❌ Erreur dans useUserProfile:", error);
+    return (
+      <div className="min-h-screen flex items-center justify-center text-red-600">
+        Erreur: {error}
+      </div>
+    );
+  }
+  
+  // ✅ CHANGEMENT ICI : Utiliser profile OU user pour décider
+  if (!user) {
+    console.log("⚠️ Pas de user", { user, profile });
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Session invalide, redirection...
+      </div>
+    );
+  }
+
+  // ✅ NOUVEAU : Si pas de profile, utiliser user comme fallback
+  const displayProfile = profile || {
+    email: user.email,
+    phone: user.phone || '',
+    firstName: user.firstName,
+    lastName: user.lastName,
+    username: user.username,
+  };
+
+  console.log("✅ Affichage profil:", { user, profile, displayProfile });
+
+  // Calcul de l'URL de la photo de profil
+  const profilePic = user.photoUri 
+    ? user.photoUri 
+    : user.photoId 
+        ? mediaService.getMediaUrl(user.photoId) 
+        : "/images/placeholder-avatar.png"; 
+
   const handleLogout = () => {
     authService.logout();
+  };
+
+    // Gestion du changement de photo
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    try {
+      // 1. Upload vers Media Service
+      // On peut montrer un loader ici
+      const media = await mediaService.uploadFile(file, "users/avatars");
+      
+      // 2. Mise à jour du profil utilisateur avec le nouvel ID
+      const updatedProfile = await userProfileService.updateUserProfile(user.userId, {
+        photoId: media.id // On met à jour l'ID de la photo
+      });
+
+      // 3. Mise à jour de la session locale pour refléter le changement immédiat
+      // Note: Assurez-vous que authService a une méthode pour rafraîchir ou mettre à jour la session
+      const newUserSession = { ...user, photoId: media.id };
+      // hack temporaire pour l'UI, idéalement via un contexte
+      setUser(newUserSession); 
+      
+      alert("Photo de profil mise à jour !");
+    } catch (err) {
+      console.error("Erreur mise à jour photo", err);
+      alert("Erreur lors de la mise à jour de la photo");
+    }
   };
 
   const handleContentSuccess = () => {
@@ -1521,116 +1886,106 @@ export default function ProfilePage() {
     setActiveTab(tab);
   };
 
-  if (isLoading) return <Loader />;
-  if (error) return <div className="min-h-screen flex items-center justify-center text-red-600">Erreur: {error}</div>;
-  if (!profile) return <div className="min-h-screen flex items-center justify-center">Profil non trouvé</div>;
-
   return (
-    <div className="min-h-screen bg-img bg-gradient-to-br from-zinc-50 via-white to-zinc-50 dark:from-black dark:via-zinc-950 dark:to-black">
+    <div className="min-h-screen bg-zinc-50 dark:bg-black font-sans pb-20">
       
-      {/* HERO HEADER avec Avatar */}
-      <div 
-        className="relative h-72 w-full overflow-hidden bg-cover bg-center"
-        style={{ 
-          backgroundImage: "url('images/fond1.jpg')",
-        }}
-      >
-        {/* Overlay sombre pour la lisibilité (indispensable) */}
-        <div className="absolute inset-0 bg-black/40 shadow-inner" />
-        
-        {/* Dégradé vers le bas pour faire ressortir le nom d'utilisateur */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-        {/* Effet de grille animée */}
-        <div className="absolute inset-0 opacity-30">
-          <div className="absolute inset-0" style={{
-            backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
-            backgroundSize: '30px 30px'
-          }} />
-        </div>
-        
-        {/* Cercles flottants */}
-        <motion.div 
-          animate={{ 
-            scale: [1, 1.2, 1],
-            rotate: [0, 180, 360]
+      {/* HERO HEADER - Pleine largeur garantie */}
+      <div className="w-full">
+        <div 
+          className="relative h-72 w-full overflow-hidden bg-cover bg-center"
+          style={{ 
+            backgroundImage: "url('/images/fond1.jpg')", // Ajout du slash initial pour robustesse
           }}
-          transition={{ duration: 20, repeat: Infinity }}
-          className="absolute -top-20 -left-20 w-96 h-96 bg-white/10 rounded-full blur-3xl"
-        />
-        <motion.div 
-          animate={{ 
-            scale: [1, 1.3, 1],
-            rotate: [360, 180, 0]
-          }}
-          transition={{ duration: 25, repeat: Infinity }}
-          className="absolute -bottom-20 -right-20 -top-20 w-96 h-96 bg-white/10 rounded-full blur-3xl"
-        />
-
-        {/* Contenu Header */}
-        <div className="relative max-w-7xl mx-auto px-4 h-full flex items-end pb-8">
-          <div className="flex items-end gap-6 w-full">
-            
-            {/* Avatar */}
-            <motion.div 
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: "spring", duration: 0.8 }}
-              className="relative group"
-            >
-              <div className="relative w-32 h-32 md:w-40 md:h-40">
-                <div className="absolute inset-0 bg-gradient-to-tr from-primary to-purple-400 rounded-3xl rotate-6 group-hover:rotate-12 transition-transform duration-300" />
-                <div className="relative w-full h-full bg-white dark:bg-zinc-900 rounded-3xl overflow-hidden border-4 border-white dark:border-zinc-800 shadow-2xl flex items-center justify-center">
-                  <span className="text-6xl font-black bg-gradient-to-br from-primary to-purple-600 bg-clip-text text-transparent">
-                    {profile.username.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <button className="absolute -bottom-2 -right-2 p-3 bg-primary text-white rounded-2xl shadow-lg hover:scale-110 active:scale-95 transition-transform">
-                  <Camera size={20} />
-                </button>
-              </div>
-            </motion.div>
-
-            {/* Infos Profil */}
-            <div className="flex-1 pb-16">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
+        >
+          {/* Overlay sombre */}
+          <div className="absolute inset-0 bg-black/40 shadow-inner" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+          
+          {/* Effets visuels */}
+          <div className="absolute inset-0 opacity-30 pointer-events-none">
+            <div className="absolute inset-0" style={{
+              backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
+              backgroundSize: '30px 30px'
+            }} />
+          </div>
+          
+          {/* Contenu Header - Centré avec contraintes */}
+          <div className="relative max-w-7xl mx-auto px-4 h-full flex items-end pb-8">
+            <div className="flex items-end gap-6 w-full">
+              
+              {/* Avatar */}
+              <motion.div 
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", duration: 0.8 }}
+                className="relative group shrink-0"
               >
-                <h1 className="text-4xl md:text-5xl font-black text-white mb-2 drop-shadow-lg">
-                  {profile.username}
-                </h1>
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="px-4 py-1.5 bg-white/20 backdrop-blur-md text-white text-sm font-bold rounded-full border border-white/30">
-                    🌟 Explorateur Navigoo
-                  </span>
-                  <span className="px-4 py-1.5 bg-white/20 backdrop-blur-md text-white text-sm font-bold rounded-full border border-white/30">
-                    Membre depuis {new Date(profile.createdAt).getFullYear()}
-                  </span>
+                <div className="relative w-32 h-32 md:w-40 md:h-40">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-primary to-purple-400 rounded-full md:rounded-3xl rotate-6 group-hover:rotate-12 transition-transform duration-300 blur-sm" />
+                  <div className="relative w-full h-full bg-white dark:bg-zinc-900 rounded-full md:rounded-3xl overflow-hidden border-4 border-white dark:border-zinc-800 shadow-2xl flex items-center justify-center">
+                    <Image 
+                        src={profilePic} 
+                        alt="Profile" 
+                        fill 
+                        className="object-cover"
+                        unoptimized
+                        onError={(e) => { e.currentTarget.src = "https://ui-avatars.com/api/?name=" + user.username }}
+                    />
+                  </div>
+                  {/* Bouton pour changer la photo */}
+                  <button 
+                    onClick={handlePhotoUpload} 
+                    className="absolute -bottom-2 -right-2 p-2 bg-primary text-white rounded-full md:rounded-2xl shadow-lg hover:scale-110 active:scale-95 transition-transform"
+                  >
+                    <Camera size={18} />
+                  </button>
                 </div>
               </motion.div>
-            </div>
 
-            {/* Actions Rapides */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-              className="hidden lg:flex items-center gap-3 pb-4"
-            >
-              <Button
-                onClick={() => router.push("/")}
-                className="bg-white/20 backdrop-blur-md text-white border-2 border-white/30 hover:bg-white/30"
+              {/* Infos Profil */}
+              <div className="flex-1 pb-1 md:pb-2">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <h1 className="text-3xl md:text-5xl font-black text-white mb-2 drop-shadow-lg leading-none">
+                    {user.firstName} {user.lastName}
+                  </h1>
+                  <p className="text-zinc-300 font-medium text-lg mb-3">@{user.username}</p>
+                  
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="px-4 py-1.5 bg-white/20 backdrop-blur-md text-white text-xs font-bold rounded-full border border-white/30 uppercase tracking-wide">
+                      {user.service || "Explorateur"}
+                    </span>
+                    <span className="px-4 py-1.5 bg-black/40 backdrop-blur-md text-zinc-200 text-xs font-bold rounded-full border border-white/10">
+                      {user.email}
+                    </span>
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Actions Rapides Desktop */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
+                className="hidden lg:flex flex-col items-end gap-3 pb-2"
               >
-                <MapPinHouse size={18} /> Retour à la carte
-              </Button>
-              <Button
-                onClick={handleLogout}
-                className="bg-red-500/20 backdrop-blur-md text-white border-2 border-red-300/30 hover:bg-red-500/30"
-              >
-                <LogOut size={18} /> Déconnexion
-              </Button>
-            </motion.div>
+                <Button
+                  onClick={() => router.push("/")}
+                  className="bg-white/10 hover:bg-white/20 backdrop-blur-md text-white border border-white/30"
+                >
+                  <MapPinHouse size={18} className="mr-2" /> Carte
+                </Button>
+                <Button
+                  onClick={handleLogout}
+                  className="bg-red-500/20 hover:bg-red-500/40 backdrop-blur-md text-white border border-red-500/30"
+                >
+                  <LogOut size={18} className="mr-2" /> Déconnexion
+                </Button>
+              </motion.div>
+            </div>
           </div>
         </div>
       </div>
@@ -1641,31 +1996,31 @@ export default function ProfilePage() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="max-w-7xl mx-auto px-4 -mt-4 mb-8"
+          className="max-w-7xl mx-auto px-4 -mt-8 mb-8 relative z-10"
         >
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <StatCard
               icon={<MapPin className="text-blue-500" />}
               label="POIs"
-              value={stats.totalPois}
+              value={stats.totalPois || 0}
               color="from-blue-500/10 to-blue-500/5"
             />
             <StatCard
               icon={<MessageSquare className="text-green-500" />}
               label="Avis"
-              value={stats.totalReviews}
+              value={stats.totalReviews || 0}
               color="from-green-500/10 to-green-500/5"
             />
             <StatCard
               icon={<FileText className="text-purple-500" />}
               label="Blogs"
-              value={stats.totalBlogs}
+              value={stats.totalBlogs || 0}
               color="from-purple-500/10 to-purple-500/5"
             />
             <StatCard
               icon={<Mic className="text-orange-500" />}
               label="Podcasts"
-              value={stats.totalPodcasts}
+              value={stats.totalPodcasts || 0}
               color="from-orange-500/10 to-orange-500/5"
             />
           </div>
@@ -1674,8 +2029,8 @@ export default function ProfilePage() {
 
       {/* TABS NAVIGATION */}
       <div className="max-w-7xl mx-auto px-4 mb-8">
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 overflow-x-auto">
-          <div className="flex gap-2 p-2">
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-x-auto scrollbar-hide">
+          <div className="flex p-2 gap-2 min-w-max">
             <TabButton
               active={activeTab === 'overview'}
               onClick={() => handleTabChange('overview')}
@@ -6643,15 +6998,25 @@ export interface Location {
 }
 
 export interface AppUser {
+  id: string; // UUID du Auth Service
   userId: string;
   organizationId: string;
   username: string;
   email: string;
   phone?: string;
+  firstName?: string;
+  lastName?: string;
   password?: string;
   role: UserRole;
+  service?: "LETS_GO" | "RIDE_AND_GO" | "FLEET_MANAGEMENT" | "SYNDICAT" | "NAVIGOO" | "PAYMENT" | "FARE_CALCULATOR";
+  photoId?: string;
+  photoUri?: string;
+  roles?: string[];
+  permissions?: string[];
+  accessToken?: string; // Ajouté côté client pour la session
   isActive: boolean;
   createdAt?: string;
+  
 }
 
 export interface POI {
@@ -6767,6 +7132,24 @@ export interface Podcast {
   is_active: boolean;
   created_at?: string;
 }
+
+// DTO Media Service
+export interface MediaDto {
+  id: string;
+  name: string;
+  real_name: string;
+  service: string;
+  mime: string;
+  size: number;
+  extension: string;
+  path: string;
+  uri: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+
+
 
 
 ================================================================================
@@ -8015,7 +8398,7 @@ export const DirectionsSidebar = ({
       animate={{ x: isOpen ? "0%" : "-100%" }}
       exit={{ x: "-100%" }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className="fixed top-0 left-0 md:left-[72px] h-full w-full md:w-[400px] bg-white dark:bg-zinc-900 shadow-2xl z-[60] flex flex-col border-r border-zinc-200 dark:border-zinc-800 font-sans overflow-hidden"
+      className="fixed top-16 left-0 md:left-[72px] h-full w-full md:w-[400px] bg-white dark:bg-zinc-900 shadow-2xl z-[60] flex flex-col border-r border-zinc-200 dark:border-zinc-800 font-sans overflow-hidden"
     >
       {/* HEADER */}
       <div className="bg-primary px-4 py-4 shadow-md text-white z-10 shrink-0">
@@ -10149,11 +10532,13 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\components\content\BlogModal.tsx
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, FileText, Save, Loader2, ImagePlus, Type, AlignLeft, Video, Camera, Image as ImageIcon } from "lucide-react";
+import { X, FileText, Save, Loader2, Video, Image as ImageIcon, AlertCircle, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { motion, AnimatePresence } from "framer-motion";
 import { authService } from "@/services/authService";
 import { contentService } from "@/services/contentService";
+import { mediaService } from "@/services/mediaService";
+import { poiService } from "@/services/poiService";
 import { POI } from "@/types";
 import Image from "next/image";
 import { clsx } from "clsx";
@@ -10165,98 +10550,264 @@ interface BlogModalProps {
   onSuccess?: () => void;
 }
 
-export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModalProps) => {
+export const BlogModal = ({ isOpen, onClose, onSuccess }: BlogModalProps) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [availablePois, setAvailablePois] = useState<POI[]>([]);
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+  const [pois, setPois] = useState<POI[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [uploadedMediaId, setUploadedMediaId] = useState<string | null>(null);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [isLoadingPois, setIsLoadingPois] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const [formData, setFormData] = useState({
-    poi_id: "",
-    title: "",
+  const [formData, setFormData] = useState({ 
+    poi_id: "", 
+    title: "", 
     description: "",
-    content: "",
-    cover_image_url: "",
+    content: "", 
+    cover_image_url: "" 
   });
+
+  const filteredPois = pois.filter(p => 
+    p.poi_name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const user = authService.getSession();
 
   useEffect(() => {
     if (isOpen) {
-      loadUserPois();
-      if (selectedPoi) {
-        setFormData(prev => ({ ...prev, poi_id: selectedPoi.poi_id }));
-      }
+      loadPois();
+      // Reset form when modal opens
+      resetForm();
     }
-  }, [isOpen, selectedPoi]);
+  }, [isOpen]);
 
-  const loadUserPois = async () => {
-    if (!user?.userId) return;
+  const resetForm = () => {
+    setFormData({
+      poi_id: "",
+      title: "",
+      description: "",
+      content: "",
+      cover_image_url: ""
+    });
+    setMediaPreview(null);
+    setUploadedMediaId(null);
+    setError(null);
+    setSuccess(null);
+    setSearchTerm("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const loadPois = async () => {
+    setIsLoadingPois(true);
+    setError(null);
     
     try {
-      const response = await fetch(`https://poi-navigoo.pynfi.com/api/pois/user/${user.userId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setAvailablePois(data || []);
-      }
-    } catch (error) {
-      console.error("Erreur chargement POIs:", error);
+      const allPois = await poiService.getAllPois();
+      setPois(allPois);
+      console.log(`✅ Loaded ${allPois.length} POIs`);
+    } catch (error: any) {
+      console.error("❌ Failed to load POIs:", error);
+      setError(`Impossible de charger les POIs: ${error.message}`);
+    } finally {
+      setIsLoadingPois(false);
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    setError(null);
+    setSuccess(null);
   };
 
-  const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result as string;
-      setMediaPreview(result);
-      setFormData(prev => ({ ...prev, cover_image_url: result }));
-    };
-    reader.readAsDataURL(file);
+    setError(null);
+    setSuccess(null);
+
+    // Validate file size (max 50MB)
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setError("Le fichier est trop volumineux (max 50MB)");
+      return;
+    }
+
+    // Validate file type
+    const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const validVideoTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
+    
+    if (mediaType === 'image' && !validImageTypes.includes(file.type)) {
+      setError("Format d'image non supporté. Utilisez JPG, PNG, GIF ou WebP");
+      return;
+    }
+    
+    if (mediaType === 'video' && !validVideoTypes.includes(file.type)) {
+      setError("Format vidéo non supporté. Utilisez MP4, WebM ou MOV");
+      return;
+    }
+
+    // Preview
+    const objectUrl = URL.createObjectURL(file);
+    setMediaPreview(objectUrl);
+    setUploadedMediaId(null);
+    setIsUploadingMedia(true);
+
+    try {
+      console.log(`⬆️ Uploading ${mediaType} file...`);
+      const context = mediaType === 'video' ? 'blogs_videos' : 'blogs_images';
+      const media = await mediaService.uploadFile(file, context);
+      
+      setUploadedMediaId(media.id);
+      
+      // Get the full URL
+      const fullUrl = mediaService.getMediaUrl(media.id);
+      setFormData(prev => ({ ...prev, cover_image_url: fullUrl }));
+      
+      console.log("✅ Media uploaded successfully!");
+      console.log("  - Media ID:", media.id);
+      console.log("  - Full URL:", fullUrl);
+      
+      setSuccess(`${mediaType === 'image' ? 'Image' : 'Vidéo'} uploadée avec succès!`);
+      
+    } catch (error: any) {
+      console.error("❌ Upload failed:", error);
+      setError(`Erreur d'upload: ${error.message}`);
+      setMediaPreview(null);
+      setUploadedMediaId(null);
+      setFormData(prev => ({ ...prev, cover_image_url: "" }));
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
+  const validateForm = (): string | null => {
+    if (!user?.userId) {
+      return "Session expirée. Veuillez vous reconnecter.";
+    }
+
+    if (!formData.poi_id) {
+      return "Veuillez sélectionner un point d'intérêt.";
+    }
+
+    if (!formData.title.trim()) {
+      return "Le titre est requis.";
+    }
+
+    if (formData.title.trim().length < 3) {
+      return "Le titre doit contenir au moins 3 caractères.";
+    }
+
+    if (!formData.content.trim()) {
+      return "Le contenu est requis.";
+    }
+
+    if (formData.content.trim().length < 10) {
+      return "Le contenu doit contenir au moins 10 caractères.";
+    }
+
+    if (!uploadedMediaId || !formData.cover_image_url) {
+      return "Veuillez uploader une image ou vidéo de couverture.";
+    }
+
+    return null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.poi_id || !formData.title || !formData.content) {
-      alert("Champs obligatoires manquants");
+    setError(null);
+    setSuccess(null);
+    
+    // Client-side validation
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
       return;
     }
-    
+
     setIsLoading(true);
+
     try {
-      await contentService.createBlog({
-        ...formData,
-        user_id: user?.userId
+      console.group("📝 [Blog Submission]");
+      console.log("User ID:", user!.userId);
+      console.log("POI ID:", formData.poi_id);
+      console.log("Title:", formData.title);
+      console.log("Description:", formData.description);
+      console.log("Content length:", formData.content.length);
+      console.log("Media URL:", formData.cover_image_url);
+      
+      const result = await contentService.createBlog({
+        user_id: user!.userId,
+        poi_id: formData.poi_id,
+        title: formData.title,
+        content: formData.content,
+        cover_image_url: formData.cover_image_url
       });
-      if (onSuccess) onSuccess();
-      handleClose();
-    } catch (error) {
-      alert("Erreur lors de la création");
+
+      console.log("✅ Blog created:", result);
+      console.groupEnd();
+
+      // Success
+      setSuccess("Blog publié avec succès!");
+      
+      // Wait a bit to show success message
+      setTimeout(() => {
+        onSuccess?.();
+        handleClose();
+      }, 1500);
+      
+    } catch (err: any) {
+      console.error("❌ Submission failed:", err);
+      console.groupEnd();
+      
+      // Parse error message
+      let errorMessage = "Une erreur est survenue lors de la publication.";
+      
+      if (err.message) {
+        if (err.message.includes("POI")) {
+          errorMessage = "Le point d'intérêt sélectionné n'existe pas ou n'est plus disponible.";
+        } else if (err.message.includes("user")) {
+          errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
+        } else if (err.message.includes("token")) {
+          errorMessage = "Session expirée. Veuillez vous reconnecter.";
+        } else if (err.message.includes("réseau") || err.message.includes("connexion")) {
+          errorMessage = "Erreur de connexion. Vérifiez votre connexion internet.";
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleClose = () => {
-    if (!isLoading) {
-      setFormData({
-        poi_id: "",
-        title: "",
-        description: "",
-        content: "",
-        cover_image_url: "",
-      });
-      setMediaPreview(null);
+    if (!isLoading && !isUploadingMedia) {
+      resetForm();
       onClose();
     }
+  };
+
+  const removeMedia = () => {
+    if (mediaPreview) {
+      URL.revokeObjectURL(mediaPreview);
+    }
+    setMediaPreview(null);
+    setUploadedMediaId(null);
+    setFormData(prev => ({ ...prev, cover_image_url: "" }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    setSuccess(null);
   };
 
   return (
@@ -10297,30 +10848,99 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
                 </div>
                 <button
                   onClick={handleClose}
-                  disabled={isLoading}
-                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
+                  disabled={isLoading || isUploadingMedia}
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors disabled:opacity-50"
                 >
                   <X size={24} className="text-zinc-600 dark:text-zinc-400" />
                 </button>
               </div>
 
+              {/* ERROR BANNER */}
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mx-6 mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3"
+                >
+                  <AlertCircle size={20} className="text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                      {error}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setError(null)}
+                    className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+                  >
+                    <X size={16} />
+                  </button>
+                </motion.div>
+              )}
+
+              {/* SUCCESS BANNER */}
+              {success && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mx-6 mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl flex items-start gap-3"
+                >
+                  <CheckCircle size={20} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                      {success}
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+
               {/* BODY */}
               <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 h-full">
                   
-                  {/* GAUCHE : MÉDIA */}
+                  {/* LEFT: MEDIA */}
                   <div className="relative bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center min-h-[400px] md:min-h-full">
                     {mediaPreview ? (
                       <div className="relative w-full h-full">
                         {mediaType === 'image' ? (
-                          <Image src={mediaPreview} alt="Preview" fill className="object-contain" />
+                          <Image 
+                            src={mediaPreview} 
+                            alt="Preview" 
+                            fill 
+                            className="object-contain" 
+                          />
                         ) : (
-                          <video src={mediaPreview} controls className="w-full h-full object-contain" />
+                          <video 
+                            src={mediaPreview} 
+                            controls 
+                            className="w-full h-full object-contain" 
+                          />
                         )}
+                        
+                        {/* Upload overlay */}
+                        {isUploadingMedia && (
+                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-sm z-10">
+                            <div className="bg-white dark:bg-zinc-800 px-6 py-3 rounded-full flex items-center gap-3 shadow-lg">
+                              <Loader2 className="animate-spin text-purple-600" size={20} />
+                              <span className="text-sm font-bold text-zinc-800 dark:text-white">
+                                Envoi en cours...
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Success overlay */}
+                        {uploadedMediaId && !isUploadingMedia && (
+                          <div className="absolute top-4 left-4 bg-green-500 text-white px-3 py-1.5 rounded-full flex items-center gap-2 shadow-lg z-20">
+                            <CheckCircle size={16} />
+                            <span className="text-xs font-bold">Uploadé</span>
+                          </div>
+                        )}
+
                         <button
                           type="button"
-                          onClick={() => { setMediaPreview(null); setFormData(prev => ({ ...prev, cover_image_url: '' })); }}
-                          className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70"
+                          onClick={removeMedia}
+                          disabled={isUploadingMedia}
+                          className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 z-20 disabled:opacity-50"
                         >
                           <X size={20} />
                         </button>
@@ -10333,7 +10953,9 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
                             onClick={() => { setMediaType('image'); fileInputRef.current?.click(); }}
                             className={clsx(
                               "flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-dashed transition-all",
-                              mediaType === 'image' ? "border-primary bg-primary/5" : "border-zinc-300 dark:border-zinc-700"
+                              mediaType === 'image' 
+                                ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20" 
+                                : "border-zinc-300 dark:border-zinc-700 hover:border-purple-300"
                             )}
                           >
                             <div className="p-4 bg-blue-100 dark:bg-blue-900/30 rounded-2xl">
@@ -10347,7 +10969,9 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
                             onClick={() => { setMediaType('video'); fileInputRef.current?.click(); }}
                             className={clsx(
                               "flex flex-col items-center gap-3 p-6 rounded-2xl border-2 border-dashed transition-all",
-                              mediaType === 'video' ? "border-primary bg-primary/5" : "border-zinc-300 dark:border-zinc-700"
+                              mediaType === 'video' 
+                                ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20" 
+                                : "border-zinc-300 dark:border-zinc-700 hover:border-purple-300"
                             )}
                           >
                             <div className="p-4 bg-purple-100 dark:bg-purple-900/30 rounded-2xl">
@@ -10366,41 +10990,48 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
                         />
                         
                         <p className="text-sm text-zinc-500 text-center">
-                          ou glissez votre fichier ici
+                          ou glissez votre fichier ici (max 50MB)
                         </p>
                       </div>
                     )}
                   </div>
 
-                  {/* DROITE : FORMULAIRE */}
+                  {/* RIGHT: FORM */}
                   <div className="p-6 space-y-4 overflow-y-auto">
                     
                     {/* POI Selection */}
                     <div>
                       <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
-                        Lieu *
+                        Point d'intérêt concerné *
                       </label>
-                      <select
-                        name="poi_id"
-                        value={formData.poi_id}
-                        onChange={handleChange}
-                        required
-                        disabled={!!selectedPoi}
-                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                      >
-                        <option value="">-- Sélectionner --</option>
-                        {availablePois.map(poi => (
-                          <option key={poi.poi_id} value={poi.poi_id}>
-                            {poi.poi_name}
-                          </option>
-                        ))}
-                      </select>
+                      {isLoadingPois ? (
+                        <div className="w-full p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 flex items-center gap-2">
+                          <Loader2 className="animate-spin" size={16} />
+                          <span className="text-sm text-zinc-500">Chargement des POIs...</span>
+                        </div>
+                      ) : (
+                        <select 
+                          name="poi_id"
+                          value={formData.poi_id} 
+                          onChange={handleChange}
+                          required
+                          disabled={isLoading}
+                          className="w-full p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all disabled:opacity-50"
+                        >
+                          <option value="">Sélectionner un lieu ({pois.length} disponibles)</option>
+                          {pois.map(poi => (
+                            <option key={poi.poi_id} value={poi.poi_id}>
+                              {poi.poi_name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
 
-                    {/* Titre */}
+                    {/* Title */}
                     <div>
                       <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
-                        Titre *
+                        Titre * (min. 3 caractères)
                       </label>
                       <input
                         type="text"
@@ -10408,40 +11039,57 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
                         value={formData.title}
                         onChange={handleChange}
                         required
+                        disabled={isLoading}
+                        minLength={3}
+                        maxLength={200}
                         placeholder="Ex: Une soirée mémorable..."
-                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all text-zinc-900 dark:text-white disabled:opacity-50"
                       />
+                      <p className="text-xs text-zinc-400 mt-1">
+                        {formData.title.length}/200 caractères
+                      </p>
                     </div>
 
                     {/* Description */}
                     <div>
                       <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
-                        Légende
+                        Légende (optionnel)
                       </label>
                       <textarea
                         name="description"
                         value={formData.description}
                         onChange={handleChange}
+                        disabled={isLoading}
                         rows={2}
-                        placeholder="Ajoutez une légende..."
-                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                        maxLength={500}
+                        placeholder="Ajoutez une légende courte..."
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all resize-none text-zinc-900 dark:text-white disabled:opacity-50"
                       />
+                      <p className="text-xs text-zinc-400 mt-1">
+                        {formData.description.length}/500 caractères
+                      </p>
                     </div>
 
-                    {/* Contenu */}
+                    {/* Content */}
                     <div>
                       <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 block">
-                        Contenu détaillé *
+                        Contenu détaillé * (min. 10 caractères)
                       </label>
                       <textarea
                         name="content"
                         value={formData.content}
                         onChange={handleChange}
                         required
-                        rows={2}
-                        placeholder="Racontez votre expérience..."
-                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                        disabled={isLoading}
+                        rows={6}
+                        minLength={10}
+                        maxLength={5000}
+                        placeholder="Racontez votre expérience en détail..."
+                        className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black/50 outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all resize-none text-zinc-900 dark:text-white disabled:opacity-50"
                       />
+                      <p className="text-xs text-zinc-400 mt-1">
+                        {formData.content.length}/5000 caractères
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -10452,7 +11100,7 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
                 <Button
                   type="button"
                   onClick={handleClose}
-                  disabled={isLoading}
+                  disabled={isLoading || isUploadingMedia}
                   variant="outline"
                   className="flex-1"
                 >
@@ -10460,8 +11108,8 @@ export const BlogModal = ({ isOpen, onClose, selectedPoi, onSuccess }: BlogModal
                 </Button>
                 <Button
                   onClick={handleSubmit}
-                  disabled={isLoading}
-                  className="flex-1 gap-2 bg-purple-700"
+                  disabled={isLoading || isUploadingMedia || !uploadedMediaId}
+                  className="flex-1 gap-2 bg-purple-700 hover:bg-purple-800 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
                     <>
@@ -11320,7 +11968,7 @@ export const HeroSection = () => {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 mb-12">
-              <Link href="/">
+              <Link href="/navigoo">
                 <Button className="w-full sm:w-auto bg-primary hover:bg-primary-dark text-white px-8 py-6 text-lg gap-2 shadow-xl shadow-primary/20">
                   Commencer l'exploration
                   <ArrowRight size={20} />
@@ -12184,6 +12832,7 @@ import { authService } from "./authService";
 
 // Nouveau : utilise le proxy définit dans next.config.ts
 const API_BASE_URL = typeof window !== 'undefined' ? "/remote-api" : "https://poi-navigoo.pynfi.com";
+
 /**
  * Fonction utilitaire pour transformer le format à plat du Backend Java
  * vers le format imbriqué { location: { latitude, longitude } } attendu par le Frontend.
@@ -12208,36 +12857,46 @@ const mapPoiFromBackend = (data: any): POI => {
 };
 
 class PoiService {
+  private async logger(url: string, options: RequestInit, response: Response, data?: any) {
+    console.group(`📡 Backend Liaison: ${options.method || 'GET'} ${url}`);
+    console.log("Header de Requête:", options.headers);
+    if (options.body) console.log("Payload Envoyé:", JSON.parse(options.body as string));
+    console.log("Statut Réponse:", response.status);
+    console.log("Données Reçues:", data);
+    console.groupEnd();
+  }
+
   /**
    * Wrapper générique pour fetch avec gestion d'erreurs
    */
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
-    
-    if (process.env.NODE_ENV === "development") {
-        console.log(`📡 Fetching: ${url}`);
+    const defaultHeaders = {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "Authorization": `Bearer ${authService.getToken()}`
+    };
+
+    options.headers = { ...defaultHeaders, ...options.headers };
+
+    try {
+      const response = await fetch(url, options);
+      
+      // Gestion spécifique du 204 No Content
+      if (response.status === 204) {
+        await this.logger(url, options, response, "No Content");
+        return {} as T;
+      }
+
+      const data = await response.json();
+      await this.logger(url, options, response, data);
+
+      if (!response.ok) throw new Error(data.message || "Erreur Backend");
+      return data;
+    } catch (error: any) {
+      console.error(`❌ Erreur Liaison sur ${url}:`, error.message);
+      throw error;
     }
-
-    const response = await fetch(url, {
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      ...options,
-    });
-
-    if (!response.ok) {
-        let errorMessage = response.statusText;
-        try {
-            const errorBody = await response.text();
-            errorMessage = errorBody || response.statusText;
-        } catch (e) {}
-        
-        throw new Error(`Erreur API (${response.status}): ${errorMessage}`);
-    }
-
-    if (response.status === 204) return {} as T;
-    return response.json();
   }
 
   // ==========================================
@@ -12304,87 +12963,143 @@ class PoiService {
   // ÉCRITURE (POST / PUT / DELETE)
   // ==========================================
   
-  async createPoi(formData: any): Promise<POI> {
-    const user = authService.getSession();
-    if (!user) throw new Error("Session expirée.");
+  private async logTraffic(endpoint: string, method: string, payload: any, response: Response, data: any) {
+    const statusColor = response.ok ? 'color: #10b981' : 'color: #ef4444';
+    console.group(`📡 [POI BACKEND LIAISON] ${method} ${endpoint}`);
+    console.log(`%cStatus: ${response.status} ${response.statusText}`, statusColor);
+    console.log("📤 Payload JSON:", payload);
+    console.log("📥 Réponse Backend:", data);
+    console.groupEnd();
+  }
 
-    // MAPPING des types POI selon catégorie
-    const getValidPoiType = (category: string, type: string) => {
-        if (type && type !== "OTHER") return type; 
-        switch(category) {
-            case "FOOD_DRINK": return "RESTAURANT";
-            case "ACCOMMODATION": return "HOTEL";
-            case "WORSHIP_SPIRITUALITY": return "AUTRE_LIEU_CULTE";
-            case "LEISURE_CULTURE": return "SITE_TOURISTIQUE";
-            case "PUBLIC_ADMIN_SERVICES": return "MAIRIE";
-            default: return "SITE_TOURISTIQUE";
-        }
-    };
-
-    // Convertir Base64 image en URL si nécessaire
-    let imageUrl = "";
-    if (formData.poi_images_urls && formData.poi_images_urls[0]) {
-      const img = formData.poi_images_urls[0];
-      // Si c'est une vraie URL, on la garde, sinon c'est du Base64 qu'on ignore pour l'instant
-      if (img.startsWith("http")) {
-        imageUrl = img;
-      }
+async createPoi(formData: any): Promise<any> {
+    const session = authService.getSession();
+    if (!session?.userId || !session?.organizationId) {
+      throw new Error("Profil incomplet. Reconnectez-vous.");
     }
 
-    // Construction du payload MINIMAL VALIDE
+    // ✅ PAYLOAD FINAL CORRIGÉ
     const payload = {
-      organization_id: user.organizationId,
+      // IDs
+      organization_id: session.organizationId,
       town_id: null,
-      created_by_user_id: user.userId,
-      poi_name: formData.poi_name,
-      poi_type: getValidPoiType(formData.poi_category, formData.poi_type),
-      poi_category: formData.poi_category || "LEISURE_CULTURE",
+      created_by_user_id: session.userId,
       
-      // Champs obligatoires
+      // Noms (TOUS REQUIS)
+      poi_name: formData.poi_name,
+      poi_type: "OTHER", // ✅ Valeur sûre
+      poi_category: formData.poi_category,
       poi_long_name: formData.poi_name,
-      poi_short_name: formData.poi_name.substring(0, Math.min(15, formData.poi_name.length)),
+      poi_short_name: formData.poi_name.substring(0, 20),
       poi_friendly_name: formData.poi_name,
+      
+      // Description
       poi_description: formData.poi_description || "",
       
-      // Logo Base64 minimal valide (image 1x1 transparente)
-      poi_logo: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", 
-
-      latitude: formData.location?.latitude ?? 3.86667,
-      longitude: formData.location?.longitude ?? 11.51667,
+      // Logo (Base64 GIF transparent)
+      poi_logo: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
       
-      // Adresse
+      // Coordonnées (conversion en Number explicite)
+      latitude: Number(formData.location?.latitude) || 0,
+      longitude: Number(formData.location?.longitude) || 0,
+      
+      // Adresse (TOUS REQUIS)
       address_street_number: "1",
-      address_street_name: formData.address_informal || "",
-      address_city: formData.address_city || "Yaoundé",
-      address_state_province: formData.address_state_province || "Centre",
+      address_street_name: formData.address_informal || "Avenue principale",
+      address_city: formData.address_city || "Ngaoundéré",
+      address_state_province: formData.address_state_province || "Adamaoua",
       address_postal_code: formData.postalCode || "0000",
-      address_country: formData.address_country || "Cameroun",
+      address_country: "Cameroon",
       address_informal: formData.address_informal || "",
       
+      // Site web
       website_url: formData.poi_contacts?.website || "",
       
-      // Objets et Tableaux (DOIVENT être présents)
-      operation_time_plan: {}, 
-      poi_contacts: {
-          phone: formData.poi_contacts?.phone || "",
-          email: formData.poi_contacts?.email || ""
+      // Horaires (OBJET REQUIS)
+      operation_time_plan: {
+        "Open": "08:00-18:00"
       },
-      poi_images_urls: imageUrl ? [imageUrl] : [],
-      poi_amenities: formData.poi_amenities || [],
-      poi_keywords: formData.poi_keywords || [],
-      poi_type_tags: [],
       
+      // Contacts (OBJET avec clés génériques)
+      poi_contacts: {
+        phone: formData.poi_contacts?.phone || "",
+        email: session.email || ""
+      },
+      
+      // Arrays
+      poi_images_urls: Array.isArray(formData.poi_images_urls) ? formData.poi_images_urls : [],
+      poi_amenities: Array.isArray(formData.poi_amenities) ? formData.poi_amenities : [],
+      poi_keywords: Array.isArray(formData.poi_keywords) ? formData.poi_keywords : [],
+      poi_type_tags: [formData.poi_category],
+      
+      // Metrics
       popularity_score: 0.0,
-      is_active: true
+      is_active: false
     };
 
-    console.log("🚀 Envoi au Backend (Payload Complet) :", payload);
+    // 🔍 VALIDATION PRÉ-ENVOI
+    console.group("🔍 [VALIDATION PAYLOAD FINAL]");
+    console.log("Session:", { userId: session.userId, orgId: session.organizationId });
+    console.log("Payload complet:", JSON.stringify(payload, null, 2));
+    console.groupEnd();
 
-    const result = await this.request<any>("/api/pois", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    return mapPoiFromBackend(result);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/pois`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "Authorization": `Bearer ${authService.getToken()}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      // Extraction de la réponse
+      let result;
+      const contentType = response.headers.get("content-type");
+      
+      if (contentType && contentType.includes("application/json")) {
+        result = await response.json();
+      } else {
+        const textResponse = await response.text();
+        console.log("📄 Réponse brute (non-JSON):", textResponse);
+        result = { rawError: textResponse };
+      }
+
+      // Log détaillé
+      await this.logTraffic("/api/pois", "POST", payload, response, result);
+
+      if (!response.ok) {
+        console.error("🚨 ERREUR BACKEND DÉTAILLÉE:", {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: result
+        });
+
+        let errorMessage = `Erreur ${response.status}: ${response.statusText}`;
+        
+        if (typeof result === 'object') {
+          if (result.message) errorMessage = result.message;
+          else if (result.error) errorMessage = result.error;
+          else if (result.rawError) errorMessage = result.rawError;
+          else if (result.details) errorMessage = JSON.stringify(result.details);
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      console.log("✅ POI créé avec succès:", result);
+      return result;
+
+    } catch (error: any) {
+      console.error("❌ [CREATE POI] Exception complète:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
   }
 
   async updatePoi(poiId: string, poiData: Partial<POI>): Promise<POI> {
@@ -12421,20 +13136,15 @@ class PoiService {
     return this.request<void>(`/api/pois/${poiId}/popularity?score=${score}`, { method: "PATCH" });
   }
 
-  // Ajoute cette méthode pour une recherche globale
   async searchGlobal(query: string): Promise<POI[]> {
-    // Cette méthode tente de chercher par nom, puis par ville, puis fusionne les tags
-    // Idéalement, le backend devrait avoir un endpoint /search?q=...
     const [byName, byCity] = await Promise.all([
       this.searchPoisByName(query),
       this.getPoisByCity(query)
     ]);
     
-    // Fusion unique par ID
     const combined = [...byName, ...byCity];
     return Array.from(new Map(combined.map(item => [item.poi_id, item])).values());
   }
-
 }
 
 export const poiService = new PoiService();
@@ -12445,107 +13155,161 @@ FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\services\authService.ts
 ================================================================================
 
 import { AppUser } from "@/types";
+import { mediaService } from "./mediaService"; // Import nécessaire pour l'upload préalable
 
-const API_BASE_URL = "https://poi-navigoo.pynfi.com";
-const DEFAULT_ORG_ID = "83ce5943-d920-454f-908d-3248a73aafdf"; 
+// URL des PROXYS (configurés dans next.config.ts)
+const POI_PROXY = "/remote-api";
+const AUTH_PROXY = "/auth-api";
+
+export const DEFAULT_ORG_ID = "83ce5943-d920-454f-908d-3248a73aafdf"; 
+
+export interface Organization {
+  organizationId: string;
+  organizationName: string;
+  orgCode?: string;
+  isActive: boolean;
+}
 
 class AuthService {
+  
   /**
-   * Inscrit un nouvel utilisateur selon le DTO Java
+   * Récupère la liste des organisations depuis le Backend POI
    */
-  async register(userData: Partial<AppUser>): Promise<AppUser> {
-    const endpoint = `${API_BASE_URL}/api/users`;
-
-    // Validation Password (doit matcher la regex Java)
-    const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (userData.password && !pwdRegex.test(userData.password)) {
-      throw new Error("Le mot de passe doit contenir: 8 chars min, 1 Maj, 1 Min, 1 Chiffre, 1 Spécial (@$!%*?&)");
+  async getOrganizations(): Promise<Organization[]> {
+    try {
+      const res = await fetch(`${POI_PROXY}/api/organizations`);
+      if (!res.ok) throw new Error("Erreur chargement organisations");
+      const data = await res.json();
+      return data.filter((org: Organization) => org.isActive !== false);
+    } catch (error) {
+      console.error("❌ [AuthService] Erreur Organizations:", error);
+      return [];
     }
+  }
 
-    // Validation Phone (doit matcher la regex Java: ^[+]?[0-9]{10,15}$)
-    if (userData.phone) {
-      const phoneRegex = /^[+]?[0-9]{10,15}$/;
-      if (!phoneRegex.test(userData.phone)) {
-        throw new Error("Le téléphone doit contenir entre 10 et 15 chiffres (+ optionnel au début)");
+  /**
+   * Orchestration complète de l'inscription :
+   * 1. Upload de la photo vers MediaService (si présente)
+   * 2. Injection de l'ID de la photo dans le payload
+   * 3. Envoi de l'inscription à AuthService
+   */
+  async register(userData: {
+    username: string;
+    email: string;
+    password: string;
+    phone?: string;
+    firstName: string;
+    lastName: string;
+    organizationId: string;
+    file?: File | null; // Le fichier photo optionnel
+  }): Promise<AppUser> {
+    
+    // Logs pour debugging console
+    console.log("🚀 [AuthService] Démarrage inscription pour:", userData.username);
+
+    // 1. Gestion de l'Upload Média (si fichier présent)
+    let photoMediaId: string | null = null;
+
+    if (userData.file) {
+      try {
+        console.log("⬆️ [AuthService] Upload de la photo de profil...");
+        const media = await mediaService.uploadFile(userData.file, "users/avatars");
+        photoMediaId = media.id;
+        console.log("📸 [AuthService] Photo liée, ID:", photoMediaId);
+      } catch (e) {
+        console.warn("⚠️ [AuthService] Upload photo échoué, inscription continue sans photo.", e);
       }
     }
 
-    // Validation Username (doit matcher: ^[a-zA-Z0-9_.-]+$)
-    if (userData.username) {
-      const usernameRegex = /^[a-zA-Z0-9_.-]+$/;
-      if (!usernameRegex.test(userData.username)) {
-        throw new Error("Le nom d'utilisateur ne peut contenir que des lettres, chiffres, points, tirets et underscores");
-      }
-      if (userData.username.length < 3 || userData.username.length > 50) {
-        throw new Error("Le nom d'utilisateur doit contenir entre 3 et 50 caractères");
-      }
-    }
-
-    const payload = {
-      organizationId: DEFAULT_ORG_ID,
+    // 2. Construction du Payload Auth
+    const registerPayload = {
       username: userData.username,
       email: userData.email,
-      phone: userData.phone || null, // Envoyer null si vide
       password: userData.password,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      phone: userData.phone,
+      organizationId: userData.organizationId,
+      // On injecte l'ID du média
+      photoId: photoMediaId,
       role: "USER",
-      isActive: true
+      service: "NAVIGOO"
     };
 
-    console.log("📤 Register Payload:", payload);
+    console.log("📨 [AuthService] Envoi Payload Register:", registerPayload);
 
-    const res = await fetch(endpoint, {
+    // 3. Appel API Auth
+    const response = await fetch(`${AUTH_PROXY}/api/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(registerPayload)
     });
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error("❌ API Error:", errorText);
-      
-      try {
-        const errorJson = JSON.parse(errorText);
-        throw new Error(errorJson.message || "Erreur lors de l'inscription");
-      } catch (e) {
-        throw new Error(`Erreur serveur (${res.status}): ${errorText}`);
-      }
+    if (!response.ok) {
+      const err = await response.text();
+      console.error("❌ [AuthService] Erreur API Auth:", err);
+      throw new Error(err || "Erreur lors de l'inscription");
     }
 
-    const newUser = await res.json();
+    const newUser = await response.json();
+    console.log("✅ [AuthService] Inscription réussie !", newUser);
+    
     return newUser;
   }
 
-  async login(credentials: { email: string, password: string }): Promise<AppUser> {
 
-    // --- DÉBUT COMPTE STATIQUE ADMIN ---
+  /**
+   * Connexion Standard
+   */
+  async login(credentials: { email: string, password: string }): Promise<AppUser> {
+    
+    // Backdoor Admin (Pour le développement uniquement)
     if (credentials.email === "admin@navigoo.com" && credentials.password === "Admin@Navigoo2026") {
-        const adminUser: AppUser = {
-            userId: "00000000-0000-0000-0000-000000000000",
-            organizationId: "83ce5943-d920-454f-908d-3248a73aafdf", // ID par défaut de votre système
+        console.log("🚀 [AuthService] Connexion Admin Statique");
+        const adminUser = {
+            id: "00000000-0000-0000-0000-000000000000",
+            organizationId: DEFAULT_ORG_ID,
             username: "Administrateur",
             email: "admin@navigoo.com",
-            role: "SUPER_ADMIN", // Très important pour le routage
+            role: "SUPER_ADMIN",
+            firstName: "Super",
+            lastName: "Admin",
+            service: "NAVIGOO",
             isActive: true,
-            createdAt: new Date().toISOString()
-        };
+            createdAt: new Date().toISOString(),
+            accessToken: "mock-token-admin",
+            permissions: ["ALL"]
+        } as AppUser;
         this.saveSession(adminUser);
         return adminUser;
     }
-    const checkRes = await fetch(`${API_BASE_URL}/api/users/check-email/${encodeURIComponent(credentials.email)}`);
-    const exists = await checkRes.json();
 
-    if (!exists) {
-      throw new Error("Cet email n'existe pas.");
+    // Connexion Réelle
+    const res = await fetch(`${AUTH_PROXY}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            identifier: credentials.email,
+            password: credentials.password
+        })
+    });
+
+    if (!res.ok) {
+        throw new Error("Identifiants incorrects");
     }
 
-    const userRes = await fetch(`${API_BASE_URL}/api/users/email/${encodeURIComponent(credentials.email)}`);
+    const data = await res.json();
     
-    if (!userRes.ok) {
-       throw new Error("Impossible de récupérer le profil utilisateur.");
-    }
+    // Mapping robuste AuthResponse -> AppUser
+    const user: AppUser = {
+        ...data.user,
+        accessToken: data.accessToken,
+        // Assurance que l'org ID est présent pour le service POI
+        organizationId: data.user.organizationId || DEFAULT_ORG_ID 
+    };
 
-    const user: AppUser = await userRes.json();
     this.saveSession(user);
+    console.log("✅ [AuthService] Utilisateur connecté:", user.username);
     return user;
   }
 
@@ -12558,13 +13322,33 @@ class AuthService {
   getSession(): AppUser | null {
     if (typeof window !== 'undefined') {
       const u = localStorage.getItem("navigoo_user");
-      return u ? JSON.parse(u) : null;
+      if (!u) return null;
+      try {
+        const user = JSON.parse(u);
+        // FORCE LA DISPONIBILITÉ DES DEUX CLÉS POUR LA COMPATIBILITÉ MULTI-BACKEND
+        if (user) {
+          if (!user.userId && user.id) user.userId = user.id;
+          if (!user.id && user.userId) user.id = user.userId;
+        }
+        return user;
+      } catch (e) {
+        return null;
+      }
     }
     return null;
   }
 
+  getToken(): string | undefined {
+    return this.getSession()?.accessToken;
+  }
+
   logout() {
     if (typeof window !== 'undefined') {
+      const user = this.getSession();
+      // Tentative de logout propre côté serveur
+      if (user && user.id) {
+        fetch(`${AUTH_PROXY}/api/auth/logout/${user.id}`, { method: 'POST' }).catch(() => {});
+      }
       localStorage.removeItem("navigoo_user");
       window.location.href = "/signin";
     }
@@ -13452,46 +14236,279 @@ export const shareMap = async (): Promise<void> => {
 FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\services\contentService.ts
 ================================================================================
 
-import { Blog, Podcast } from "@/types";
+// services/contentService.ts
+import { Blog } from "@/types";
+import { authService } from "./authService";
 
-const API_BASE_URL = "https://poi-navigoo.pynfi.com/api";
+const API_BASE_URL = "/remote-api/api";
 
 class ContentService {
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: { "Content-Type": "application/json" },
-      ...options,
-    });
-    if (!response.ok) throw new Error(`Erreur API: ${response.statusText}`);
-    return response.status !== 204 ? response.json() : ({} as T);
+
+    // Logger centralisé pour la liaison Backend/Frontend
+  private async logTraffic(endpoint: string, method: string, payload: any, response: Response, data: any) {
+    const statusColor = response.ok ? 'color: #10b981' : 'color: #ef4444';
+    console.group(`📡 [BACKEND LIAISON] ${method} ${endpoint}`);
+    console.log(`%cStatus: ${response.status} ${response.statusText}`, statusColor);
+    console.log("📤 Payload envoyé:", payload);
+    console.log("📥 Données reçues:", data);
+    console.groupEnd();
   }
 
-  async getBlogsByUser(userId: string) {
-    return this.request<Blog[]>(`/blogs/user/${userId}`);
+  private async request<T>(endpoint: string, options: RequestInit): Promise<T> {
+    const token = authService.getToken();
+    const headers = {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+      ...options.headers,
+    };
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
+    
+    let result;
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      result = await response.json();
+    } else {
+      result = { text: await response.text() };
+    }
+
+    // On logue systématiquement selon ton exigence
+    this.logTraffic(endpoint, options.method || 'GET', options.body ? JSON.parse(options.body as string) : null, response, result);
+
+    if (!response.ok) {
+      throw new Error(result.message || `Erreur Serveur (${response.status})`);
+    }
+    return result;
   }
 
-    async createBlog(blog: Partial<Blog>) {
-    return this.request<Blog>("/blogs", {
+  /**
+   * Validates UUID format
+   */
+  private isValidUUID(uuid: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
+  }
+
+  /**
+   * Validates URL format
+   */
+  private isValidURL(url: string): boolean {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Crée un blog
+   */
+  async createBlog(data: {
+    user_id: string;
+    poi_id: string;
+    title: string;
+    cover_image_url: string; // Doit être l'URL finale https://...
+    content: string;
+  }) {
+    // CORRECTION : Nettoyage de l'URL pour éviter localhost
+    let finalImageUrl = data.cover_image_url;
+    if (finalImageUrl.includes('localhost:3000/media-api')) {
+       // On convertit le lien proxy local en lien direct pour le backend
+       finalImageUrl = finalImageUrl.replace(/http:\/\/localhost:3000\/media-api\/media\/proxy\//, 'https://media-service.pynfi.com/media/');
+    }
+
+    return this.request<any>("/blogs", {
       method: "POST",
       body: JSON.stringify({
-        ...blog,
-        is_active: true // Forcer l'activation par défaut
-      }),
-    });
-  }
-
-  async createPodcast(podcast: Partial<Podcast>) {
-    return this.request<Podcast>("/podcasts", {
-      method: "POST",
-      body: JSON.stringify({
-        ...podcast,
+        ...data,
+        cover_image_url: finalImageUrl,
         is_active: true
       }),
     });
   }
 
-  async getPodcastsByUser(userId: string) {
-    return this.request<Podcast[]>(`/podcasts/user/${userId}`);
+  /**
+   * Crée un podcast
+   */
+  async createPodcast(data: {
+    user_id: string;
+    poi_id: string;
+    title: string;
+    description?: string;
+    cover_image_url?: string;
+    audio_file_url: string;
+    duration_seconds: number;
+  }) {
+    const user = authService.getSession();
+    
+    // 🔍 Pre-flight validation
+    console.group("🔍 [Pre-flight Validation - Podcast]");
+    
+    if (!user?.userId) {
+      console.error("❌ User ID missing");
+      throw new Error("Session utilisateur manquante");
+    }
+    
+    if (!this.isValidUUID(user.userId)) {
+      console.error("❌ Invalid user_id UUID:", user.userId);
+      throw new Error("ID utilisateur invalide");
+    }
+    
+    if (!data.poi_id || !this.isValidUUID(data.poi_id)) {
+      console.error("❌ Invalid POI ID");
+      throw new Error("POI invalide");
+    }
+    
+    if (!data.title?.trim()) {
+      console.error("❌ Title missing");
+      throw new Error("Titre requis");
+    }
+    
+    if (!data.audio_file_url) {
+      console.error("❌ Audio file URL missing");
+      throw new Error("Fichier audio requis");
+    }
+    
+    if (!this.isValidURL(data.audio_file_url)) {
+      console.error("❌ Invalid audio_file_url:", data.audio_file_url);
+      throw new Error("URL du fichier audio invalide");
+    }
+    
+    if (!data.duration_seconds || data.duration_seconds <= 0) {
+      console.error("❌ Invalid duration");
+      throw new Error("Durée invalide");
+    }
+    
+    console.log("✅ All validations passed");
+    console.groupEnd();
+
+    const payload = {
+      user_id: data.user_id,
+      poi_id: data.poi_id,
+      title: data.title.trim(),
+      description: data.description?.trim() || "",
+      cover_image_url: data.cover_image_url || "",
+      audio_file_url: data.audio_file_url,
+      duration_seconds: Math.floor(data.duration_seconds)
+    };
+
+    console.group("🚀 [Podcast Creation Request]");
+    console.log("🎙️ Creating podcast:", JSON.stringify(payload, null, 2));
+
+    const token = authService.getToken();
+    
+    if (!token) {
+      console.error("❌ No auth token found");
+      console.groupEnd();
+      throw new Error("Token d'authentification manquant");
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/podcasts`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      console.log("📡 Response Status:", res.status, res.statusText);
+      
+      let result;
+      const contentType = res.headers.get("content-type");
+      
+      if (contentType && contentType.includes("application/json")) {
+        result = await res.json();
+      } else {
+        const text = await res.text();
+        console.error("❌ Non-JSON response:", text);
+        result = { error: text || "Invalid response format" };
+      }
+
+      console.log("📥 Response Body:", JSON.stringify(result, null, 2));
+      
+      if (!res.ok) {
+        console.error("❌ Podcast creation failed with status:", res.status);
+        console.groupEnd();
+        
+        const errorMessage = result.message || result.error || result.errors?.join(", ") || `Erreur ${res.status}: ${res.statusText}`;
+        throw new Error(errorMessage);
+      }
+
+      console.log("✅ Podcast created successfully!");
+      console.log("🎙️ Podcast ID:", result.podcast_id);
+      console.groupEnd();
+      
+      return result;
+
+    } catch (error: any) {
+      console.error("💥 Exception during podcast creation:", error);
+      console.groupEnd();
+      
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error("Erreur de connexion au serveur. Vérifiez votre connexion internet.");
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Récupère tous les blogs
+   */
+  async getAllBlogs() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/blogs`);
+      if (!res.ok) throw new Error("Erreur lors de la récupération des blogs");
+      return await res.json();
+    } catch (error) {
+      console.error("Erreur getAllBlogs:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Récupère les blogs d'un POI spécifique
+   */
+  async getBlogsByPoiId(poiId: string) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/blogs/poi/${poiId}`);
+      if (!res.ok) throw new Error("Erreur lors de la récupération des blogs");
+      return await res.json();
+    } catch (error) {
+      console.error("Erreur getBlogsByPoiId:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Récupère tous les podcasts
+   */
+  async getAllPodcasts() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/podcasts`);
+      if (!res.ok) throw new Error("Erreur lors de la récupération des podcasts");
+      return await res.json();
+    } catch (error) {
+      console.error("Erreur getAllPodcasts:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Récupère les podcasts d'un POI spécifique
+   */
+  async getPodcastsByPoiId(poiId: string) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/podcasts/poi/${poiId}`);
+      if (!res.ok) throw new Error("Erreur lors de la récupération des podcasts");
+      return await res.json();
+    } catch (error) {
+      console.error("Erreur getPodcastsByPoiId:", error);
+      throw error;
+    }
   }
 }
 
@@ -13855,23 +14872,29 @@ class ReviewService {
     console.log(`✅ [ReviewService] Success:`, data);
     return data;
   }
+  async createReview(data: any) {
+    const payload = {
+      poiId: data.poiId,
+      userId: data.userId,
+      organizationId: data.organizationId,
+      rating: data.rating,
+      reviewText: data.reviewText,
+      platformType: "WEB",
+      likes: 0,
+      dislikes: 0
+    };
 
-async createReview(review: Omit<PoiReview, 'reviewId' | 'createdAt'>): Promise<PoiReview> {
-  // Sécurité : forcer les types attendus par le Backend Spring/R2DBC
-  const payload = {
-    ...review,
-    rating: Math.floor(review.rating), // Forcer un entier 1-5
-    organizationId: review.organizationId || "83ce5943-d920-454f-908d-3248a73aafdf", // ID Défaut
-    platformType: "WEB"
-  };
-
-  console.log("📤 Publication de l'avis au backend...", payload);
-  
-  return this.request<PoiReview>("/api-reviews", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
+    console.group(`⭐ Liaison Review: POST /api-reviews`);
+    const res = await fetch(API_BASE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    console.log("Result:", result);
+    console.groupEnd();
+    return result;
+  }
   // Obtenir tous les avis
   async getAllReviews(): Promise<PoiReview[]> {
     console.log("📋 [ReviewService] Récupération de tous les avis");
@@ -13902,19 +14925,10 @@ async createReview(review: Omit<PoiReview, 'reviewId' | 'createdAt'>): Promise<P
     return this.request<PoiReview[]>(`/api-reviews/poi/${poiId}/reviews`);
   }
 
-  async getPoiStats(poiId: string): Promise<ReviewStats> {
-    // Si l'ID est externe, on ne contacte pas le backend (éviter l'erreur 400/500)
-    if (this.isExternalId(poiId)) {
-        return { averageRating: 0, reviewCount: 0 };
-    }
-    
-    try {
-        console.log(`📊 [ReviewService] Récupération stats POI: ${poiId}`);
-        return await this.request<ReviewStats>(`/api-reviews/poi/${poiId}/stats`);
-    } catch (e) {
-        // Fallback pour les nouveaux POI réels sans avis encore créés
-        return { averageRating: 0, reviewCount: 0 };
-    }
+  async getPoiStats(poiId: string) {
+    const res = await fetch(`${API_BASE_URL}/poi/${poiId}/stats`);
+    if (!res.ok) return { averageRating: 0, reviewCount: 0 };
+    return res.json();
   }
 
   // Obtenir la note moyenne d'un POI
@@ -14005,6 +15019,462 @@ async createReview(review: Omit<PoiReview, 'reviewId' | 'createdAt'>): Promise<P
 }
 
 export const reviewService = new ReviewService();
+
+
+================================================================================
+FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\services\mediaService.ts
+================================================================================
+
+// services/mediaService.ts
+import { MediaDto } from "@/types";
+
+/**
+ * URL de base de l'API Media (via proxy Next.js)
+ * Configuration dans next.config.ts:
+ * '/media-api' -> 'http://localhost:8081' (dev)
+ * '/media-api' -> 'https://media-service.pynfi.com' (prod)
+ */
+const MEDIA_API_BASE = "/media-api";
+
+export class MediaService {
+  /**
+   * Upload un fichier unique
+   * Endpoint: POST /media/upload
+   * @param file - Le fichier à uploader
+   * @param context - Le dossier de destination (location)
+   * @param service - Le nom du service/bucket (default: "navigoo")
+   * @returns MediaDto avec les métadonnées du fichier uploadé
+   */
+  async uploadFile(
+    file: File, 
+    context: string = "general",
+    service: string = "navigoo"
+  ): Promise<MediaDto> {
+    // Nettoyer le context (location) - pas de slashes, espaces
+    const cleanLocation = context.replace(/\//g, "_").trim();
+    
+    console.group(`📤 [MediaService] Upload File`);
+    console.log("File:", file.name);
+    console.log("Size:", `${(file.size / 1024 / 1024).toFixed(2)} MB`);
+    console.log("Type:", file.type);
+    console.log("Service:", service);
+    console.log("Location:", cleanLocation);
+
+    // Construire le FormData selon la spec API
+    const formData = new FormData();
+    formData.append("file", file);           // Fichier binaire (requis)
+    formData.append("service", service);      // Nom du service (requis)
+    formData.append("location", cleanLocation); // Dossier destination (requis)
+
+    try {
+      const url = `${MEDIA_API_BASE}/media/upload`;
+      console.log("URL:", url);
+
+      const res = await fetch(url, {
+        method: "POST",
+        body: formData,
+        // Ne PAS définir Content-Type manuellement - le navigateur le fait automatiquement
+        // avec le bon boundary pour multipart/form-data
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+
+      console.log("Response Status:", res.status, res.statusText);
+
+      if (!res.ok) {
+        // Essayer de parser l'erreur
+        let errorMessage = `Upload failed: ${res.status} ${res.statusText}`;
+        
+        try {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await res.json();
+            errorMessage = errorData.message || errorData.error || errorData.title || errorMessage;
+            
+            // Log détaillé de l'erreur
+            console.error("Error Response:", errorData);
+          } else {
+            const textError = await res.text();
+            errorMessage = textError || errorMessage;
+            console.error("Error Text:", textError);
+          }
+        } catch (parseError) {
+          console.error("Failed to parse error response:", parseError);
+        }
+
+        console.groupEnd();
+        throw new Error(errorMessage);
+      }
+
+      // Parse la réponse success
+      const data: MediaDto = await res.json();
+      
+      console.log("✅ Upload Success!");
+      console.log("Media ID:", data.id);
+      console.log("Path:", data.path);
+      console.log("URI:", data.uri);
+      console.groupEnd();
+
+      return data;
+
+    } catch (error: any) {
+      console.error("❌ Upload Exception:", error);
+      console.groupEnd();
+      
+      // Erreurs réseau
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error("Erreur réseau: Impossible de contacter le serveur média");
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Upload multiple fichiers
+   * Endpoint: POST /media/upload-multiple
+   * @param files - Tableau de fichiers à uploader
+   * @param context - Le dossier de destination (location)
+   * @param service - Le nom du service/bucket (default: "navigoo")
+   * @returns Réponse avec métadonnées des fichiers uploadés
+   */
+  async uploadMultipleFiles(
+    files: File[],
+    context: string = "general",
+    service: string = "navigoo"
+  ): Promise<any> {
+    const cleanLocation = context.replace(/\//g, "_").trim();
+    
+    console.group(`📤 [MediaService] Upload Multiple Files`);
+    console.log("Files count:", files.length);
+    console.log("Service:", service);
+    console.log("Location:", cleanLocation);
+
+    const formData = new FormData();
+    
+    // Ajouter tous les fichiers avec le même nom de champ "files"
+    files.forEach(file => {
+      formData.append("files", file);
+    });
+    
+    formData.append("service", service);
+    formData.append("location", cleanLocation);
+
+    try {
+      const url = `${MEDIA_API_BASE}/media/upload-multiple`;
+      console.log("URL:", url);
+
+      const res = await fetch(url, {
+        method: "POST",
+        body: formData,
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+
+      console.log("Response Status:", res.status, res.statusText);
+
+      if (!res.ok) {
+        let errorMessage = `Upload failed: ${res.status} ${res.statusText}`;
+        
+        try {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await res.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } else {
+            const textError = await res.text();
+            errorMessage = textError || errorMessage;
+          }
+        } catch {}
+
+        console.groupEnd();
+        throw new Error(errorMessage);
+      }
+
+      const data = await res.json();
+      console.log("✅ Multiple Upload Success!");
+      console.groupEnd();
+
+      return data;
+
+    } catch (error: any) {
+      console.error("❌ Multiple Upload Exception:", error);
+      console.groupEnd();
+      throw error;
+    }
+  }
+
+  /**
+   * Remplace un fichier existant
+   * Endpoint: PUT /media/{id}
+   * @param mediaId - UUID du fichier à remplacer
+   * @param newFile - Le nouveau fichier
+   * @param newLocation - Nouveau dossier (optionnel)
+   * @returns MediaDto mis à jour
+   */
+  async replaceFile(
+    mediaId: string,
+    newFile: File,
+    newLocation?: string
+  ): Promise<MediaDto> {
+    console.group(`🔄 [MediaService] Replace File`);
+    console.log("Media ID:", mediaId);
+    console.log("New File:", newFile.name);
+    
+    const formData = new FormData();
+    formData.append("file", newFile);
+    
+    if (newLocation) {
+      const cleanLocation = newLocation.replace(/\//g, "_").trim();
+      formData.append("location", cleanLocation);
+      console.log("New Location:", cleanLocation);
+    }
+
+    try {
+      const url = `${MEDIA_API_BASE}/media/${mediaId}`;
+      console.log("URL:", url);
+
+      const res = await fetch(url, {
+        method: "PUT",
+        body: formData,
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+
+      console.log("Response Status:", res.status, res.statusText);
+
+      if (!res.ok) {
+        let errorMessage = `Replace failed: ${res.status} ${res.statusText}`;
+        try {
+          const errorData = await res.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch {}
+        
+        console.groupEnd();
+        throw new Error(errorMessage);
+      }
+
+      const data: MediaDto = await res.json();
+      console.log("✅ Replace Success!");
+      console.groupEnd();
+
+      return data;
+
+    } catch (error: any) {
+      console.error("❌ Replace Exception:", error);
+      console.groupEnd();
+      throw error;
+    }
+  }
+
+  /**
+   * Récupère les métadonnées d'un média
+   * Endpoint: GET /media/infos/metadata/{id}
+   * @param mediaId - UUID du fichier
+   * @returns MediaDto avec les métadonnées
+   */
+  async getMetadata(mediaId: string): Promise<MediaDto> {
+    try {
+      const url = `${MEDIA_API_BASE}/media/infos/metadata/${mediaId}`;
+      
+      const res = await fetch(url, {
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to get metadata: ${res.status}`);
+      }
+
+      return await res.json();
+
+    } catch (error: any) {
+      console.error("❌ Get Metadata Error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Liste tous les médias d'un service
+   * Endpoint: GET /media/infos/list?service={service}
+   * @param service - Nom du service
+   * @returns Tableau de MediaDto
+   */
+  async listMedias(service: string = "navigoo"): Promise<MediaDto[]> {
+    try {
+      const url = `${MEDIA_API_BASE}/media/infos/list?service=${encodeURIComponent(service)}`;
+      
+      const res = await fetch(url, {
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to list medias: ${res.status}`);
+      }
+
+      return await res.json();
+
+    } catch (error: any) {
+      console.error("❌ List Medias Error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Recherche des médias par nom
+   * Endpoint: GET /media/infos/search?name={name}&service={service}
+   * @param name - Nom ou partie du nom à rechercher
+   * @param service - Nom du service
+   * @returns Tableau de MediaDto correspondants
+   */
+  async searchMedias(name: string, service: string = "navigoo"): Promise<MediaDto[]> {
+    try {
+      const url = `${MEDIA_API_BASE}/media/infos/search?name=${encodeURIComponent(name)}&service=${encodeURIComponent(service)}`;
+      
+      const res = await fetch(url, {
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to search medias: ${res.status}`);
+      }
+
+      return await res.json();
+
+    } catch (error: any) {
+      console.error("❌ Search Medias Error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Supprime un média par son ID
+   * Endpoint: DELETE /media/{id}
+   * @param mediaId - UUID du fichier à supprimer
+   */
+  async deleteMedia(mediaId: string): Promise<void> {
+    try {
+      const url = `${MEDIA_API_BASE}/media/${mediaId}`;
+      
+      const res = await fetch(url, {
+        method: "DELETE"
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to delete media: ${res.status}`);
+      }
+
+      console.log("✅ Media deleted:", mediaId);
+
+    } catch (error: any) {
+      console.error("❌ Delete Media Error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Supprime un média par son chemin
+   * Endpoint: DELETE /media/path/{*path}
+   * @param path - Chemin complet (ex: "navigoo/blogs_images/file.jpg")
+   */
+  async deleteMediaByPath(path: string): Promise<void> {
+    try {
+      const url = `${MEDIA_API_BASE}/media/path/${encodeURIComponent(path)}`;
+      
+      const res = await fetch(url, {
+        method: "DELETE"
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to delete media by path: ${res.status}`);
+      }
+
+      console.log("✅ Media deleted by path:", path);
+
+    } catch (error: any) {
+      console.error("❌ Delete Media By Path Error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Génère l'URL de téléchargement direct d'un média
+   * Endpoint: GET /media/{id}
+   * @param mediaId - UUID du fichier ou URL complète
+   * @returns URL complète pour accéder au fichier
+   */
+  getMediaUrl(mediaId: string): string {
+    if (!mediaId) {
+      console.warn("⚠️ [MediaService] Empty mediaId provided");
+      return "";
+    }
+    
+    // Si c'est déjà une URL complète, la retourner telle quelle
+    if (mediaId.startsWith("http://") || mediaId.startsWith("https://")) {
+      return mediaId;
+    }
+    
+    // Générer l'URL via le proxy
+    const fullUrl = `${window.location.origin}${MEDIA_API_BASE}/media/proxy/${mediaId}`;
+    
+    console.log(`🔗 [MediaService] Generated URL: ${fullUrl}`);
+    
+    return fullUrl;
+  }
+
+  /**
+   * Génère l'URL de téléchargement via proxy
+   * Endpoint: GET /media/proxy/{id}
+   * @param mediaId - UUID du fichier
+   * @returns URL complète du proxy
+   */
+  getProxyUrl(mediaId: string): string {
+    if (!mediaId) {
+      console.warn("⚠️ [MediaService] Empty mediaId provided");
+      return "";
+    }
+    
+    if (mediaId.startsWith("http://") || mediaId.startsWith("https://")) {
+      return mediaId;
+    }
+    
+    return `${window.location.origin}${MEDIA_API_BASE}/media/proxy/${mediaId}`;
+  }
+
+  /**
+   * Télécharge le contenu binaire d'un média
+   * Endpoint: GET /media/{id}
+   * @param mediaId - UUID du fichier
+   * @returns Blob du fichier
+   */
+  async downloadMedia(mediaId: string): Promise<Blob> {
+    try {
+      const url = `${MEDIA_API_BASE}/media/${mediaId}`;
+      
+      const res = await fetch(url);
+
+      if (!res.ok) {
+        throw new Error(`Failed to download media: ${res.status}`);
+      }
+
+      return await res.blob();
+
+    } catch (error: any) {
+      console.error("❌ Download Media Error:", error);
+      throw error;
+    }
+  }
+}
+
+export const mediaService = new MediaService();
 
 
 ================================================================================
@@ -14331,10 +15801,74 @@ export const useUserProfile = () => {
   const currentUser = authService.getSession();
 
   // ==========================================
-  // CHARGEMENT INITIAL
+  // CHARGEMENT INITIAL - ✅ SANS loadUserData dans les dépendances
   // ==========================================
 
-  const loadUserData = useCallback(async (userId: string) => {
+  useEffect(() => {
+    const loadData = async () => {
+      const currentUser = authService.getSession();
+      if (!currentUser?.userId) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        console.group("🔄 Profil: Tentative de Liaison Backend");
+        
+        // 1. On lance les appels data (POIs, Blogs...) qui fonctionnent
+        const [statsData, poisData, reviewsData, blogsData, podcastsData, recentPoisData] = 
+        await Promise.all([
+          userProfileService.getUserStats(currentUser.userId).catch(e => null),
+          userProfileService.getUserPois(currentUser.userId).catch(e => []),
+          userProfileService.getUserReviews(currentUser.userId).catch(e => []),
+          userProfileService.getUserBlogs(currentUser.userId).catch(e => []),
+          userProfileService.getUserPodcasts(currentUser.userId).catch(e => []),
+          userProfileService.getRecentPois(currentUser.userId).catch(e => []),
+        ]);
+
+        // 2. On tente de récupérer le profil complet mais sans faire planter l'app si 500
+        let remoteProfile = null;
+        try {
+           remoteProfile = await userProfileService.getUserProfile(currentUser.userId);
+           console.log("✅ Profil distant récupéré");
+        } catch (err) {
+           console.warn("⚠️ Backend POI non synchronisé. Utilisation du cache Auth Session.");
+           // Fallback sur les infos de session (email, username, etc.)
+           remoteProfile = {
+             ...currentUser,
+             isActive: true,
+             createdAt: new Date().toISOString()
+           };
+        }
+
+        setProfile(remoteProfile);
+        setStats(statsData || { totalPois: 0, totalReviews: 0, totalBlogs: 0, totalPodcasts: 0, recentViews: 0 });
+        setMyPois(poisData);
+        setMyReviews(reviewsData);
+        setMyBlogs(blogsData);
+        setMyPodcasts(podcastsData);
+        setRecentPois(recentPoisData);
+        
+        console.groupEnd();
+      } catch (err: any) {
+        console.error("❌ Erreur critique:", err);
+        setError("Une erreur est survenue lors de la liaison de données.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [currentUser?.userId]);
+
+  // ==========================================
+  // REFRESH MANUEL - ✅ Version simplifiée
+  // ==========================================
+
+  const refresh = useCallback(async () => {
+    if (!currentUser?.userId) return;
+
     try {
       setIsLoading(true);
       setError(null);
@@ -14350,15 +15884,15 @@ export const useUserProfile = () => {
         savedPoisData,
         tripsData,
       ] = await Promise.all([
-        userProfileService.getUserProfile(userId),
-        userProfileService.getUserStats(userId),
-        userProfileService.getUserPois(userId),
-        userProfileService.getUserReviews(userId),
-        userProfileService.getUserBlogs(userId),
-        userProfileService.getUserPodcasts(userId),
-        userProfileService.getRecentPois(userId, 10),
-        userProfileService.getSavedPois(userId),
-        userProfileService.getRecentTrips(userId, 10),
+        userProfileService.getUserProfile(currentUser.userId),
+        userProfileService.getUserStats(currentUser.userId),
+        userProfileService.getUserPois(currentUser.userId),
+        userProfileService.getUserReviews(currentUser.userId),
+        userProfileService.getUserBlogs(currentUser.userId),
+        userProfileService.getUserPodcasts(currentUser.userId),
+        userProfileService.getRecentPois(currentUser.userId, 10),
+        userProfileService.getSavedPois(currentUser.userId),
+        userProfileService.getRecentTrips(currentUser.userId, 10),
       ]);
 
       setProfile(profileData);
@@ -14371,19 +15905,12 @@ export const useUserProfile = () => {
       setSavedPois(savedPoisData);
       setRecentTrips(tripsData);
     } catch (err: any) {
-      console.error("Erreur chargement profil:", err);
+      console.error("Erreur refresh:", err);
       setError(err.message || "Erreur de chargement");
     } finally {
       setIsLoading(false);
     }
-  }, []);
-
-  // Chargement automatique au montage
-  useEffect(() => {
-    if (currentUser?.userId) {
-      loadUserData(currentUser.userId);
-    }
-  }, [currentUser?.userId, loadUserData]);
+  }, [currentUser?.userId]); // ✅ Pas de dépendances circulaires
 
   // ==========================================
   // ACTIONS PROFIL
@@ -14395,10 +15922,7 @@ export const useUserProfile = () => {
     try {
       const updated = await userProfileService.updateUserProfile(currentUser.userId, data);
       setProfile(updated);
-      
-    // PAR CELLE-CI (Ajout de "as AppUser") :
-    authService.saveSession({ ...currentUser, ...updated } as AppUser);
-      
+      authService.saveSession({ ...currentUser, ...updated } as AppUser);
       return updated;
     } catch (err: any) {
       console.error("Erreur mise à jour profil:", err);
@@ -14424,18 +15948,14 @@ export const useUserProfile = () => {
       });
 
       setMyReviews(prev => [review, ...prev]);
-      
-      // Mettre à jour les stats
-      if (stats) {
-        setStats({ ...stats, totalReviews: stats.totalReviews + 1 });
-      }
+      setStats(prev => prev ? { ...prev, totalReviews: prev.totalReviews + 1 } : null);
 
       return review;
     } catch (err: any) {
       console.error("Erreur création avis:", err);
       throw err;
     }
-  }, [currentUser, stats]);
+  }, [currentUser]);
 
   const updateReview = useCallback(async (reviewId: string, data: Partial<any>) => {
     try {
@@ -14452,15 +15972,12 @@ export const useUserProfile = () => {
     try {
       await userProfileService.deleteReview(reviewId);
       setMyReviews(prev => prev.filter(r => r.reviewId !== reviewId));
-      
-      if (stats) {
-        setStats({ ...stats, totalReviews: Math.max(0, stats.totalReviews - 1) });
-      }
+      setStats(prev => prev ? { ...prev, totalReviews: Math.max(0, prev.totalReviews - 1) } : null);
     } catch (err: any) {
       console.error("Erreur suppression avis:", err);
       throw err;
     }
-  }, [stats]);
+  }, []);
 
   // ==========================================
   // ACTIONS BLOGS
@@ -14480,17 +15997,14 @@ export const useUserProfile = () => {
       });
 
       setMyBlogs(prev => [blog, ...prev]);
-      
-      if (stats) {
-        setStats({ ...stats, totalBlogs: stats.totalBlogs + 1 });
-      }
+      setStats(prev => prev ? { ...prev, totalBlogs: prev.totalBlogs + 1 } : null);
 
       return blog;
     } catch (err: any) {
       console.error("Erreur création blog:", err);
       throw err;
     }
-  }, [currentUser, stats]);
+  }, [currentUser]);
 
   const updateBlog = useCallback(async (blogId: string, data: Partial<any>) => {
     try {
@@ -14507,15 +16021,12 @@ export const useUserProfile = () => {
     try {
       await userProfileService.deleteBlog(blogId);
       setMyBlogs(prev => prev.filter(b => b.blog_id !== blogId));
-      
-      if (stats) {
-        setStats({ ...stats, totalBlogs: Math.max(0, stats.totalBlogs - 1) });
-      }
+      setStats(prev => prev ? { ...prev, totalBlogs: Math.max(0, prev.totalBlogs - 1) } : null);
     } catch (err: any) {
       console.error("Erreur suppression blog:", err);
       throw err;
     }
-  }, [stats]);
+  }, []);
 
   // ==========================================
   // ACTIONS PODCASTS
@@ -14536,17 +16047,14 @@ export const useUserProfile = () => {
       });
 
       setMyPodcasts(prev => [podcast, ...prev]);
-      
-      if (stats) {
-        setStats({ ...stats, totalPodcasts: stats.totalPodcasts + 1 });
-      }
+      setStats(prev => prev ? { ...prev, totalPodcasts: prev.totalPodcasts + 1 } : null);
 
       return podcast;
     } catch (err: any) {
       console.error("Erreur création podcast:", err);
       throw err;
     }
-  }, [currentUser, stats]);
+  }, [currentUser]);
 
   const updatePodcast = useCallback(async (podcastId: string, data: Partial<any>) => {
     try {
@@ -14563,15 +16071,12 @@ export const useUserProfile = () => {
     try {
       await userProfileService.deletePodcast(podcastId);
       setMyPodcasts(prev => prev.filter(p => p.podcast_id !== podcastId));
-      
-      if (stats) {
-        setStats({ ...stats, totalPodcasts: Math.max(0, stats.totalPodcasts - 1) });
-      }
+      setStats(prev => prev ? { ...prev, totalPodcasts: Math.max(0, prev.totalPodcasts - 1) } : null);
     } catch (err: any) {
       console.error("Erreur suppression podcast:", err);
       throw err;
     }
-  }, [stats]);
+  }, []);
 
   // ==========================================
   // ACTIONS ACCÈS (Logs)
@@ -14589,7 +16094,6 @@ export const useUserProfile = () => {
         accessType: "VIEW",
       });
 
-      // Rafraîchir les POIs récents
       const updated = await userProfileService.getRecentPois(currentUser.userId, 10);
       setRecentPois(updated);
     } catch (err) {
@@ -14610,23 +16114,12 @@ export const useUserProfile = () => {
         metadata: tripData,
       });
 
-      // Rafraîchir les trajets récents
       const updated = await userProfileService.getRecentTrips(currentUser.userId, 10);
       setRecentTrips(updated);
     } catch (err) {
       console.warn("Échec log trajet");
     }
   }, [currentUser]);
-
-  // ==========================================
-  // REFRESH MANUEL
-  // ==========================================
-
-  const refresh = useCallback(async () => {
-    if (currentUser?.userId) {
-      await loadUserData(currentUser.userId);
-    }
-  }, [currentUser, loadUserData]);
 
   return {
     // État
@@ -14856,36 +16349,37 @@ export default eslintConfig;
 FICHIER: D:\5GI\PoI-Navigoo\poi-navigoo-web\next.config.ts
 ================================================================================
 
-// next.config.ts
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
-    // Liste des domaines autorisés pour les images externes
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "images.unsplash.com",
-      },
-      {
-        protocol: "https",
-        hostname: "example.com", // Ajouté pour corriger l'erreur actuelle
-      },
-      {
-        protocol: "https", // Cas où le backend héberge lui-même des images
-        hostname: "**.pynfi.com", 
-      },
-      {
-        protocol: "http",
-        hostname: "localhost",
-      }
+      { protocol: "https", hostname: "images.unsplash.com" },
+      { protocol: "https", hostname: "poi-navigoo.pynfi.com" }, // Images du POI Service
+      { protocol: "https", hostname: "media-service.pynfi.com" } // Images du Media Service
     ],
   },
   async rewrites() {
     return [
+      // 1. POI & Access Logs Service (Backend Initial)
+      // Utilisé pour: Organisations, POIs, Reviews, Logs
       {
         source: '/remote-api/:path*',
         destination: 'https://poi-navigoo.pynfi.com/:path*',
+      },
+      // 2. Auth Service (Authentification Centralisée)
+      // Utilisé pour: Login, Register, User Profile
+      {
+        source: '/auth-api/:path*',
+        destination: 'https://auth-service.pynfi.com/:path*',
+      },
+      // 3. Media Service (Gestion des fichiers)
+      // Utilisé pour: Upload, Download images
+      {
+        source: '/media-api/:path*',
+        // Note: J'ai retiré "/webjars" car c'est généralement pour l'UI Swagger. 
+        // L'API est sans doute à la racine (ex: /media/upload).
+        destination: 'https://media-service.pynfi.com/:path*', 
       },
     ];
   },
