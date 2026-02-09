@@ -6,7 +6,8 @@ import {
   MapPin, Search, Filter, Star, TrendingUp, Users, 
   FileText, Mic, Grid, List, X, ChevronRight,
   Phone, Globe, Clock, Navigation, Heart, MessageCircle,
-  Building2, Utensils, Hotel, ShoppingBag, Coffee, Landmark
+  Building2, Utensils, Hotel, ShoppingBag, Coffee, Landmark,
+  ExternalLink, HandCoins, Car, Truck, PenTool, StoreIcon, Settings
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
@@ -30,6 +31,35 @@ interface PoiWithStats extends POI {
   podcastCount: number;
 }
 
+interface BlogWithAuthor {
+  blog_id: string;
+  title: string;
+  content: string;
+  cover_image_url?: string;
+  user_id: string;
+  poi_id: string;
+  created_at: string;
+  views: number;
+  likes: number;
+  author?: string;
+  poiName?: string;
+}
+
+interface PodcastWithDetails {
+  podcast_id: string;
+  title: string;
+  description?: string;
+  cover_image_url?: string;
+  audio_file_url: string;
+  duration_seconds: number;
+  user_id: string;
+  poi_id: string;
+  created_at: string;
+  plays: number;
+  likes: number;
+  poiName?: string;
+}
+
 const CATEGORIES = [
   { id: "ALL", label: "Tous", icon: Grid },
   { id: "FOOD_DRINK", label: "Restaurants", icon: Utensils },
@@ -40,16 +70,63 @@ const CATEGORIES = [
   { id: "TOURISM", label: "Tourisme", icon: Landmark },
 ];
 
+const TRAMASYS_SERVICES = [
+  { 
+    name: "FareCalculator", 
+    desc: "Calculez vos tarifs de course instantanément", 
+    link: "https://fare-calculator-front.vercel.app/en", 
+    color: "from-blue-500 to-cyan-500",
+    icon: HandCoins
+  },
+  { 
+    name: "RidenGo", 
+    desc: "Application de covoiturage moderne", 
+    link: "https://ride-go-web.vercel.app/", 
+    color: "from-green-500 to-emerald-500",
+    icon: Car
+  },
+  { 
+    name: "Fleet Management", 
+    desc: "Gérez votre flotte de véhicules", 
+    link: "https://fleet-management-tramasys.vercel.app/", 
+    color: "from-orange-500 to-red-500",
+    icon: Truck
+  },
+  { 
+    name: "Freelance Driver", 
+    desc: "Plateforme pour chauffeurs indépendants", 
+    link: "https://freelance-driver.vercel.app", 
+    color: "from-purple-500 to-pink-500",
+    icon: PenTool
+  },
+  { 
+    name: "Syndicat", 
+    desc: "Gestion des organisations de transport", 
+    link: "https://ugates.vercel.app/fr", 
+    color: "from-indigo-500 to-blue-500",
+    icon: StoreIcon
+  },
+  { 
+    name: "Navigoo API", 
+    desc: "Intégrez nos services dans vos apps", 
+    link: "/pricing", 
+    color: "from-primary to-purple-600",
+    icon: Settings
+  },
+];
+
 export default function MarketplacePage() {
   const [pois, setPois] = useState<PoiWithStats[]>([]);
-  const [filteredPois, setFilteredPois] = useState<PoiWithStats[]>([]);
+  const [blogs, setBlogs] = useState<BlogWithAuthor[]>([]);
+  const [podcasts, setPodcasts] = useState<PodcastWithDetails[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [filteredPois, setFilteredPois] = useState<PoiWithStats[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list" | "map">("grid");
   const [selectedPoi, setSelectedPoi] = useState<PoiWithStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([7.3697, 13.5833]); // Ngaoundéré
+  const [mapCenter, setMapCenter] = useState<[number, number]>([7.3697, 13.5833]);
 
   useEffect(() => {
     loadMarketplaceData();
@@ -95,6 +172,46 @@ export default function MarketplacePage() {
 
       setPois(enrichedPois);
       
+      // Charger les blogs
+      const allBlogs = contentService.getAllBlogs();
+      const blogsWithDetails = await Promise.all(
+        allBlogs.map(async (blog) => {
+          try {
+            const poi = await poiService.getPoiById(blog.poi_id);
+            return {
+              ...blog,
+              poiName: poi.poi_name,
+            };
+          } catch {
+            return {
+              ...blog,
+              poiName: "Lieu inconnu",
+            };
+          }
+        })
+      );
+      setBlogs(blogsWithDetails);
+
+      // Charger les podcasts
+      const allPodcasts = contentService.getAllPodcasts();
+      const podcastsWithDetails = await Promise.all(
+        allPodcasts.map(async (podcast) => {
+          try {
+            const poi = await poiService.getPoiById(podcast.poi_id);
+            return {
+              ...podcast,
+              poiName: poi.poi_name,
+            };
+          } catch {
+            return {
+              ...podcast,
+              poiName: "Lieu inconnu",
+            };
+          }
+        })
+      );
+      setPodcasts(podcastsWithDetails);
+      
       // Charger les utilisateurs
       const allUsers = await UserAPI.getAll();
       setUsers(allUsers);
@@ -109,12 +226,10 @@ export default function MarketplacePage() {
   const filterPois = () => {
     let filtered = [...pois];
 
-    // Filtre par catégorie
     if (selectedCategory !== "ALL") {
       filtered = filtered.filter(poi => poi.poi_category === selectedCategory);
     }
 
-    // Filtre par recherche
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(poi => 
@@ -139,194 +254,458 @@ export default function MarketplacePage() {
     }
   };
 
+  const getTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffHours < 1) return "Il y a quelques minutes";
+    if (diffHours < 24) return `Il y a ${diffHours}h`;
+    if (diffDays === 1) return "Il y a 1j";
+    if (diffDays < 7) return `Il y a ${diffDays}j`;
+    return date.toLocaleDateString();
+  };
+
   return (
     <div className="min-h-screen bg-white dark:bg-black">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-purple-600 text-white py-12">
+      {/* Hero Section avec image de fond */}
+      <div className="relative h-[70vh] overflow-hidden">
+        {/* Image de fond */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundImage: "url('https://images.unsplash.com/photo-1519904981063-b0cf448d479e?q=80&w=2070')",
+          }}
+        >
+          {/* Overlay gradient violet */}
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-900/95 via-primary/90 to-purple-800/95" />
+        </div>
+
+        {/* Contenu */}
+        <div className="relative z-10 h-full flex items-center justify-center">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+            >
+              <h1 className="text-5xl md:text-7xl font-black text-white mb-6">
+                Marketplace Navigoo
+              </h1>
+              <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-3xl mx-auto">
+                Découvrez {pois.length} lieux exceptionnels, {blogs.length} blogs, {podcasts.length} podcasts et {users.length} contributeurs
+              </p>
+              
+              {/* Statistiques rapides */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto mt-12">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20"
+                >
+                  <div className="text-4xl font-black text-white mb-2">{pois.length}</div>
+                  <div className="text-sm text-white/80">Lieux</div>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20"
+                >
+                  <div className="text-4xl font-black text-white mb-2">{blogs.length}</div>
+                  <div className="text-sm text-white/80">Blogs</div>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.4 }}
+                  className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20"
+                >
+                  <div className="text-4xl font-black text-white mb-2">{podcasts.length}</div>
+                  <div className="text-sm text-white/80">Podcasts</div>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.5 }}
+                  className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20"
+                >
+                  <div className="text-4xl font-black text-white mb-2">{users.length}</div>
+                  <div className="text-sm text-white/80">Utilisateurs</div>
+                </motion.div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Scroll indicator */}
+        <motion.div
+          className="absolute bottom-8 left-1/2 -translate-x-1/2"
+          animate={{ y: [0, 10, 0] }}
+          transition={{ repeat: Infinity, duration: 2 }}
+        >
+          <ChevronRight className="text-white rotate-90" size={32} />
+        </motion.div>
+      </div>
+
+      {/* Section POIs avec filtres */}
+      <section className="py-16 bg-white dark:bg-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center"
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
           >
-            <h1 className="text-4xl md:text-6xl font-black mb-4">
-              Marketplace Navigoo
-            </h1>
-            <p className="text-xl text-white/90">
-              Découvrez {pois.length} lieux exceptionnels et {users.length} contributeurs
+            <h2 className="text-4xl md:text-5xl font-black mb-4">
+              Explorez nos{" "}
+              <span className="bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                Lieux
+              </span>
+            </h2>
+            <p className="text-xl text-zinc-600 dark:text-zinc-400">
+              Découvrez les meilleurs endroits de votre ville
             </p>
           </motion.div>
-        </div>
-      </div>
 
-      {/* Statistiques rapides */}
-      <div className="bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="text-3xl font-black text-primary">{pois.length}</div>
-              <div className="text-sm text-zinc-600 dark:text-zinc-400">Lieux</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-black text-purple-600">{users.length}</div>
-              <div className="text-sm text-zinc-600 dark:text-zinc-400">Utilisateurs</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-black text-green-600">
-                {pois.reduce((sum, poi) => sum + poi.blogCount, 0)}
+          {/* Barre de recherche et filtres */}
+          <div className="mb-8">
+            <div className="flex flex-col md:flex-row gap-4 mb-6">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
+                <input
+                  type="text"
+                  placeholder="Rechercher un lieu, une ville..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
               </div>
-              <div className="text-sm text-zinc-600 dark:text-zinc-400">Blogs</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-black text-orange-600">
-                {pois.reduce((sum, poi) => sum + poi.podcastCount, 0)}
-              </div>
-              <div className="text-sm text-zinc-600 dark:text-zinc-400">Podcasts</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filtres et recherche */}
-      <div className="sticky top-0 bg-white dark:bg-black border-b border-zinc-200 dark:border-zinc-800 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          {/* Barre de recherche */}
-          <div className="flex flex-col md:flex-row gap-4 mb-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={20} />
-              <input
-                type="text"
-                placeholder="Rechercher un lieu, une ville..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            
-            <div className="flex gap-2">
-              <Button
-                variant={viewMode === "grid" ? "default" : "outline"}
-                onClick={() => setViewMode("grid")}
-                className="gap-2"
-              >
-                <Grid size={18} />
-                Grille
-              </Button>
-              <Button
-                variant={viewMode === "list" ? "default" : "outline"}
-                onClick={() => setViewMode("list")}
-                className="gap-2"
-              >
-                <List size={18} />
-                Liste
-              </Button>
-              <Button
-                variant={viewMode === "map" ? "default" : "outline"}
-                onClick={() => setViewMode("map")}
-                className="gap-2"
-              >
-                <MapPin size={18} />
-                Carte
-              </Button>
-            </div>
-          </div>
-
-          {/* Catégories */}
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {CATEGORIES.map((cat) => {
-              const Icon = cat.icon;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-colors ${
-                    selectedCategory === cat.id
-                      ? "bg-primary text-white"
-                      : "bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800"
-                  }`}
+              
+              <div className="flex gap-2">
+                <Button
+                  variant={viewMode === "grid" ? "default" : "outline"}
+                  onClick={() => setViewMode("grid")}
+                  className="gap-2"
                 >
-                  <Icon size={16} />
-                  {cat.label}
-                </button>
+                  <Grid size={18} />
+                  Grille
+                </Button>
+                <Button
+                  variant={viewMode === "list" ? "default" : "outline"}
+                  onClick={() => setViewMode("list")}
+                  className="gap-2"
+                >
+                  <List size={18} />
+                  Liste
+                </Button>
+                <Button
+                  variant={viewMode === "map" ? "default" : "outline"}
+                  onClick={() => setViewMode("map")}
+                  className="gap-2"
+                >
+                  <MapPin size={18} />
+                  Carte
+                </Button>
+              </div>
+            </div>
+
+            {/* Catégories */}
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {CATEGORIES.map((cat) => {
+                const Icon = cat.icon;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-colors ${
+                      selectedCategory === cat.id
+                        ? "bg-primary text-white"
+                        : "bg-zinc-100 dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    <Icon size={16} />
+                    {cat.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Contenu POIs */}
+          {loading ? (
+            <div className="text-center py-20">
+              <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+              <p className="text-zinc-600 dark:text-zinc-400">Chargement des lieux...</p>
+            </div>
+          ) : (
+            <>
+              {viewMode === "grid" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredPois.map((poi) => (
+                    <PoiCard key={poi.poi_id} poi={poi} onSelect={openPoiDetails} />
+                  ))}
+                </div>
+              )}
+
+              {viewMode === "list" && (
+                <div className="space-y-4">
+                  {filteredPois.map((poi) => (
+                    <PoiListItem key={poi.poi_id} poi={poi} onSelect={openPoiDetails} />
+                  ))}
+                </div>
+              )}
+
+              {viewMode === "map" && (
+                <div className="h-[600px] rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
+                  <MapContainer center={mapCenter} zoom={13} className="h-full w-full">
+                    <TileLayer
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      attribution='&copy; OpenStreetMap contributors'
+                    />
+                    {filteredPois.map((poi) => (
+                      poi.location && (
+                        <Marker
+                          key={poi.poi_id}
+                          position={[poi.location.latitude, poi.location.longitude]}
+                          eventHandlers={{ click: () => openPoiDetails(poi) }}
+                        >
+                          <Popup>
+                            <div className="p-2">
+                              <h3 className="font-bold">{poi.poi_name}</h3>
+                              <p className="text-sm text-zinc-600">{poi.address_city}</p>
+                            </div>
+                          </Popup>
+                        </Marker>
+                      )
+                    ))}
+                  </MapContainer>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* Section Blogs */}
+      <section className="py-16 bg-zinc-50 dark:bg-zinc-950">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <h2 className="text-4xl md:text-5xl font-black mb-4">
+              <FileText className="inline-block mr-3 text-primary" size={48} />
+              <span className="bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                Blogs
+              </span>
+            </h2>
+            <p className="text-xl text-zinc-600 dark:text-zinc-400">
+              Découvrez les expériences partagées par notre communauté
+            </p>
+          </motion.div>
+
+          {blogs.length > 0 ? (
+            <div className="relative overflow-hidden">
+              <motion.div
+                className="flex gap-6"
+                animate={{
+                  x: [0, -2000],
+                }}
+                transition={{
+                  x: {
+                    repeat: Infinity,
+                    repeatType: "loop",
+                    duration: 40,
+                    ease: "linear",
+                  },
+                }}
+              >
+                {[...blogs, ...blogs, ...blogs].map((blog, index) => (
+                  <BlogCard key={`${blog.blog_id}-${index}`} blog={blog} getTimeAgo={getTimeAgo} />
+                ))}
+              </motion.div>
+              
+              <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-zinc-50 dark:from-zinc-950 to-transparent pointer-events-none z-10" />
+              <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-zinc-50 dark:from-zinc-950 to-transparent pointer-events-none z-10" />
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <FileText size={48} className="mx-auto text-zinc-300 dark:text-zinc-700 mb-4" />
+              <p className="text-zinc-600 dark:text-zinc-400">Aucun blog disponible</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Section Podcasts */}
+      <section className="py-16 bg-white dark:bg-black">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <h2 className="text-4xl md:text-5xl font-black mb-4">
+              <Mic className="inline-block mr-3 text-purple-600" size={48} />
+              <span className="bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                Podcasts
+              </span>
+            </h2>
+            <p className="text-xl text-zinc-600 dark:text-zinc-400">
+              Écoutez les récits audio de nos explorateurs
+            </p>
+          </motion.div>
+
+          {podcasts.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[800px] overflow-hidden">
+              {[...podcasts, ...podcasts].map((podcast, index) => (
+                <motion.div
+                  key={`${podcast.podcast_id}-${index}`}
+                  initial={{ opacity: 0, y: 50 }}
+                  animate={{ 
+                    opacity: 1, 
+                    y: [0, -1500]
+                  }}
+                  transition={{
+                    opacity: { duration: 0.5 },
+                    y: {
+                      repeat: Infinity,
+                      repeatType: "loop",
+                      duration: 30,
+                      ease: "linear",
+                      delay: (index % 3) * 2,
+                    },
+                  }}
+                >
+                  <PodcastCard podcast={podcast} getTimeAgo={getTimeAgo} />
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <Mic size={48} className="mx-auto text-zinc-300 dark:text-zinc-700 mb-4" />
+              <p className="text-zinc-600 dark:text-zinc-400">Aucun podcast disponible</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Section Utilisateurs */}
+      <section className="py-16 bg-zinc-50 dark:bg-zinc-950">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <h2 className="text-4xl md:text-5xl font-black mb-4">
+              <Users className="inline-block mr-3 text-green-600" size={48} />
+              <span className="bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                Contributeurs
+              </span>
+            </h2>
+            <p className="text-xl text-zinc-600 dark:text-zinc-400">
+              Rejoignez notre communauté de {users.length} explorateurs
+            </p>
+          </motion.div>
+
+          {users.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+              {users.slice(0, 12).map((user, i) => (
+                <motion.div
+                  key={user.user_id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.05 }}
+                  className="text-center"
+                >
+                  <div className="w-20 h-20 bg-gradient-to-br from-primary to-purple-600 rounded-full mx-auto mb-3 flex items-center justify-center text-white text-2xl font-bold">
+                    {user.username?.charAt(0).toUpperCase() || "U"}
+                  </div>
+                  <p className="font-medium text-sm truncate">{user.username || "Utilisateur"}</p>
+                  <p className="text-xs text-zinc-500">{user.role || "Membre"}</p>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <Users size={48} className="mx-auto text-zinc-300 dark:text-zinc-700 mb-4" />
+              <p className="text-zinc-600 dark:text-zinc-400">Aucun utilisateur</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Section Services TraMaSys */}
+      <section className="py-16 bg-white dark:bg-black">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <h2 className="text-4xl md:text-5xl font-black mb-4">
+              Écosystème{" "}
+              <span className="bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                TraMaSys
+              </span>
+            </h2>
+            <p className="text-xl text-zinc-600 dark:text-zinc-400">
+              Découvrez notre suite complète de solutions de mobilité
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {TRAMASYS_SERVICES.map((service, i) => {
+              const Icon = service.icon;
+              return (
+                <motion.a
+                  key={i}
+                  href={service.link}
+                  target={service.link.startsWith('http') ? '_blank' : '_self'}
+                  rel={service.link.startsWith('http') ? 'noopener noreferrer' : ''}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                  className="group relative overflow-hidden bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 hover:shadow-2xl hover:scale-105 transition-all p-8"
+                >
+                  <div className={`absolute inset-0 bg-gradient-to-br ${service.color} opacity-0 group-hover:opacity-10 transition-opacity`} />
+                  
+                  <div className="relative z-10">
+                    <div className={`w-16 h-16 bg-gradient-to-br ${service.color} rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform text-white`}>
+                      <Icon size={32} />
+                    </div>
+                    
+                    <h3 className="text-2xl font-black mb-2 group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:bg-clip-text group-hover:from-primary group-hover:to-purple-600 transition-all">
+                      {service.name}
+                    </h3>
+                    
+                    <p className="text-zinc-600 dark:text-zinc-400 mb-4">
+                      {service.desc}
+                    </p>
+                    
+                    <div className="flex items-center gap-2 text-primary font-medium">
+                      <span>Découvrir</span>
+                      <ExternalLink size={16} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    </div>
+                  </div>
+                </motion.a>
               );
             })}
           </div>
         </div>
-      </div>
-
-      {/* Contenu principal */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {loading ? (
-          <div className="text-center py-20">
-            <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-            <p className="text-zinc-600 dark:text-zinc-400">Chargement des lieux...</p>
-          </div>
-        ) : (
-          <>
-            {/* Vue Grille */}
-            {viewMode === "grid" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredPois.map((poi) => (
-                  <PoiCard key={poi.poi_id} poi={poi} onSelect={openPoiDetails} />
-                ))}
-              </div>
-            )}
-
-            {/* Vue Liste */}
-            {viewMode === "list" && (
-              <div className="space-y-4">
-                {filteredPois.map((poi) => (
-                  <PoiListItem key={poi.poi_id} poi={poi} onSelect={openPoiDetails} />
-                ))}
-              </div>
-            )}
-
-            {/* Vue Carte */}
-            {viewMode === "map" && (
-              <div className="h-[600px] rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
-                <MapContainer
-                  center={mapCenter}
-                  zoom={13}
-                  className="h-full w-full"
-                >
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; OpenStreetMap contributors'
-                  />
-                  {filteredPois.map((poi) => (
-                    poi.location && (
-                      <Marker
-                        key={poi.poi_id}
-                        position={[poi.location.latitude, poi.location.longitude]}
-                        eventHandlers={{
-                          click: () => openPoiDetails(poi)
-                        }}
-                      >
-                        <Popup>
-                          <div className="p-2">
-                            <h3 className="font-bold">{poi.poi_name}</h3>
-                            <p className="text-sm text-zinc-600">{poi.address_city}</p>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    )
-                  ))}
-                </MapContainer>
-              </div>
-            )}
-
-            {filteredPois.length === 0 && (
-              <div className="text-center py-20">
-                <MapPin size={48} className="mx-auto text-zinc-300 dark:text-zinc-700 mb-4" />
-                <h3 className="text-xl font-bold mb-2">Aucun lieu trouvé</h3>
-                <p className="text-zinc-600 dark:text-zinc-400">
-                  Essayez de modifier vos filtres ou votre recherche
-                </p>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      </section>
 
       {/* Modal détails POI */}
       {selectedPoi && (
@@ -338,12 +717,7 @@ export default function MarketplacePage() {
 
 // Composant carte POI
 function PoiCard({ poi, onSelect }: { poi: PoiWithStats; onSelect: (poi: PoiWithStats) => void }) {
-  const Icon = poi.poi_category ? getCategoryIcon(poi.poi_category) : MapPin;
-  
-  function getCategoryIcon(category: string) {
-    const cat = CATEGORIES.find(c => c.id === category);
-    return cat?.icon || MapPin;
-  }
+  const Icon = poi.poi_category ? CATEGORIES.find(c => c.id === poi.poi_category)?.icon || MapPin : MapPin;
 
   return (
     <motion.div
@@ -353,7 +727,6 @@ function PoiCard({ poi, onSelect }: { poi: PoiWithStats; onSelect: (poi: PoiWith
       onClick={() => onSelect(poi)}
     >
       <div className="bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 hover:shadow-2xl transition-all">
-        {/* Image */}
         <div className="relative h-48 bg-gradient-to-br from-primary/10 to-purple-500/10">
           {poi.poi_images_urls && poi.poi_images_urls[0] ? (
             <img 
@@ -375,7 +748,6 @@ function PoiCard({ poi, onSelect }: { poi: PoiWithStats; onSelect: (poi: PoiWith
           )}
         </div>
 
-        {/* Contenu */}
         <div className="p-4">
           <h3 className="font-bold text-lg mb-2 group-hover:text-primary transition-colors line-clamp-1">
             {poi.poi_name}
@@ -414,12 +786,7 @@ function PoiCard({ poi, onSelect }: { poi: PoiWithStats; onSelect: (poi: PoiWith
 
 // Composant liste POI
 function PoiListItem({ poi, onSelect }: { poi: PoiWithStats; onSelect: (poi: PoiWithStats) => void }) {
-  const Icon = poi.poi_category ? getCategoryIcon(poi.poi_category) : MapPin;
-  
-  function getCategoryIcon(category: string) {
-    const cat = CATEGORIES.find(c => c.id === category);
-    return cat?.icon || MapPin;
-  }
+  const Icon = poi.poi_category ? CATEGORIES.find(c => c.id === poi.poi_category)?.icon || MapPin : MapPin;
 
   return (
     <motion.div
@@ -488,11 +855,92 @@ function PoiListItem({ poi, onSelect }: { poi: PoiWithStats; onSelect: (poi: Poi
   );
 }
 
+// Composant Blog Card
+function BlogCard({ blog, getTimeAgo }: { blog: BlogWithAuthor; getTimeAgo: (date: string) => string }) {
+  return (
+    <Link
+      href={`/blogs/${blog.blog_id}`}
+      className="flex-shrink-0 w-80 group cursor-pointer"
+    >
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 hover:shadow-2xl transition-all">
+        <div className="relative h-48 bg-gradient-to-br from-primary/20 to-purple-500/20">
+          {blog.cover_image_url ? (
+            <img 
+              src={blog.cover_image_url} 
+              alt={blog.title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <FileText size={48} className="text-primary/30" />
+            </div>
+          )}
+        </div>
+        <div className="p-4">
+          <h4 className="font-bold text-lg mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+            {blog.title}
+          </h4>
+          <p className="text-sm text-zinc-500 line-clamp-2 mb-3">
+            {blog.content.substring(0, 100)}...
+          </p>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-400">{blog.poiName}</span>
+            <span className="text-xs text-zinc-400">{getTimeAgo(blog.created_at)}</span>
+          </div>
+          <div className="flex items-center gap-3 mt-2 text-xs text-zinc-400">
+            <span className="flex items-center gap-1">
+              👁️ {blog.views || 0}
+            </span>
+            <span className="flex items-center gap-1">
+              ❤️ {blog.likes || 0}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// Composant Podcast Card
+function PodcastCard({ podcast, getTimeAgo }: { podcast: PodcastWithDetails; getTimeAgo: (date: string) => string }) {
+  return (
+    <Link href={`/podcasts/${podcast.podcast_id}`}>
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 hover:shadow-xl transition-all cursor-pointer group">
+        <div className="flex gap-4 p-4">
+          <div className="w-24 h-24 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-xl shrink-0 flex items-center justify-center">
+            {podcast.cover_image_url ? (
+              <img 
+                src={podcast.cover_image_url} 
+                alt={podcast.title}
+                className="w-full h-full object-cover rounded-xl"
+              />
+            ) : (
+              <Mic size={32} className="text-purple-600" />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="font-bold text-lg mb-2 line-clamp-2 group-hover:text-purple-600 transition-colors">
+              {podcast.title}
+            </h4>
+            <p className="text-sm text-zinc-500 line-clamp-2 mb-2">
+              {podcast.description || "Découvrez ce podcast audio passionnant..."}
+            </p>
+            <div className="flex items-center gap-2 text-xs text-zinc-400">
+              <span>{getTimeAgo(podcast.created_at)}</span>
+              <span>•</span>
+              <span>{Math.floor(podcast.duration_seconds / 60)} min</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 // Modal détails POI
 function PoiDetailsModal({ poi, onClose }: { poi: PoiWithStats; onClose: () => void }) {
   const [blogs, setBlogs] = useState<any[]>([]);
   const [podcasts, setPodcasts] = useState<any[]>([]);
-  const [reviews, setReviews] = useState<any[]>([]);
 
   useEffect(() => {
     loadPoiContent();
@@ -500,15 +948,13 @@ function PoiDetailsModal({ poi, onClose }: { poi: PoiWithStats; onClose: () => v
 
   const loadPoiContent = async () => {
     try {
-      const [blogsData, podcastsData, reviewsData] = await Promise.all([
+      const [blogsData, podcastsData] = await Promise.all([
         contentService.getBlogsByPoiId(poi.poi_id),
         contentService.getPodcastsByPoiId(poi.poi_id),
-        reviewService.getReviewsByPoi(poi.poi_id),
       ]);
       
       setBlogs(blogsData);
       setPodcasts(podcastsData);
-      setReviews(reviewsData);
     } catch (error) {
       console.error("Erreur chargement contenu POI:", error);
     }
@@ -521,7 +967,6 @@ function PoiDetailsModal({ poi, onClose }: { poi: PoiWithStats; onClose: () => v
         animate={{ opacity: 1, scale: 1 }}
         className="bg-white dark:bg-zinc-900 rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
       >
-        {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 p-6 flex items-center justify-between">
           <h2 className="text-2xl font-black">{poi.poi_name}</h2>
           <button
@@ -532,9 +977,7 @@ function PoiDetailsModal({ poi, onClose }: { poi: PoiWithStats; onClose: () => v
           </button>
         </div>
 
-        {/* Contenu */}
         <div className="p-6 space-y-6">
-          {/* Image principale */}
           {poi.poi_images_urls && poi.poi_images_urls[0] && (
             <div className="h-64 rounded-2xl overflow-hidden">
               <img 
@@ -545,7 +988,6 @@ function PoiDetailsModal({ poi, onClose }: { poi: PoiWithStats; onClose: () => v
             </div>
           )}
 
-          {/* Infos principales */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-start gap-3">
               <MapPin className="text-primary shrink-0 mt-1" size={20} />
@@ -556,35 +998,6 @@ function PoiDetailsModal({ poi, onClose }: { poi: PoiWithStats; onClose: () => v
                 </div>
               </div>
             </div>
-
-            {poi.poi_contacts?.phone && (
-              <div className="flex items-start gap-3">
-                <Phone className="text-primary shrink-0 mt-1" size={20} />
-                <div>
-                  <div className="font-medium">Téléphone</div>
-                  <div className="text-sm text-zinc-600 dark:text-zinc-400">
-                    {poi.poi_contacts.phone}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {poi.poi_contacts?.website && (
-              <div className="flex items-start gap-3">
-                <Globe className="text-primary shrink-0 mt-1" size={20} />
-                <div>
-                  <div className="font-medium">Site web</div>
-                  <a 
-                    href={poi.poi_contacts.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-primary hover:underline"
-                  >
-                    Visiter
-                  </a>
-                </div>
-              </div>
-            )}
 
             {poi.averageRating > 0 && (
               <div className="flex items-start gap-3">
@@ -599,7 +1012,6 @@ function PoiDetailsModal({ poi, onClose }: { poi: PoiWithStats; onClose: () => v
             )}
           </div>
 
-          {/* Description */}
           {poi.poi_description && (
             <div>
               <h3 className="font-bold text-lg mb-2">Description</h3>
@@ -607,55 +1019,6 @@ function PoiDetailsModal({ poi, onClose }: { poi: PoiWithStats; onClose: () => v
             </div>
           )}
 
-          {/* Blogs */}
-          {blogs.length > 0 && (
-            <div>
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <FileText className="text-primary" />
-                Blogs ({blogs.length})
-              </h3>
-              <div className="space-y-2">
-                {blogs.map((blog) => (
-                  <Link
-                    key={blog.blog_id}
-                    href={`/blogs/${blog.blog_id}`}
-                    className="block p-3 bg-zinc-50 dark:bg-zinc-800 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-                  >
-                    <div className="font-medium">{blog.title}</div>
-                    <div className="text-sm text-zinc-500">
-                      {new Date(blog.created_at).toLocaleDateString()}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Podcasts */}
-          {podcasts.length > 0 && (
-            <div>
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <Mic className="text-purple-600" />
-                Podcasts ({podcasts.length})
-              </h3>
-              <div className="space-y-2">
-                {podcasts.map((podcast) => (
-                  <Link
-                    key={podcast.podcast_id}
-                    href={`/podcasts/${podcast.podcast_id}`}
-                    className="block p-3 bg-zinc-50 dark:bg-zinc-800 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-                  >
-                    <div className="font-medium">{podcast.title}</div>
-                    <div className="text-sm text-zinc-500">
-                      {Math.floor(podcast.duration_seconds / 60)} min
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Actions */}
           <div className="flex gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
             <Link href={`/poi/${poi.poi_id}`} className="flex-1">
               <Button className="w-full gap-2">
@@ -665,9 +1028,6 @@ function PoiDetailsModal({ poi, onClose }: { poi: PoiWithStats; onClose: () => v
             </Link>
             <Button variant="outline" className="gap-2">
               <Heart size={18} />
-            </Button>
-            <Button variant="outline" className="gap-2">
-              <MessageCircle size={18} />
             </Button>
           </div>
         </div>
