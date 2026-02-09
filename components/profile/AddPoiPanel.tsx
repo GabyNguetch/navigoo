@@ -23,9 +23,11 @@ const AMENITIES_OPTIONS = [
 
 interface AddPoiPanelProps {
   onClose: () => void;
+  poiId?: string;
+  onSuccess?: () => void; // Optionnel pour notifier le succès
 }
 
-export const AddPoiPanel = ({ onClose }: AddPoiPanelProps) => {
+export const AddPoiPanel = ({ onClose, poiId, onSuccess }: AddPoiPanelProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [keywordsString, setKeywordsString] = useState("");
@@ -57,6 +59,39 @@ export const AddPoiPanel = ({ onClose }: AddPoiPanelProps) => {
       });
     }
   }, []);
+
+    // Charger les données si mode édition (poiId présent)
+  useEffect(() => {
+    if (poiId) {
+      const fetchPoi = async () => {
+        setIsLoading(true);
+        try {
+          const data = await poiService.getPoiById(poiId);
+          setFormData(data);
+          if (data.location) {
+            setTempLocation(data.location);
+          }
+          if (data.poi_images_urls && data.poi_images_urls.length > 0) {
+            setPreviewImage(data.poi_images_urls[0]);
+          }
+          if (data.poi_keywords) {
+            setKeywordsString(data.poi_keywords.join(', '));
+          }
+        } catch (error) {
+          console.error("Erreur chargement POI:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchPoi();
+    } else if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        setFormData(prev => ({ ...prev, location: loc }));
+        setTempLocation(loc);
+      });
+    }
+  }, [poiId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
