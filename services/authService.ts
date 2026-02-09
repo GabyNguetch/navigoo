@@ -35,10 +35,11 @@ export interface AuthResponse {
 class AuthService {
   
   /**
-   * Récupère la liste des organisations depuis le Backend POI
+   * Récupère la liste des organisations (SIMULÉ avec localStorage)
    */
   async getOrganizations(): Promise<Organization[]> {
     try {
+      // Tentative de récupération depuis le backend réel
       const res = await fetch(`${API_PROXY}/api/organizations`, {
         headers: {
           "Accept": "application/json"
@@ -46,22 +47,58 @@ class AuthService {
       });
       
       if (!res.ok) {
-        console.warn("❌ Erreur chargement organisations:", res.status);
-        return [];
+        console.warn("❌ Erreur chargement organisations depuis backend, utilisation du localStorage");
+        return this.getOrganizationsFromLocalStorage();
       }
       
       const data = await res.json();
       return Array.isArray(data) ? data.filter((org: Organization) => org.isActive !== false) : [];
     } catch (error) {
-      console.error("❌ [AuthService] Erreur Organizations:", error);
-      return [];
+      console.error("❌ [AuthService] Erreur Organizations, utilisation du localStorage");
+      return this.getOrganizationsFromLocalStorage();
     }
   }
 
   /**
-   * ✅ INSCRIPTION selon OpenAPI spec:
-   * POST /api/auth/register
-   * Body: RegisterRequest { username, email, password, phone?, organizationId, role }
+   * Organisations simulées depuis localStorage
+   */
+  private getOrganizationsFromLocalStorage(): Organization[] {
+    const stored = localStorage.getItem("navigoo_organizations");
+    if (stored) {
+      return JSON.parse(stored);
+    }
+    
+    // Organisations par défaut
+    const defaultOrgs: Organization[] = [
+      {
+        organizationId: DEFAULT_ORG_ID,
+        organizationName: "Utilisateur Standard",
+        orgCode: "STANDARD",
+        orgType: "PUBLIC",
+        isActive: true
+      },
+      {
+        organizationId: "550e8400-e29b-41d4-a716-446655440001",
+        organizationName: "Navigoo Tourism",
+        orgCode: "TOURISM",
+        orgType: "BUSINESS",
+        isActive: true
+      },
+      {
+        organizationId: "550e8400-e29b-41d4-a716-446655440002",
+        organizationName: "Cameroon Heritage",
+        orgCode: "HERITAGE",
+        orgType: "NGO",
+        isActive: true
+      }
+    ];
+    
+    localStorage.setItem("navigoo_organizations", JSON.stringify(defaultOrgs));
+    return defaultOrgs;
+  }
+
+  /**
+   * ✅ INSCRIPTION SIMULÉE (localStorage)
    */
   async register(userData: {
     username: string;
@@ -71,106 +108,60 @@ class AuthService {
     organizationId: string;
   }): Promise<AppUser> {
     
-    console.log("🚀 [AuthService] Démarrage inscription pour:", userData.username);
+    console.log("🚀 [AuthService SIMULÉ] Démarrage inscription pour:", userData.username);
 
-    // ✅ Construire le payload en omettant les champs vides au lieu d'envoyer null
-    const registerPayload: any = {
-      username: userData.username.trim(),
-      email: userData.email.trim().toLowerCase(),
-      password: userData.password,
+    // Vérifier si l'utilisateur existe déjà
+    const existingUsers = this.getAllUsers();
+    
+    if (existingUsers.find(u => u.email === userData.email.toLowerCase())) {
+      throw new Error("Cet email est déjà utilisé");
+    }
+    
+    if (existingUsers.find(u => u.username === userData.username)) {
+      throw new Error("Ce nom d'utilisateur est déjà pris");
+    }
+
+    // Créer le nouvel utilisateur
+    const newUser: AppUser = {
+      id: this.generateUUID(),
+      userId: this.generateUUID(),
       organizationId: userData.organizationId,
-      role: "USER" as const
+      username: userData.username,
+      email: userData.email.toLowerCase(),
+      phone: userData.phone,
+      role: "USER",
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      accessToken: this.generateToken(),
+      permissions: []
     };
 
-    // ✅ N'ajouter phone que s'il est défini et non vide
-    if (userData.phone && userData.phone.trim()) {
-      registerPayload.phone = userData.phone.trim();
-    }
+    // Sauvegarder le mot de passe de manière sécurisée (en production, ne jamais stocker en clair!)
+    const userWithPassword = {
+      ...newUser,
+      password: userData.password // ⚠️ Pour démo uniquement
+    };
 
-    console.log("📨 [AuthService] Payload Register:", registerPayload);
+    // Ajouter aux utilisateurs existants
+    existingUsers.push(userWithPassword);
+    localStorage.setItem("navigoo_all_users", JSON.stringify(existingUsers));
 
-    try {
-      const response = await fetch(`${API_PROXY}/api/auth/register`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify(registerPayload)
-      });
-
-      // ✅ Gestion détaillée des erreurs
-      if (!response.ok) {
-        const contentType = response.headers.get("content-type");
-        let errorMessage = `Erreur ${response.status}`;
-        
-        if (contentType?.includes("application/json")) {
-          const errorData = await response.json();
-          console.error("❌ [AuthService] Erreur JSON:", errorData);
-          
-          // ✅ Extraction intelligente du message d'erreur
-          if (errorData.message) {
-            errorMessage = errorData.message;
-          } else if (errorData.error) {
-            errorMessage = errorData.error;
-          } else if (errorData.details) {
-            errorMessage = errorData.details;
-          } else if (errorData.errors) {
-            // Si c'est un tableau d'erreurs de validation
-            if (Array.isArray(errorData.errors)) {
-              errorMessage = errorData.errors.map((e: any) => e.message || e).join(", ");
-            } else if (typeof errorData.errors === 'object') {
-              errorMessage = Object.values(errorData.errors).join(", ");
-            }
-          }
-        } else {
-          const textError = await response.text();
-          console.error("❌ [AuthService] Erreur Text:", textError);
-          errorMessage = textError || errorMessage;
-        }
-        
-        throw new Error(errorMessage);
-      }
-
-      const authResponse: AuthResponse = await response.json();
-      console.log("✅ [AuthService] Inscription réussie !");
-      
-      // Conversion AuthResponse → AppUser
-      const user: AppUser = {
-        id: authResponse.user.userId,
-        userId: authResponse.user.userId,
-        organizationId: authResponse.user.organizationId,
-        username: authResponse.user.username,
-        email: authResponse.user.email,
-        phone: authResponse.user.phone,
-        role: authResponse.user.role,
-        isActive: authResponse.user.isActive,
-        createdAt: authResponse.user.createdAt,
-        accessToken: authResponse.accessToken,
-        permissions: []
-      };
-
-      this.saveSession(user);
-      return user;
-      
-    } catch (error: any) {
-      console.error("❌ [AuthService] Exception Register:", error.message);
-      throw error;
-    }
+    console.log("✅ [AuthService SIMULÉ] Inscription réussie !");
+    
+    this.saveSession(newUser);
+    return newUser;
   }
 
   /**
-   * ✅ CONNEXION selon OpenAPI spec:
-   * POST /api/auth/login
-   * Body: LoginRequest { emailOrUsername, password }
+   * ✅ CONNEXION SIMULÉE (localStorage)
    */
   async login(credentials: { email: string; password: string }): Promise<AppUser> {
     
-    console.log("🔐 [AuthService] Tentative connexion:", credentials.email);
+    console.log("🔐 [AuthService SIMULÉ] Tentative connexion:", credentials.email);
 
-    // Backdoor Admin (Développement uniquement - À RETIRER EN PRODUCTION)
+    // Backdoor Admin
     if (credentials.email === "admin@navigoo.com" && credentials.password === "Admin@Navigoo2026") {
-      console.log("🚀 [AuthService] Mode Admin Statique");
+      console.log("🚀 [AuthService SIMULÉ] Mode Admin Statique");
       const adminUser: AppUser = {
         id: "00000000-0000-0000-0000-000000000000",
         userId: "00000000-0000-0000-0000-000000000000",
@@ -187,58 +178,44 @@ class AuthService {
       return adminUser;
     }
 
-    // Connexion Réelle
-    try {
-      const response = await fetch(`${API_PROXY}/api/auth/login`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify({
-          emailOrUsername: credentials.email.trim(),
-          password: credentials.password
-        })
-      });
+    // Connexion simulée
+    const allUsers = this.getAllUsers();
+    const user = allUsers.find(u => 
+      (u.email === credentials.email.toLowerCase() || u.username === credentials.email) &&
+      u.password === credentials.password
+    );
 
-      if (!response.ok) {
-        const contentType = response.headers.get("content-type");
-        let errorMessage = "Identifiants incorrects";
-        
-        if (contentType?.includes("application/json")) {
-          const errorData = await response.json();
-          errorMessage = errorData.message || errorData.error || errorMessage;
-        }
-        
-        console.error("❌ [AuthService] Erreur Login:", errorMessage);
-        throw new Error(errorMessage);
-      }
-
-      const authResponse: AuthResponse = await response.json();
-      console.log("✅ [AuthService] Connexion réussie:", authResponse.user.username);
-
-      // Conversion AuthResponse → AppUser
-      const user: AppUser = {
-        id: authResponse.user.userId,
-        userId: authResponse.user.userId,
-        organizationId: authResponse.user.organizationId,
-        username: authResponse.user.username,
-        email: authResponse.user.email,
-        phone: authResponse.user.phone,
-        role: authResponse.user.role,
-        isActive: authResponse.user.isActive,
-        createdAt: authResponse.user.createdAt,
-        accessToken: authResponse.accessToken,
-        permissions: []
-      };
-
-      this.saveSession(user);
-      return user;
-      
-    } catch (error: any) {
-      console.error("❌ [AuthService] Exception Login:", error.message);
-      throw error;
+    if (!user) {
+      throw new Error("Identifiants incorrects");
     }
+
+    // Mettre à jour le dernier login
+    user.lastLoginAt = new Date().toISOString();
+    user.accessToken = this.generateToken();
+    
+    const updatedUsers = allUsers.map(u => 
+      u.userId === user.userId ? user : u
+    );
+    localStorage.setItem("navigoo_all_users", JSON.stringify(updatedUsers));
+
+    console.log("✅ [AuthService SIMULÉ] Connexion réussie:", user.username);
+
+    const sessionUser: AppUser = {
+      id: user.userId,
+      userId: user.userId,
+      organizationId: user.organizationId,
+      username: user.username,
+      email: user.email,
+      phone: user.phone,
+      role: user.role,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+      accessToken: user.accessToken,
+      permissions: []
+    };
+
+    this.saveSession(sessionUser);
+    return sessionUser;
   }
 
   /**
@@ -293,25 +270,10 @@ class AuthService {
   }
 
   /**
-   * ✅ DÉCONNEXION selon OpenAPI spec:
-   * POST /api/auth/logout/{userId}
+   * ✅ DÉCONNEXION SIMULÉE
    */
   logout() {
     if (typeof window !== 'undefined') {
-      const user = this.getSession();
-      
-      // Tentative de logout propre côté serveur
-      if (user && user.userId) {
-        fetch(`${API_PROXY}/api/auth/logout/${user.userId}`, { 
-          method: 'POST',
-          headers: {
-            "Authorization": `Bearer ${user.accessToken}`
-          }
-        })
-        .then(() => console.log("✅ Logout serveur réussi"))
-        .catch(err => console.warn("⚠️ Logout serveur échoué:", err));
-      }
-      
       localStorage.removeItem("navigoo_user");
       console.log("🚪 Déconnexion locale");
       window.location.href = "/signin";
@@ -319,98 +281,60 @@ class AuthService {
   }
 
   /**
-   * ✅ RAFRAÎCHISSEMENT TOKEN selon OpenAPI spec:
-   * POST /api/auth/refresh
-   * Body: { refreshToken }
+   * ✅ RAFRAÎCHISSEMENT TOKEN SIMULÉ
    */
   async refreshToken(refreshToken: string): Promise<AppUser> {
-    try {
-      const response = await fetch(`${API_PROXY}/api/auth/refresh`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify({ refreshToken })
-      });
-
-      if (!response.ok) {
-        throw new Error("Token refresh failed");
-      }
-
-      const authResponse: AuthResponse = await response.json();
-      
-      const user: AppUser = {
-        id: authResponse.user.userId,
-        userId: authResponse.user.userId,
-        organizationId: authResponse.user.organizationId,
-        username: authResponse.user.username,
-        email: authResponse.user.email,
-        phone: authResponse.user.phone,
-        role: authResponse.user.role,
-        isActive: authResponse.user.isActive,
-        createdAt: authResponse.user.createdAt,
-        accessToken: authResponse.accessToken,
-        permissions: []
-      };
-
-      this.saveSession(user);
-      return user;
-      
-    } catch (error) {
-      console.error("❌ Refresh token failed:", error);
-      this.logout();
-      throw error;
+    const currentUser = this.getSession();
+    if (!currentUser) {
+      throw new Error("Session expirée");
     }
+
+    // Générer un nouveau token
+    currentUser.accessToken = this.generateToken();
+    this.saveSession(currentUser);
+    
+    return currentUser;
   }
 
   /**
-   * ✅ RÉCUPÉRATION PROFIL selon OpenAPI spec:
-   * GET /api/auth/me
+   * ✅ RÉCUPÉRATION PROFIL SIMULÉ
    */
   async getCurrentUser(): Promise<AppUser> {
-    const token = this.getToken();
+    const user = this.getSession();
     
-    if (!token) {
+    if (!user) {
       throw new Error("Non authentifié");
     }
 
+    return user;
+  }
+
+  /**
+   * Utilitaires privés
+   */
+  private getAllUsers(): any[] {
+    if (typeof window === 'undefined') return [];
+    
+    const stored = localStorage.getItem("navigoo_all_users");
+    if (!stored) return [];
+    
     try {
-      const response = await fetch(`${API_PROXY}/api/auth/me`, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Accept": "application/json"
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error("Session expirée");
-      }
-
-      const userData = await response.json();
-      
-      // Mise à jour de la session
-      const user: AppUser = {
-        id: userData.userId,
-        userId: userData.userId,
-        organizationId: userData.organizationId,
-        username: userData.username,
-        email: userData.email,
-        phone: userData.phone,
-        role: userData.role,
-        isActive: userData.isActive,
-        createdAt: userData.createdAt,
-        accessToken: token,
-        permissions: []
-      };
-
-      this.saveSession(user);
-      return user;
-      
-    } catch (error) {
-      console.error("❌ Get current user failed:", error);
-      throw error;
+      return JSON.parse(stored);
+    } catch {
+      return [];
     }
+  }
+
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  private generateToken(): string {
+    return 'token_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
   }
 }
 

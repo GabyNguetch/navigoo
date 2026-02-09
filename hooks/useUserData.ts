@@ -1,4 +1,4 @@
-// hooks/useUserData.ts - VERSION COMPLÈTE BACKEND
+// hooks/useUserData.ts
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -17,7 +17,7 @@ export const useUserData = () => {
 
   const currentUser = authService.getSession();
 
-  // --- 1. CHARGEMENT DES DONNÉES DEPUIS LE BACKEND ---
+  // --- CHARGEMENT DES DONNÉES DEPUIS LE BACKEND ---
 
   const loadUserPois = useCallback(async (userId: string) => {
     try {
@@ -62,8 +62,7 @@ export const useUserData = () => {
     initSync();
   }, [currentUser?.userId, loadUserPois, loadRecentActivity]);
 
-
-  // --- 2. ACTIONS DE MISE À JOUR (BACKEND WRITE) ---
+  // --- ACTIONS DE MISE À JOUR (BACKEND WRITE) ---
 
   const addMyPoi = async (poiData: Partial<POI>) => {
     try {
@@ -125,7 +124,7 @@ export const useUserData = () => {
     if (!currentUser) return;
     try {
         await userProfileService.createAccessLog({
-            poiId: trip.id,
+            poiId: trip.poiId || trip.id,
             userId: currentUser.userId,
             organizationId: currentUser.organizationId,
             accessType: "TRIP",
@@ -138,22 +137,64 @@ export const useUserData = () => {
     }
   };
 
-  // --- 3. UI STATE (Volatile ou à porter en table préférences plus tard) ---
+  // --- GESTION DES POIs SAUVEGARDÉS ---
   
-  const toggleMapStyle = () => {
-    setMapStyle((prev) => (prev === "streets-v2" ? "hybrid" : "streets-v2"));
-  };
-
   const toggleSavePoi = async (poi: POI) => {
-    // Gestion temporaire locale
-    // TODO: Créer une vraie table favorites sur le backend
+    if (!currentUser) {
+      alert("Vous devez être connecté pour sauvegarder des POIs");
+      return;
+    }
+
     const isSaved = savedPois.some(p => p.poi_id === poi.poi_id);
     
     if (isSaved) {
+      // Retirer de la liste
       setSavedPois(prev => prev.filter(p => p.poi_id !== poi.poi_id));
+      
+      // Supprimer du localStorage
+      const favorites = JSON.parse(localStorage.getItem("navigoo_favorites") || "[]");
+      const updated = favorites.filter((f: any) => !(f.poiId === poi.poi_id && f.userId === currentUser.userId));
+      localStorage.setItem("navigoo_favorites", JSON.stringify(updated));
+      
+      console.log("❌ POI retiré des favoris:", poi.poi_name);
     } else {
+      // Ajouter à la liste
       setSavedPois(prev => [poi, ...prev]);
+      
+      // Sauvegarder dans localStorage
+      const favorites = JSON.parse(localStorage.getItem("navigoo_favorites") || "[]");
+      favorites.push({
+        userId: currentUser.userId,
+        poiId: poi.poi_id,
+        savedAt: new Date().toISOString()
+      });
+      localStorage.setItem("navigoo_favorites", JSON.stringify(favorites));
+      
+      // Enregistrer dans l'historique
+      try {
+        await userProfileService.createAccessLog({
+          poiId: poi.poi_id,
+          userId: currentUser.userId,
+          organizationId: currentUser.organizationId,
+          accessType: "SAVE",
+          platformType: "WEB"
+        });
+      } catch (err) {
+        console.warn("Échec enregistrement sauvegarde");
+      }
+      
+      console.log("✅ POI ajouté aux favoris:", poi.poi_name);
     }
+  };
+
+  const isSaved = (poiId: string): boolean => {
+    return savedPois.some(p => p.poi_id === poiId);
+  };
+
+  // --- UI STATE ---
+  
+  const toggleMapStyle = () => {
+    setMapStyle((prev) => (prev === "streets-v2" ? "hybrid" : "streets-v2"));
   };
 
   return {
@@ -168,12 +209,12 @@ export const useUserData = () => {
     // Méthodes
     loadUserPois,
     toggleSavePoi,
+    isSaved,
     addRecentPoi,
     addTrip,
     addMyPoi,
     updateMyPoi,
     deleteMyPoi,
-    toggleMapStyle,
-    isSaved: (id: string) => savedPois.some((p) => p.poi_id === id)
+    toggleMapStyle
   };
 };

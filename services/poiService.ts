@@ -120,15 +120,38 @@ class PoiService {
   }
 
   // ==========================================
-  // LECTURE (GET) - AVEC FALLBACK
+  // UTILITAIRES LOCALSTORAGE
+  // ==========================================
+
+  private getAllPoisFromStorage(): POI[] {
+    if (typeof window === 'undefined') return [];
+    const stored = localStorage.getItem("navigoo_user_pois");
+    return stored ? JSON.parse(stored) : [];
+  }
+
+  private saveAllPoisToStorage(pois: POI[]) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem("navigoo_user_pois", JSON.stringify(pois));
+  }
+
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  // ==========================================
+  // LECTURE (GET)
   // ==========================================
 
   /**
-   * ✅ Récupère tous les POIs avec stratégie de repli
+   * ✅ Récupère tous les POIs - GARDE LE BACKEND RÉEL
    */
   async getAllPois(): Promise<POI[]> {
     try {
-      console.log("🔄 [POI] Récupération de tous les POIs...");
+      console.log("🔄 [POI] Récupération de tous les POIs depuis le backend...");
       const data = await this.request<any[]>("/api/pois");
       return Array.isArray(data) ? data.map(mapPoiFromBackend) : [];
     } catch (error: any) {
@@ -145,102 +168,170 @@ class PoiService {
     }
   }
 
+  /**
+   * ✅ Récupère un POI par ID - SIMULÉ localStorage avec fallback gracieux
+   */
   async getPoiById(poiId: string): Promise<POI> {
-    const data = await this.request<any>(`/api/pois/${poiId}`);
-    return mapPoiFromBackend(data);
+    console.log(`🔍 [POI SIMULÉ] Récupération POI: ${poiId}`);
+    
+    // Chercher d'abord dans localStorage
+    const localPois = this.getAllPoisFromStorage();
+    const localPoi = localPois.find(p => p.poi_id === poiId);
+    
+    if (localPoi) {
+      console.log("✅ POI trouvé dans localStorage");
+      return localPoi;
+    }
+
+    // Sinon tenter le backend (pour les POIs publics)
+    try {
+      const data = await this.request<any>(`/api/pois/${poiId}`);
+      return mapPoiFromBackend(data);
+    } catch (error: any) {
+      console.warn(`⚠️ POI ${poiId} non trouvé dans le backend:`, error.message);
+      
+      // Retourner un POI placeholder au lieu de throw error
+      return {
+        poi_id: poiId,
+        poi_name: "Lieu non disponible",
+        poi_category: "OTHER",
+        poi_type: "OTHER",
+        poi_description: "Ce lieu n'est plus disponible",
+        location: { latitude: 0, longitude: 0 },
+        latitude: 0,
+        longitude: 0,
+        address_city: "Non spécifié",
+        address_country: "Cameroun",
+        poi_images_urls: [],
+        poi_amenities: [],
+        poi_keywords: [],
+        poi_contacts: { phone: "", website: "" },
+        rating: 0,
+        review_count: 0,
+        popularity_score: 0,
+        is_active: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as POI;
+    }
   }
 
+  /**
+   * ✅ Recherche par localisation - SIMULÉ localStorage
+   */
   async searchPoisByLocation(latitude: number, longitude: number, radiusKm: number = 10): Promise<POI[]> {
-    try {
-      const params = new URLSearchParams({
-        latitude: latitude.toString(),
-        longitude: longitude.toString(),
-        radiusKm: radiusKm.toString(),
-      });
-      const data = await this.request<any[]>(`/api/pois/nearby?${params.toString()}`);
-      return Array.isArray(data) ? data.map(mapPoiFromBackend) : [];
-    } catch (error) {
-      console.warn("Erreur recherche locale");
-      return [];
-    }
+    console.log(`📍 [POI SIMULÉ] Recherche locale: ${latitude}, ${longitude} (rayon: ${radiusKm}km)`);
+    
+    const localPois = this.getAllPoisFromStorage();
+    
+    // Filtrer par distance (formule simple)
+    const filtered = localPois.filter(poi => {
+      if (!poi.location) return false;
+      
+      const dx = poi.location.latitude - latitude;
+      const dy = poi.location.longitude - longitude;
+      const distance = Math.sqrt(dx * dx + dy * dy) * 111; // Approximation km
+      
+      return distance <= radiusKm;
+    });
+
+    return filtered;
   }
 
+  /**
+   * ✅ Recherche par catégorie - SIMULÉ localStorage
+   */
   async getPoisByCategory(category: string): Promise<POI[]> {
-    try {
-      const data = await this.request<any[]>(`/api/pois/category/${category}`);
-      return Array.isArray(data) ? data.map(mapPoiFromBackend) : [];
-    } catch (error) {
-      return [];
-    }
+    console.log(`🏷️ [POI SIMULÉ] Recherche par catégorie: ${category}`);
+    const localPois = this.getAllPoisFromStorage();
+    return localPois.filter(poi => poi.poi_category === category);
   }
 
+  /**
+   * ✅ Recherche par ville - SIMULÉ localStorage
+   */
   async getPoisByCity(city: string): Promise<POI[]> {
-    try {
-      const data = await this.request<any[]>(`/api/pois/city/${encodeURIComponent(city)}`);
-      return Array.isArray(data) ? data.map(mapPoiFromBackend) : [];
-    } catch (error) {
-      return [];
-    }
+    console.log(`🏙️ [POI SIMULÉ] Recherche par ville: ${city}`);
+    const localPois = this.getAllPoisFromStorage();
+    return localPois.filter(poi => 
+      poi.address_city?.toLowerCase().includes(city.toLowerCase())
+    );
   }
 
+  /**
+   * ✅ Recherche par nom - SIMULÉ localStorage
+   */
   async searchPoisByName(name: string): Promise<POI[]> {
-    try {
-      const data = await this.request<any[]>(`/api/pois/name/${encodeURIComponent(name)}`);
-      return Array.isArray(data) ? data.map(mapPoiFromBackend) : [];
-    } catch (error) {
-      return [];
-    }
+    console.log(`🔍 [POI SIMULÉ] Recherche par nom: ${name}`);
+    const localPois = this.getAllPoisFromStorage();
+    return localPois.filter(poi => 
+      poi.poi_name?.toLowerCase().includes(name.toLowerCase())
+    );
   }
 
+  /**
+   * ✅ POIs populaires - SIMULÉ localStorage
+   */
   async getTopPopularPois(limit: number = 10): Promise<POI[]> {
-    try {
-      const data = await this.request<any[]>(`/api/pois/popular?limit=${limit}`);
-      return Array.isArray(data) ? data.map(mapPoiFromBackend) : [];
-    } catch (error) {
-      return [];
-    }
+    console.log(`⭐ [POI SIMULÉ] Top ${limit} POIs populaires`);
+    const localPois = this.getAllPoisFromStorage();
+    return localPois
+      .sort((a, b) => (b.popularity_score || 0) - (a.popularity_score || 0))
+      .slice(0, limit);
   }
 
+  /**
+   * ✅ Recherche par type - SIMULÉ localStorage
+   */
   async getPoisByType(type: string): Promise<POI[]> {
-    try {
-      const data = await this.request<any[]>(`/api/pois/type/${encodeURIComponent(type)}`);
-      return Array.isArray(data) ? data.map(mapPoiFromBackend) : [];
-    } catch (error) {
-      return [];
-    }
+    console.log(`🎯 [POI SIMULÉ] Recherche par type: ${type}`);
+    const localPois = this.getAllPoisFromStorage();
+    return localPois.filter(poi => poi.poi_type === type);
   }
 
+  /**
+   * ✅ POIs d'un utilisateur - SIMULÉ localStorage
+   */
   async getPoisByUser(userId: string): Promise<POI[]> {
-    try {
-      const data = await this.request<any[]>(`/api/pois/user/${userId}`);
-      return Array.isArray(data) ? data.map(mapPoiFromBackend) : [];
-    } catch (error) {
-      return [];
-    }
+    console.log(`👤 [POI SIMULÉ] POIs de l'utilisateur: ${userId}`);
+    const localPois = this.getAllPoisFromStorage();
+    return localPois.filter(poi => poi.created_by === userId || poi.created_by_user_id === userId);
   }
 
+  /**
+   * ✅ POIs d'une organisation - SIMULÉ localStorage
+   */
   async getPoisByOrganization(orgId: string, type: 'active' | 'all' = 'active'): Promise<POI[]> {
-    try {
-      const suffix = type === 'all' ? '/all' : '';
-      const data = await this.request<any[]>(`/api/pois/organization/${orgId}${suffix}`);
-      return Array.isArray(data) ? data.map(mapPoiFromBackend) : [];
-    } catch (error) {
-      return [];
+    console.log(`🏢 [POI SIMULÉ] POIs de l'organisation: ${orgId}`);
+    const localPois = this.getAllPoisFromStorage();
+    const orgPois = localPois.filter(poi => poi.organization_id === orgId);
+    
+    if (type === 'active') {
+      return orgPois.filter(poi => poi.is_active);
     }
+    
+    return orgPois;
   }
 
   // ==========================================
-  // ÉCRITURE (POST / PUT / DELETE)
+  // ÉCRITURE (POST / PUT / DELETE) - SIMULÉ
   // ==========================================
 
+  /**
+   * ✅ Créer un POI - SIMULÉ localStorage
+   */
   async createPoi(formData: any): Promise<any> {
+    console.group("🚀 [POI SIMULÉ] Création POI");
+    
     const session = authService.getSession();
     if (!session?.userId || !session?.organizationId) {
       throw new Error("Vous devez être connecté pour créer un POI.");
     }
 
-    const payload = {
+    const newPoi: POI = {
+      poi_id: this.generateUUID(),
       organization_id: session.organizationId,
+      created_by: session.userId,
       created_by_user_id: session.userId,
       
       poi_name: formData.poi_name,
@@ -253,6 +344,10 @@ class PoiService {
       poi_description: formData.poi_description || "",
       poi_logo: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
       
+      location: {
+        latitude: Number(formData.location?.latitude) || 0,
+        longitude: Number(formData.location?.longitude) || 0
+      },
       latitude: Number(formData.location?.latitude) || 0,
       longitude: Number(formData.location?.longitude) || 0,
       
@@ -281,75 +376,137 @@ class PoiService {
       poi_type_tags: [formData.poi_category],
       
       popularity_score: 0.0,
-      is_active: false
+      rating: 0,
+      review_count: 0,
+      is_active: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
 
-    console.group("🔍 [CREATE POI] Payload");
-    console.log(payload);
+    console.log("📝 Nouveau POI:", newPoi);
+
+    // Sauvegarder dans localStorage
+    const existingPois = this.getAllPoisFromStorage();
+    existingPois.push(newPoi);
+    this.saveAllPoisToStorage(existingPois);
+
+    console.log("✅ POI créé avec succès dans localStorage");
     console.groupEnd();
 
-    const result = await this.request<any>("/api/pois", {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
-
-    console.log("✅ POI créé:", result);
-    return result;
+    return newPoi;
   }
 
+  /**
+   * ✅ Mettre à jour un POI - SIMULÉ localStorage
+   */
   async updatePoi(poiId: string, poiData: Partial<POI>): Promise<POI> {
-    const result = await this.request<any>(`/api/pois/${poiId}`, {
-      method: "PUT",
-      body: JSON.stringify(poiData),
-    });
-    return mapPoiFromBackend(result);
-  }
-
-  async deletePoi(poiId: string): Promise<void> {
-    return this.request<void>(`/api/pois/${poiId}`, { method: "DELETE" });
-  }
-
-  // ==========================================
-  // ACTIONS SPÉCIFIQUES
-  // ==========================================
-
-  async checkPoiNameExists(name: string, organizationId: string, excludeId?: string): Promise<boolean> {
-    try {
-      const params = new URLSearchParams({ name, organizationId });
-      if (excludeId) params.append("excludeId", excludeId);
-      return this.request<boolean>(`/api/pois/check-name?${params.toString()}`);
-    } catch (error) {
-      return false;
+    console.log(`✏️ [POI SIMULÉ] Mise à jour POI: ${poiId}`);
+    
+    const existingPois = this.getAllPoisFromStorage();
+    const index = existingPois.findIndex(p => p.poi_id === poiId);
+    
+    if (index === -1) {
+      throw new Error("POI non trouvé");
     }
+
+    existingPois[index] = {
+      ...existingPois[index],
+      ...poiData,
+      updated_at: new Date().toISOString()
+    };
+
+    this.saveAllPoisToStorage(existingPois);
+    
+    console.log("✅ POI mis à jour avec succès");
+    return existingPois[index];
   }
 
+  /**
+   * ✅ Supprimer un POI - SIMULÉ localStorage
+   */
+  async deletePoi(poiId: string): Promise<void> {
+    console.log(`🗑️ [POI SIMULÉ] Suppression POI: ${poiId}`);
+    
+    const existingPois = this.getAllPoisFromStorage();
+    const filtered = existingPois.filter(p => p.poi_id !== poiId);
+    
+    this.saveAllPoisToStorage(filtered);
+    
+    console.log("✅ POI supprimé avec succès");
+  }
+
+  // ==========================================
+  // ACTIONS SPÉCIFIQUES - SIMULÉ
+  // ==========================================
+
+  /**
+   * ✅ Vérifier si un nom existe - SIMULÉ localStorage
+   */
+  async checkPoiNameExists(name: string, organizationId: string, excludeId?: string): Promise<boolean> {
+    const localPois = this.getAllPoisFromStorage();
+    return localPois.some(poi => 
+      poi.poi_name?.toLowerCase() === name.toLowerCase() &&
+      poi.organization_id === organizationId &&
+      poi.poi_id !== excludeId
+    );
+  }
+
+  /**
+   * ✅ Activer un POI - SIMULÉ localStorage
+   */
   async activatePoi(poiId: string): Promise<void> {
-    return this.request<void>(`/api/pois/${poiId}/activate`, { method: "PATCH" });
+    console.log(`✅ [POI SIMULÉ] Activation POI: ${poiId}`);
+    await this.updatePoi(poiId, { is_active: true });
   }
 
+  /**
+   * ✅ Désactiver un POI - SIMULÉ localStorage
+   */
   async deactivatePoi(poiId: string): Promise<void> {
-    return this.request<void>(`/api/pois/${poiId}/desactivate`, { method: "PATCH" });
+    console.log(`❌ [POI SIMULÉ] Désactivation POI: ${poiId}`);
+    await this.updatePoi(poiId, { is_active: false });
   }
 
+  /**
+   * ✅ Approuver un POI - SIMULÉ localStorage
+   */
   async approvePoi(poiId: string, approverId: string): Promise<void> {
-    return this.request<void>(`/api/pois/${poiId}/approve?approverId=${approverId}`, { 
-      method: "PATCH" 
-    });
+    console.log(`👍 [POI SIMULÉ] Approbation POI: ${poiId} par ${approverId}`);
+    await this.updatePoi(poiId, { 
+      is_active: true,
+      approval_status: 'APPROVED',
+      approved_by: approverId,
+      approved_at: new Date().toISOString()
+    } as any);
   }
 
+  /**
+   * ✅ Rejeter un POI - SIMULÉ localStorage
+   */
   async rejectPoi(poiId: string, rejecterId: string): Promise<void> {
-    return this.request<void>(`/api/pois/${poiId}/reject?rejecterId=${rejecterId}`, { 
-      method: "PATCH" 
-    });
+    console.log(`👎 [POI SIMULÉ] Rejet POI: ${poiId} par ${rejecterId}`);
+    await this.updatePoi(poiId, { 
+      is_active: false,
+      approval_status: 'REJECTED',
+      rejected_by: rejecterId,
+      rejected_at: new Date().toISOString()
+    } as any);
   }
 
+  /**
+   * ✅ Mettre à jour le score de popularité - SIMULÉ localStorage
+   */
   async updatePopularityScore(poiId: string, score: number): Promise<void> {
-    return this.request<void>(`/api/pois/${poiId}/popularity?score=${score}`, { 
-      method: "PATCH" 
-    });
+    console.log(`⭐ [POI SIMULÉ] Mise à jour score popularité: ${poiId} = ${score}`);
+    await this.updatePoi(poiId, { popularity_score: score });
   }
 
+  /**
+   * ✅ Recherche globale - SIMULÉ localStorage
+   */
   async searchGlobal(query: string): Promise<POI[]> {
+    console.log(`🔍 [POI SIMULÉ] Recherche globale: ${query}`);
+    
     const [byName, byCity] = await Promise.all([
       this.searchPoisByName(query),
       this.getPoisByCity(query)
@@ -360,50 +517,44 @@ class PoiService {
   }
 
   /**
-   * ✅ Statistiques POI
+   * ✅ Nombre de POIs - SIMULÉ localStorage
    */
   async getPoiCount(): Promise<number> {
-    try {
-      return await this.request<number>("/api/pois/count");
-    } catch (error) {
-      return 0;
-    }
+    const pois = this.getAllPoisFromStorage();
+    return pois.length;
   }
 
   /**
-   * ✅ POIs récents
+   * ✅ POIs récents - SIMULÉ localStorage
    */
   async getRecentPois(limit: number = 10): Promise<POI[]> {
-    try {
-      const data = await this.request<any[]>(`/api/pois/recent?limit=${limit}`);
-      return Array.isArray(data) ? data.map(mapPoiFromBackend) : [];
-    } catch (error) {
-      return [];
-    }
+    console.log(`🕒 [POI SIMULÉ] ${limit} POIs récents`);
+    const localPois = this.getAllPoisFromStorage();
+    return localPois
+      .sort((a, b) => {
+        const dateA = new Date(a.created_at || 0).getTime();
+        const dateB = new Date(b.created_at || 0).getTime();
+        return dateB - dateA;
+      })
+      .slice(0, limit);
   }
 
   /**
-   * ✅ POIs soumis (status SUBMITTED)
+   * ✅ POIs soumis - SIMULÉ localStorage
    */
   async getSubmittedPois(): Promise<POI[]> {
-    try {
-      const data = await this.request<any[]>("/api/pois/submitted");
-      return Array.isArray(data) ? data.map(mapPoiFromBackend) : [];
-    } catch (error) {
-      return [];
-    }
+    console.log(`📋 [POI SIMULÉ] POIs soumis`);
+    const localPois = this.getAllPoisFromStorage();
+    return localPois.filter(poi => !poi.is_active);
   }
 
   /**
-   * ✅ POIs approuvés (status APPROVED)
+   * ✅ POIs approuvés - SIMULÉ localStorage
    */
   async getApprovedPois(): Promise<POI[]> {
-    try {
-      const data = await this.request<any[]>("/api/pois/approved");
-      return Array.isArray(data) ? data.map(mapPoiFromBackend) : [];
-    } catch (error) {
-      return [];
-    }
+    console.log(`✅ [POI SIMULÉ] POIs approuvés`);
+    const localPois = this.getAllPoisFromStorage();
+    return localPois.filter(poi => poi.is_active);
   }
 }
 

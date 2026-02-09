@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { POI } from "@/types";
-import { X, Navigation, Bookmark, Share2, Smartphone, Globe, Clock, MapPin, Star, MessageSquare, Edit, FileText, Mic } from "lucide-react";
+import { X, Navigation, Bookmark, Share2, Smartphone, Globe, Clock, MapPin, Star, MessageSquare, Edit, FileText, Mic, Heart } from "lucide-react";
 import { getCategoryConfig } from "@/data/categories";
 import { useRouter } from "next/navigation";
 import { useUserData } from "@/hooks/useUserData";
@@ -20,9 +20,18 @@ interface PoiDetailsProps {
   onClose: () => void;
   isOpen: boolean;
   onOpenDirections: () => void;
+  onToggleSave: (poi: POI) => void;
+  isSaved: boolean;
 }
 
-export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: PoiDetailsProps) => {
+export const PoiDetailsSidebar = ({ 
+  poi, 
+  onClose, 
+  isOpen, 
+  onOpenDirections,
+  onToggleSave,
+  isSaved
+}: PoiDetailsProps) => {
   const categoryConfig = getCategoryConfig(poi.poi_category);
   const router = useRouter();
   const { myPois } = useUserData();
@@ -59,7 +68,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
   }, [poi.poi_id]);
 
   const handleEdit = () => {
-    router.push(`/add-poi?id=${poi.poi_id}`);
+    router.push(`/profile?editPoi=${poi.poi_id}`);
   };
 
   const handleReviewSubmitted = async () => {
@@ -69,6 +78,31 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
       setStats(statsData);
     } catch (error) {
       console.error("Erreur rechargement stats:", error);
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: poi.poi_name,
+          text: poi.poi_description || `Découvrez ${poi.poi_name} sur Navigoo`,
+          url: window.location.href
+        });
+      } else {
+        // Fallback: copier le lien
+        await navigator.clipboard.writeText(window.location.href);
+        alert("Lien copié dans le presse-papier !");
+      }
+    } catch (error) {
+      console.error("Erreur lors du partage:", error);
+    }
+  };
+
+  const handleWebsiteClick = () => {
+    if (poi.poi_contacts?.website || poi.website_url) {
+      const url = poi.poi_contacts?.website || poi.website_url;
+      window.open(url, '_blank');
     }
   };
 
@@ -102,6 +136,13 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
               >
                   <Edit size={16} /> Modifier
               </button>
+          )}
+
+          {/* STATUS BADGE pour POI en attente */}
+          {!poi.is_active && isOwner && (
+            <div className="absolute top-20 left-4 bg-yellow-500 text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-lg">
+              ⏳ En attente de validation
+            </div>
           )}
         </div>
 
@@ -137,10 +178,29 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
 
           {/* ACTIONS CIRCULAIRES */}
           <div className="flex justify-between px-2 py-2">
-            <ActionButton icon={<Navigation size={22} className="-rotate-45 ml-1 mt-1" />} label="Y aller" active onClick={onOpenDirections} />
-            <ActionButton icon={<Bookmark size={22} />} label="Sauver" onClick={() => {}}/>
-            <ActionButton icon={<Share2 size={22} />} label="Partager" onClick={() => {}}/>
-            <ActionButton icon={<Globe size={22} />} label="Site web" onClick={() => {}} disabled={!poi.poi_contacts?.website} />
+            <ActionButton 
+              icon={<Navigation size={22} className="-rotate-45 ml-1 mt-1" />} 
+              label="Y aller" 
+              active 
+              onClick={onOpenDirections} 
+            />
+            <ActionButton 
+              icon={isSaved ? <Heart size={22} className="fill-red-500 text-red-500" /> : <Bookmark size={22} />} 
+              label={isSaved ? "Sauvé" : "Sauver"} 
+              onClick={() => onToggleSave(poi)}
+              active={isSaved}
+            />
+            <ActionButton 
+              icon={<Share2 size={22} />} 
+              label="Partager" 
+              onClick={handleShare}
+            />
+            <ActionButton 
+              icon={<Globe size={22} />} 
+              label="Site web" 
+              onClick={handleWebsiteClick} 
+              disabled={!poi.poi_contacts?.website && !poi.website_url} 
+            />
           </div>
 
           <div className="h-px bg-zinc-100 dark:bg-zinc-800 w-full" />
@@ -165,9 +225,18 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
 
           {/* INFO PRATIQUES */}
           <div className="space-y-4">
-            <InfoRow icon={<MapPin className="text-zinc-400" size={20} />} text={poi.address_informal || `${poi.address_city}, ${poi.address_country || "Cameroun"}`} />
-            <InfoRow icon={<Clock className="text-zinc-400" size={20} />} text="Ouvert maintenant (ferme à 22h)" isActive />
-            <InfoRow icon={<Smartphone className="text-zinc-400" size={20} />} text={poi.poi_contacts?.phone || "Non renseigné"} />
+            <InfoRow 
+              icon={<MapPin className="text-zinc-400" size={20} />} 
+              text={poi.address_informal || `${poi.address_city}, ${poi.address_country || "Cameroun"}`} 
+            />
+            <InfoRow 
+              icon={<Clock className="text-zinc-400" size={20} />} 
+              text={poi.operation_time_plan?.Open || "Horaires non renseignés"} 
+            />
+            <InfoRow 
+              icon={<Smartphone className="text-zinc-400" size={20} />} 
+              text={poi.poi_contacts?.phone || "Non renseigné"} 
+            />
           </div>
 
           <div className="h-px bg-zinc-100 dark:bg-zinc-800 w-full" />
@@ -215,6 +284,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
         selectedPoi={poi}
         onSuccess={() => {
           console.log("✅ Blog créé avec succès");
+          setIsBlogModalOpen(false);
         }}
       />
 
@@ -224,6 +294,7 @@ export const PoiDetailsSidebar = ({ poi, onClose, isOpen, onOpenDirections }: Po
         selectedPoi={poi}
         onSuccess={() => {
           console.log("✅ Podcast créé avec succès");
+          setIsPodcastModalOpen(false);
         }}
       />
     </>

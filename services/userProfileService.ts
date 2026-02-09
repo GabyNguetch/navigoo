@@ -1,6 +1,6 @@
 import { UserRole } from "@/types";
 
-// services/userProfileService.ts
+// services/userProfileService.ts - VERSION SIMULÉE
 const API_BASE_URL = "https://poi-navigoo.pynfi.com";
 
 export interface UserProfile {
@@ -23,47 +23,63 @@ export interface UserStats {
 }
 
 class UserProfileService {
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
-    
-    const response = await fetch(url, {
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      ...options,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Erreur API (${response.status}): ${errorText}`);
-    }
-
-    if (response.status === 204) return {} as T;
-    return response.json();
-  }
 
   // ==========================================
-  // PROFIL UTILISATEUR
+  // PROFIL UTILISATEUR (SIMULÉ)
   // ==========================================
 
   async getUserProfile(userId: string): Promise<UserProfile> {
-    return this.request<UserProfile>(`/api/users/${userId}`);
+    console.log("👤 [UserProfileService SIMULÉ] Récupération profil:", userId);
+    
+    // Récupérer depuis localStorage
+    const allUsers = this.getAllUsersFromStorage();
+    const user = allUsers.find(u => u.userId === userId);
+    
+    if (!user) {
+      throw new Error("Utilisateur non trouvé");
+    }
+
+    return {
+      userId: user.userId,
+      username: user.username,
+      email: user.email,
+      phone: user.phone,
+      organizationId: user.organizationId,
+      role: user.role,
+      isActive: user.isActive,
+      createdAt: user.createdAt
+    };
   }
 
   async updateUserProfile(userId: string, data: Partial<UserProfile>): Promise<UserProfile> {
-    return this.request<UserProfile>(`/api/users/${userId}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    console.log("✏️ [UserProfileService SIMULÉ] Mise à jour profil:", userId);
+    
+    const allUsers = this.getAllUsersFromStorage();
+    const index = allUsers.findIndex(u => u.userId === userId);
+    
+    if (index === -1) {
+      throw new Error("Utilisateur non trouvé");
+    }
+
+    allUsers[index] = {
+      ...allUsers[index],
+      ...data
+    };
+
+    localStorage.setItem("navigoo_all_users", JSON.stringify(allUsers));
+    
+    return this.getUserProfile(userId);
   }
 
   // ==========================================
-  // POIs DE L'UTILISATEUR
+  // POIs DE L'UTILISATEUR (SIMULÉ)
   // ==========================================
 
   async getUserPois(userId: string): Promise<any[]> {
-    return this.request<any[]>(`/api/pois/user/${userId}`);
+    console.log("📍 [UserProfileService SIMULÉ] Récupération POIs utilisateur:", userId);
+    
+    const allPois = this.getAllPoisFromStorage();
+    return allPois.filter(poi => poi.created_by === userId || poi.userId === userId);
   }
 
   async getUserPoiCount(userId: string): Promise<number> {
@@ -72,11 +88,14 @@ class UserProfileService {
   }
 
   // ==========================================
-  // AVIS (REVIEWS) DE L'UTILISATEUR
+  // AVIS (REVIEWS) DE L'UTILISATEUR (SIMULÉ)
   // ==========================================
 
   async getUserReviews(userId: string): Promise<any[]> {
-    return this.request<any[]>(`/api-reviews/user/${userId}/reviews`);
+    console.log("⭐ [UserProfileService SIMULÉ] Récupération reviews utilisateur:", userId);
+    
+    const allReviews = this.getAllReviewsFromStorage();
+    return allReviews.filter(review => review.userId === userId);
   }
 
   async createReview(reviewData: {
@@ -87,31 +106,53 @@ class UserProfileService {
     rating: number;
     reviewText?: string;
   }): Promise<any> {
-    return this.request<any>("/api-reviews", {
-      method: "POST",
-      body: JSON.stringify(reviewData),
-    });
+    const newReview = {
+      reviewId: this.generateUUID(),
+      ...reviewData,
+      likes: 0,
+      dislikes: 0,
+      createdAt: new Date().toISOString()
+    };
+
+    const reviews = this.getAllReviewsFromStorage();
+    reviews.push(newReview);
+    localStorage.setItem("navigoo_reviews", JSON.stringify(reviews));
+
+    return newReview;
   }
 
   async updateReview(reviewId: string, reviewData: Partial<any>): Promise<any> {
-    return this.request<any>(`/api-reviews/${reviewId}`, {
-      method: "PUT",
-      body: JSON.stringify(reviewData),
-    });
+    const reviews = this.getAllReviewsFromStorage();
+    const index = reviews.findIndex(r => r.reviewId === reviewId);
+    
+    if (index === -1) {
+      throw new Error("Avis non trouvé");
+    }
+
+    reviews[index] = {
+      ...reviews[index],
+      ...reviewData
+    };
+
+    localStorage.setItem("navigoo_reviews", JSON.stringify(reviews));
+    return reviews[index];
   }
 
   async deleteReview(reviewId: string): Promise<void> {
-    return this.request<void>(`/api-reviews/${reviewId}`, {
-      method: "DELETE",
-    });
+    const reviews = this.getAllReviewsFromStorage();
+    const filtered = reviews.filter(r => r.reviewId !== reviewId);
+    localStorage.setItem("navigoo_reviews", JSON.stringify(filtered));
   }
 
   // ==========================================
-  // BLOGS DE L'UTILISATEUR
+  // BLOGS DE L'UTILISATEUR (SIMULÉ)
   // ==========================================
 
   async getUserBlogs(userId: string): Promise<any[]> {
-    return this.request<any[]>(`/api/blogs/user/${userId}`);
+    console.log("📝 [UserProfileService SIMULÉ] Récupération blogs utilisateur:", userId);
+    
+    const allBlogs = this.getAllBlogsFromStorage();
+    return allBlogs.filter(blog => blog.user_id === userId);
   }
 
   async createBlog(blogData: {
@@ -122,31 +163,56 @@ class UserProfileService {
     cover_image_url?: string;
     content: string;
   }): Promise<any> {
-    return this.request<any>("/api/blogs", {
-      method: "POST",
-      body: JSON.stringify(blogData),
-    });
+    const newBlog = {
+      blog_id: this.generateUUID(),
+      ...blogData,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      views: 0,
+      likes: 0
+    };
+
+    const blogs = this.getAllBlogsFromStorage();
+    blogs.push(newBlog);
+    localStorage.setItem("navigoo_blogs", JSON.stringify(blogs));
+
+    return newBlog;
   }
 
   async updateBlog(blogId: string, blogData: Partial<any>): Promise<any> {
-    return this.request<any>(`/api/blogs/${blogId}`, {
-      method: "PUT",
-      body: JSON.stringify(blogData),
-    });
+    const blogs = this.getAllBlogsFromStorage();
+    const index = blogs.findIndex(b => b.blog_id === blogId);
+    
+    if (index === -1) {
+      throw new Error("Blog non trouvé");
+    }
+
+    blogs[index] = {
+      ...blogs[index],
+      ...blogData,
+      updated_at: new Date().toISOString()
+    };
+
+    localStorage.setItem("navigoo_blogs", JSON.stringify(blogs));
+    return blogs[index];
   }
 
   async deleteBlog(blogId: string): Promise<void> {
-    return this.request<void>(`/api/blogs/${blogId}`, {
-      method: "DELETE",
-    });
+    const blogs = this.getAllBlogsFromStorage();
+    const filtered = blogs.filter(b => b.blog_id !== blogId);
+    localStorage.setItem("navigoo_blogs", JSON.stringify(filtered));
   }
 
   // ==========================================
-  // PODCASTS DE L'UTILISATEUR
+  // PODCASTS DE L'UTILISATEUR (SIMULÉ)
   // ==========================================
 
   async getUserPodcasts(userId: string): Promise<any[]> {
-    return this.request<any[]>(`/api/podcasts/user/${userId}`);
+    console.log("🎙️ [UserProfileService SIMULÉ] Récupération podcasts utilisateur:", userId);
+    
+    const allPodcasts = this.getAllPodcastsFromStorage();
+    return allPodcasts.filter(podcast => podcast.user_id === userId);
   }
 
   async createPodcast(podcastData: {
@@ -158,31 +224,55 @@ class UserProfileService {
     audio_file_url: string;
     duration_seconds: number;
   }): Promise<any> {
-    return this.request<any>("/api/podcasts", {
-      method: "POST",
-      body: JSON.stringify(podcastData),
-    });
+    const newPodcast = {
+      podcast_id: this.generateUUID(),
+      ...podcastData,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      plays: 0,
+      likes: 0
+    };
+
+    const podcasts = this.getAllPodcastsFromStorage();
+    podcasts.push(newPodcast);
+    localStorage.setItem("navigoo_podcasts", JSON.stringify(podcasts));
+
+    return newPodcast;
   }
 
   async updatePodcast(podcastId: string, podcastData: Partial<any>): Promise<any> {
-    return this.request<any>(`/api/podcasts/${podcastId}`, {
-      method: "PUT",
-      body: JSON.stringify(podcastData),
-    });
+    const podcasts = this.getAllPodcastsFromStorage();
+    const index = podcasts.findIndex(p => p.podcast_id === podcastId);
+    
+    if (index === -1) {
+      throw new Error("Podcast non trouvé");
+    }
+
+    podcasts[index] = {
+      ...podcasts[index],
+      ...podcastData,
+      updated_at: new Date().toISOString()
+    };
+
+    localStorage.setItem("navigoo_podcasts", JSON.stringify(podcasts));
+    return podcasts[index];
   }
 
   async deletePodcast(podcastId: string): Promise<void> {
-    return this.request<void>(`/api/podcasts/${podcastId}`, {
-      method: "DELETE",
-    });
+    const podcasts = this.getAllPodcastsFromStorage();
+    const filtered = podcasts.filter(p => p.podcast_id !== podcastId);
+    localStorage.setItem("navigoo_podcasts", JSON.stringify(filtered));
   }
 
   // ==========================================
-  // LOGS D'ACCÈS (HISTORIQUE)
+  // LOGS D'ACCÈS (HISTORIQUE) (SIMULÉ)
   // ==========================================
 
   async getUserAccessLogs(userId: string): Promise<any[]> {
-    return this.request<any[]>(`/api/poi-access-logs/user/${userId}`);
+    console.log("📊 [UserProfileService SIMULÉ] Récupération logs utilisateur:", userId);
+    
+    const allLogs = this.getAllLogsFromStorage();
+    return allLogs.filter(log => log.userId === userId);
   }
 
   async createAccessLog(logData: {
@@ -193,20 +283,26 @@ class UserProfileService {
     accessType: string;
     metadata?: any;
   }): Promise<any> {
-    return this.request<any>("/api/poi-access-logs", {
-      method: "POST",
-      body: JSON.stringify({
-        ...logData,
-        accessDatetime: new Date().toISOString(),
-      }),
-    });
+    const newLog = {
+      accessId: this.generateUUID(),
+      ...logData,
+      accessDatetime: new Date().toISOString()
+    };
+
+    const logs = this.getAllLogsFromStorage();
+    logs.push(newLog);
+    localStorage.setItem("navigoo_access_logs", JSON.stringify(logs));
+
+    return newLog;
   }
 
   // ==========================================
-  // STATISTIQUES UTILISATEUR
+  // STATISTIQUES UTILISATEUR (SIMULÉ)
   // ==========================================
 
   async getUserStats(userId: string): Promise<UserStats> {
+    console.log("📈 [UserProfileService SIMULÉ] Calcul statistiques utilisateur:", userId);
+    
     const [pois, reviews, blogs, podcasts, logs] = await Promise.all([
       this.getUserPois(userId),
       this.getUserReviews(userId),
@@ -234,10 +330,12 @@ class UserProfileService {
   }
 
   // ==========================================
-  // DONNÉES RÉCENTES POUR LA SIDEBAR
+  // DONNÉES RÉCENTES POUR LA SIDEBAR (SIMULÉ)
   // ==========================================
 
   async getRecentPois(userId: string, limit: number = 10): Promise<any[]> {
+    console.log("🕒 [UserProfileService SIMULÉ] Récupération POIs récents:", userId);
+    
     const logs = await this.getUserAccessLogs(userId);
     
     // Filtrer les logs de type VIEW et prendre les plus récents
@@ -248,32 +346,33 @@ class UserProfileService {
 
     // Récupérer les détails des POIs
     const poiIds = Array.from(new Set(viewLogs.map(log => log.poiId)));
-    const poisPromises = poiIds.map(id => 
-      this.request<any>(`/api/pois/${id}`).catch(() => null)
-    );
+    const allPois = this.getAllPoisFromStorage();
     
-    const pois = (await Promise.all(poisPromises)).filter(Boolean);
+    const pois = poiIds
+      .map(id => allPois.find(p => p.poi_id === id))
+      .filter(Boolean);
     
     return pois;
   }
 
   async getSavedPois(userId: string): Promise<any[]> {
-    // Pour l'instant, on utilise les POIs avec reviews positives (rating >= 4)
-    // À terme, créer une table favorites
-    const reviews = await this.getUserReviews(userId);
-    const favoritePoiIds = reviews
-      .filter(r => r.rating >= 4)
-      .map(r => r.poiId);
+    console.log("💾 [UserProfileService SIMULÉ] Récupération POIs sauvegardés:", userId);
+    
+    // Récupérer les POIs favoris depuis localStorage
+    const favorites = this.getFavoritesFromStorage();
+    const userFavorites = favorites.filter(f => f.userId === userId);
+    
+    const allPois = this.getAllPoisFromStorage();
+    const savedPois = userFavorites
+      .map(fav => allPois.find(p => p.poi_id === fav.poiId))
+      .filter(Boolean);
 
-    const uniqueIds = Array.from(new Set(favoritePoiIds));
-    const poisPromises = uniqueIds.map(id => 
-      this.request<any>(`/api/pois/${id}`).catch(() => null)
-    );
-
-    return (await Promise.all(poisPromises)).filter(Boolean);
+    return savedPois;
   }
 
   async getRecentTrips(userId: string, limit: number = 10): Promise<any[]> {
+    console.log("🚗 [UserProfileService SIMULÉ] Récupération trajets récents:", userId);
+    
     const logs = await this.getUserAccessLogs(userId);
     
     // Filtrer les logs de type TRIP
@@ -288,6 +387,60 @@ class UserProfileService {
       date: log.accessDatetime,
       ...log.metadata,
     }));
+  }
+
+  // ==========================================
+  // UTILITAIRES PRIVÉS
+  // ==========================================
+
+  private getAllUsersFromStorage(): any[] {
+    if (typeof window === 'undefined') return [];
+    const stored = localStorage.getItem("navigoo_all_users");
+    return stored ? JSON.parse(stored) : [];
+  }
+
+  private getAllPoisFromStorage(): any[] {
+    if (typeof window === 'undefined') return [];
+    const stored = localStorage.getItem("navigoo_user_pois");
+    return stored ? JSON.parse(stored) : [];
+  }
+
+  private getAllReviewsFromStorage(): any[] {
+    if (typeof window === 'undefined') return [];
+    const stored = localStorage.getItem("navigoo_reviews");
+    return stored ? JSON.parse(stored) : [];
+  }
+
+  private getAllBlogsFromStorage(): any[] {
+    if (typeof window === 'undefined') return [];
+    const stored = localStorage.getItem("navigoo_blogs");
+    return stored ? JSON.parse(stored) : [];
+  }
+
+  private getAllPodcastsFromStorage(): any[] {
+    if (typeof window === 'undefined') return [];
+    const stored = localStorage.getItem("navigoo_podcasts");
+    return stored ? JSON.parse(stored) : [];
+  }
+
+  private getAllLogsFromStorage(): any[] {
+    if (typeof window === 'undefined') return [];
+    const stored = localStorage.getItem("navigoo_access_logs");
+    return stored ? JSON.parse(stored) : [];
+  }
+
+  private getFavoritesFromStorage(): any[] {
+    if (typeof window === 'undefined') return [];
+    const stored = localStorage.getItem("navigoo_favorites");
+    return stored ? JSON.parse(stored) : [];
+  }
+
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 }
 

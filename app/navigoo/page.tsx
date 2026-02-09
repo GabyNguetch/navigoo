@@ -9,6 +9,7 @@ import { POI, Location, TransportMode } from "@/types";
 import { getRoute, calculateDistance } from "@/services/routingService";
 import { poiService } from "@/services/poiService";
 import { useUserData } from "@/hooks/useUserData";
+import { userProfileService } from "@/services/userProfileService";
 import { Settings as SettingsIcon, Check, X, AlertTriangle } from "lucide-react";
 import { Loader } from "@/components/ui/Loader";
 import { MobileNavBar } from "@/components/navigation/MobileNavbar";
@@ -23,7 +24,7 @@ const MapComponent = dynamic(() => import("@/components/map/Map"), {
   loading: () => <Loader />,
 });
 
-// Ajoutez aussi le chargement différé pour les Sidebars secondaires qui ne sont pas visibles au chargement
+// Chargement différé pour les Sidebars secondaires
 const SecondarySidebar = dynamic(() => import("@/components/sidebar/SecondarySidebar").then(mod => mod.SecondarySidebar), { ssr: false });
 const DirectionsSidebar = dynamic(() => import("@/components/sidebar/DirectionSidebar").then(mod => mod.DirectionsSidebar), { ssr: false });
 
@@ -45,7 +46,7 @@ export default function Home() {
   // Hooks Persistance Utilisateur
   const { 
     savedPois, recentPois, recentTrips, mapStyle, 
-    addRecentPoi, addTrip, toggleMapStyle, myPois, loadUserPois 
+    addRecentPoi, addTrip, toggleMapStyle, myPois, loadUserPois, toggleSavePoi, isSaved
   } = useUserData();
 
   // États Recherche & Carte
@@ -63,16 +64,16 @@ export default function Home() {
   const [isNavigating, setIsNavigating] = useState(false);
   const [traveledPath, setTraveledPath] = useState<Location[]>([]);
 
-  // ✅ CORRECTION : On utilise uniquement le hook useGeolocation (plus de state séparé)
+  // Hook de géolocalisation
   const { 
-    position: userLocation,  // Renommage direct ici
+    position: userLocation,
     isTracking, 
     startTracking, 
     stopTracking,
     getCurrentPosition 
   } = useGeolocation();
 
-    // 1. Déclenchement automatique au chargement
+  // Déclenchement automatique de la géolocalisation
   useEffect(() => {
     const autoLocate = async () => {
       try {
@@ -94,8 +95,26 @@ export default function Home() {
      const loadAllPois = async () => {
         try {
             if(mounted) setIsLoadingPois(true);
-            const data = await poiService.getAllPois();
-            if(mounted) setAllPois(data || []);
+            
+            // Récupérer les POIs approuvés du backend
+            const backendPois = await poiService.getApprovedPois();
+            
+            // Récupérer les POIs de l'utilisateur (approuvés et en attente)
+            const currentUser = authService.getSession();
+            let userPois: POI[] = [];
+            if (currentUser?.userId) {
+              userPois = await poiService.getPoisByUser(currentUser.userId);
+            }
+            
+            // Combiner les deux listes en évitant les doublons
+            const combinedPois = [...backendPois];
+            userPois.forEach(userPoi => {
+              if (!combinedPois.find(p => p.poi_id === userPoi.poi_id)) {
+                combinedPois.push(userPoi);
+              }
+            });
+            
+            if(mounted) setAllPois(combinedPois || []);
         } catch (error) {
             console.error("Erreur chargement POIs:", error);
             if(mounted) setFetchError("Impossible de contacter le serveur.");
@@ -109,11 +128,27 @@ export default function Home() {
             if(mounted) setIsLoadingPois(true);
             const data = await poiService.searchPoisByLocation(lat, lon, 50);
             
-            if (!data || data.length === 0) {
+            // Filtrer pour ne garder que les POIs approuvés + mes POIs
+            const currentUser = authService.getSession();
+            let approvedData = data.filter(poi => poi.is_active);
+            
+            // Ajouter mes POIs même s'ils ne sont pas actifs
+            if (currentUser?.userId) {
+              const myUserPois = data.filter(poi => 
+                (poi.created_by === currentUser.userId || poi.created_by_user_id === currentUser.userId)
+              );
+              myUserPois.forEach(poi => {
+                if (!approvedData.find(p => p.poi_id === poi.poi_id)) {
+                  approvedData.push(poi);
+                }
+              });
+            }
+            
+            if (!approvedData || approvedData.length === 0) {
                console.warn("Pas de POIs proches, chargement global.");
                await loadAllPois();
             } else {
-               if(mounted) setAllPois(data);
+               if(mounted) setAllPois(approvedData);
             }
         } catch (err) {
             console.error("Erreur recherche locale, repli sur tout:", err);
@@ -123,7 +158,6 @@ export default function Home() {
         }
      };
 
-     // ✅ Utilisation du hook getCurrentPosition au lieu de navigator.geolocation
      getCurrentPosition()
        .then(loc => {
          if (mounted) {
@@ -149,11 +183,10 @@ export default function Home() {
     }
   }, [panelState.type, loadUserPois]);
 
-    // 2. Gestionnaire pour le bouton "Ma position"
+  // Gestionnaire pour le bouton "Ma position"
   const handleLocateMe = async () => {
     try {
       const pos = await getCurrentPosition();
-      // On force la carte à se repositionner (géré par le useEffect dans Map.tsx)
       console.log("📍 Localisation manuelle vers:", pos);
     } catch (err) {
       alert("Localisation impossible : vérifiez les permissions de votre navigateur.");
@@ -164,14 +197,32 @@ export default function Home() {
   // HANDLERS INTERFACE
   // ============================================
 
-  const handleSelectPoi = (poi: POI | null) => {
+  const handleSelectPoi = async (poi: POI | null) => {
     if(!poi) {
         setPanelState({ type: null });
         return;
     }
+    
     const safePoi = { ...poi, poi_images_urls: poi.poi_images_urls || [] };
     
-    addRecentPoi(safePoi);
+    // Enregistrer l'accès dans l'historique
+    const user = authService.getSession();
+    if (user?.userId) {
+      try {
+        await userProfileService.createAccessLog({
+          poiId: safePoi.poi_id,
+          userId: user.userId,
+          organizationId: user.organizationId,
+          platformType: "WEB",
+          accessType: "VIEW",
+        });
+        console.log("✅ Accès POI enregistré:", safePoi.poi_name);
+      } catch (err) {
+        console.warn("⚠️ Échec enregistrement accès POI");
+      }
+    }
+    
+    await addRecentPoi(safePoi);
     setIsMainSidebarOpen(false); 
     setPanelState({ type: "details", data: safePoi });
   };
@@ -200,14 +251,36 @@ export default function Home() {
     const result = await getRoute(userLocation, destination.location, mode, MAPTILER_API_KEY);
     
     if (result) {
-        addTrip({
+        const tripData = {
             id: Date.now().toString(),
             departName: "Ma Position",
             arriveName: destination.poi_name,
             date: new Date().toISOString(),
             distance: result.distance,
-            duration: result.duration
-        });
+            duration: result.duration,
+            poiId: destination.poi_id
+        };
+        
+        await addTrip(tripData);
+        
+        // Enregistrer le trajet dans l'historique
+        const user = authService.getSession();
+        if (user?.userId) {
+          try {
+            await userProfileService.createAccessLog({
+              poiId: destination.poi_id,
+              userId: user.userId,
+              organizationId: user.organizationId,
+              platformType: "WEB",
+              accessType: "TRIP",
+              metadata: tripData
+            });
+            console.log("✅ Trajet enregistré:", destination.poi_name);
+          } catch (err) {
+            console.warn("⚠️ Échec enregistrement trajet");
+          }
+        }
+        
         setRouteStats(result);
         setRouteGeometry(result.geometry);
     } else {
@@ -220,7 +293,7 @@ export default function Home() {
     setPanelState({ type: null });
     setRouteGeometry(null); 
     setRouteStats(null);
-    handleStopNavigation(); // Arrêter la navigation si active
+    handleStopNavigation();
   };
 
   const handleResetToMap = () => {
@@ -229,12 +302,28 @@ export default function Home() {
     handleStopNavigation();
   };
 
-  // HANDLER OPTIMISÉ POUR LE CLIC SUR LA CARTE
+  // HANDLER POUR LE CLIC SUR LA CARTE
   const handleMapClick = async (lng: number, lat: number) => {
     try {
       const externalPoi = await reverseGeocode(lat, lng);
       
       if (externalPoi) {
+        // Enregistrer l'accès au POI externe
+        const user = authService.getSession();
+        if (user?.userId) {
+          try {
+            await userProfileService.createAccessLog({
+              poiId: externalPoi.poi_id,
+              userId: user.userId,
+              organizationId: user.organizationId,
+              platformType: "WEB",
+              accessType: "VIEW",
+            });
+          } catch (err) {
+            console.warn("⚠️ Échec enregistrement accès POI externe");
+          }
+        }
+        
         setPanelState({ 
           type: "details", 
           data: externalPoi as POI 
@@ -256,8 +345,8 @@ export default function Home() {
     }
 
     setIsNavigating(true);
-    setTraveledPath([userLocation]); // Début du trajet
-    startTracking(); // Activer le suivi GPS continu
+    setTraveledPath([userLocation]);
+    startTracking();
     
     console.log("🚀 Navigation démarrée");
   };
@@ -273,16 +362,14 @@ export default function Home() {
   useEffect(() => {
     if (isNavigating && userLocation) {
       setTraveledPath(prev => {
-        // Éviter les doublons trop proches
         const lastPoint = prev[prev.length - 1];
         if (lastPoint) {
           const dist = calculateDistance(lastPoint, userLocation);
-          if (dist < 5) return prev; // Ignorer si < 5m
+          if (dist < 5) return prev;
         }
         return [...prev, userLocation];
       });
 
-      // Vérifier si on est arrivé (distance < 20m)
       if (panelState.data?.location) {
         const distanceToDestination = calculateDistance(userLocation, panelState.data.location);
         if (distanceToDestination < 20) {
@@ -293,18 +380,29 @@ export default function Home() {
     }
   }, [isNavigating, userLocation, panelState.data]);
 
-  // Filtrage Local
+  // Filtrage Local - Afficher POIs approuvés + mes POIs
   const filteredPois = useMemo(() => {
+    const currentUser = authService.getSession();
+    
     return allPois.filter((poi) => {
       const catMatch = selectedCategory ? (poi.poi_category === selectedCategory) : true;
       const nameMatch = searchQuery 
         ? (poi.poi_name?.toLowerCase().includes(searchQuery.toLowerCase())) 
         : true;
-      const activeMatch = poi.is_active !== false; 
+      
+      // Afficher si: POI approuvé OU c'est mon POI
+      const isMyPoi = currentUser?.userId && 
+                      (poi.created_by === currentUser.userId || poi.created_by_user_id === currentUser.userId);
+      const shouldShow = poi.is_active || isMyPoi;
 
-      return catMatch && nameMatch && activeMatch;
+      return catMatch && nameMatch && shouldShow;
     });
   }, [selectedCategory, searchQuery, allPois]);
+
+  // Handler pour sauvegarder un POI
+  const handleToggleSave = async (poi: POI) => {
+    await toggleSavePoi(poi);
+  };
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-zinc-50 dark:bg-black font-sans">
@@ -354,6 +452,8 @@ export default function Home() {
           isOpen={true}
           onClose={handleClosePanel}
           onOpenDirections={handleOpenDirections}
+          onToggleSave={handleToggleSave}
+          isSaved={isSaved(panelState.data.poi_id)}
         />
       )}
 
