@@ -86,7 +86,7 @@ export default function Home() {
   }, [getCurrentPosition]);
 
   // ============================================
-  // INITIALISATION (Géoloc + Fetch API)
+  // INITIALISATION (Géoloc + Fetch API + localStorage)
   // ============================================
   
   useEffect(() => {
@@ -96,28 +96,50 @@ export default function Home() {
         try {
             if(mounted) setIsLoadingPois(true);
             
-            // Récupérer les POIs approuvés du backend
-            const backendPois = await poiService.getApprovedPois();
+            // 1️⃣ Récupérer les POIs du backend
+            console.log("🔄 Chargement POIs du backend...");
+            const backendPois = await poiService.getAllPois();
+            console.log(`✅ ${backendPois.length} POIs chargés du backend`);
             
-            // Récupérer les POIs de l'utilisateur (approuvés et en attente)
+            // 2️⃣ Récupérer TOUS les POIs du localStorage (simulation avec getPoisByUser(""))
+            console.log("🔄 Chargement POIs du localStorage...");
+            let localStoragePois: POI[] = [];
+            try {
+              // Cette méthode retourne tous les POIs du localStorage
+              localStoragePois = await poiService.getPoisByUser("");
+              console.log(`✅ ${localStoragePois.length} POIs chargés du localStorage`);
+            } catch (err) {
+              console.warn("⚠️ Erreur chargement localStorage:", err);
+            }
+            
+            // 3️⃣ Récupérer les POIs de l'utilisateur connecté (du backend)
             const currentUser = authService.getSession();
             let userPois: POI[] = [];
             if (currentUser?.userId) {
-              userPois = await poiService.getPoisByUser(currentUser.userId);
+              try {
+                userPois = await poiService.getPoisByUser(currentUser.userId);
+                console.log(`✅ ${userPois.length} POIs de l'utilisateur ${currentUser.userId}`);
+              } catch (err) {
+                console.warn("⚠️ Erreur chargement POIs utilisateur:", err);
+              }
             }
             
-            // Combiner les deux listes en évitant les doublons
-            const combinedPois = [...backendPois];
-            userPois.forEach(userPoi => {
-              if (!combinedPois.find(p => p.poi_id === userPoi.poi_id)) {
-                combinedPois.push(userPoi);
-              }
-            });
+            // 4️⃣ Combiner toutes les sources en évitant les doublons
+            const allPoiSources = [...backendPois, ...localStoragePois, ...userPois];
+            const uniquePois = Array.from(
+              new Map(allPoiSources.map(poi => [poi.poi_id, poi])).values()
+            );
             
-            if(mounted) setAllPois(combinedPois || []);
+            console.log("📊 Récapitulatif du chargement:");
+            console.log(`   📍 Total POIs uniques: ${uniquePois.length}`);
+            console.log(`   🌐 Backend: ${backendPois.length}`);
+            console.log(`   💾 localStorage: ${localStoragePois.length}`);
+            console.log(`   👤 Utilisateur: ${userPois.length}`);
+            
+            if(mounted) setAllPois(uniquePois);
         } catch (error) {
-            console.error("Erreur chargement POIs:", error);
-            if(mounted) setFetchError("Impossible de contacter le serveur.");
+            console.error("❌ Erreur chargement POIs:", error);
+            if(mounted) setFetchError("Impossible de charger les lieux.");
         } finally {
             if(mounted) setIsLoadingPois(false);
         }
@@ -126,46 +148,75 @@ export default function Home() {
      const loadLocalPois = async (lat: number, lon: number) => {
         try {
             if(mounted) setIsLoadingPois(true);
-            const data = await poiService.searchPoisByLocation(lat, lon, 50);
             
-            // Filtrer pour ne garder que les POIs approuvés + mes POIs
-            const currentUser = authService.getSession();
-            let approvedData = data.filter(poi => poi.is_active);
+            console.log(`📍 Recherche POIs autour de ${lat.toFixed(4)}, ${lon.toFixed(4)} (rayon 50km)...`);
             
-            // Ajouter mes POIs même s'ils ne sont pas actifs
-              if (currentUser?.userId) {
-                const myUserPois = data.filter(poi => 
-                  poi.created_by_user_id === currentUser.userId
-                );
-              myUserPois.forEach(poi => {
-                if (!approvedData.find(p => p.poi_id === poi.poi_id)) {
-                  approvedData.push(poi);
-                }
-              });
+            // 1️⃣ Récupérer les POIs du backend proches
+            let backendNearbyPois: POI[] = [];
+            try {
+              backendNearbyPois = await poiService.searchPoisByLocation(lat, lon, 50);
+              console.log(`✅ ${backendNearbyPois.length} POIs backend à proximité`);
+            } catch (err) {
+              console.warn("⚠️ Erreur recherche backend locale:", err);
             }
             
-            if (!approvedData || approvedData.length === 0) {
-               console.warn("Pas de POIs proches, chargement global.");
+            // 2️⃣ Récupérer TOUS les POIs du localStorage
+            let allLocalStoragePois: POI[] = [];
+            try {
+              allLocalStoragePois = await poiService.getPoisByUser("");
+              console.log(`✅ ${allLocalStoragePois.length} POIs localStorage`);
+            } catch (err) {
+              console.warn("⚠️ Erreur chargement localStorage:", err);
+            }
+            
+            // 3️⃣ Récupérer les POIs de l'utilisateur connecté
+            const currentUser = authService.getSession();
+            let userPois: POI[] = [];
+            if (currentUser?.userId) {
+              try {
+                userPois = await poiService.getPoisByUser(currentUser.userId);
+                console.log(`✅ ${userPois.length} POIs utilisateur`);
+              } catch (err) {
+                console.warn("⚠️ Erreur chargement POIs utilisateur");
+              }
+            }
+            
+            // 4️⃣ Combiner toutes les sources
+            const allPoiSources = [...backendNearbyPois, ...allLocalStoragePois, ...userPois];
+            const uniquePois = Array.from(
+              new Map(allPoiSources.map(poi => [poi.poi_id, poi])).values()
+            );
+            
+            console.log("📊 Récapitulatif local:");
+            console.log(`   📍 Total POIs combinés: ${uniquePois.length}`);
+            console.log(`   🌐 Backend proche: ${backendNearbyPois.length}`);
+            console.log(`   💾 localStorage: ${allLocalStoragePois.length}`);
+            console.log(`   👤 Utilisateur: ${userPois.length}`);
+            
+            if (uniquePois.length === 0) {
+               console.warn("⚠️ Aucun POI trouvé, chargement global...");
                await loadAllPois();
             } else {
-               if(mounted) setAllPois(approvedData);
+               if(mounted) setAllPois(uniquePois);
             }
         } catch (err) {
-            console.error("Erreur recherche locale, repli sur tout:", err);
+            console.error("❌ Erreur recherche locale, repli sur chargement global:", err);
             await loadAllPois();
         } finally {
             if(mounted) setIsLoadingPois(false);
         }
      };
 
+     // Démarrage du chargement
      getCurrentPosition()
        .then(loc => {
          if (mounted) {
+           console.log("✅ Position obtenue, chargement POIs locaux...");
            loadLocalPois(loc.latitude, loc.longitude);
          }
        })
        .catch(() => {
-         console.warn("Géolocalisation échouée, chargement de tous les POIs");
+         console.warn("⚠️ Géolocalisation échouée, chargement de tous les POIs");
          loadAllPois();
        });
 
@@ -380,7 +431,7 @@ export default function Home() {
     }
   }, [isNavigating, userLocation, panelState.data]);
 
-  // Filtrage Local - Afficher POIs approuvés + mes POIs
+  // Filtrage Local - Afficher tous les POIs (backend + localStorage)
   const filteredPois = useMemo(() => {
     const currentUser = authService.getSession();
     
@@ -390,9 +441,10 @@ export default function Home() {
         ? (poi.poi_name?.toLowerCase().includes(searchQuery.toLowerCase())) 
         : true;
       
-      // Afficher si: POI approuvé OU c'est mon POI
+      // Afficher tous les POIs (backend actifs + localStorage + mes POIs)
       const isMyPoi = currentUser?.userId && 
-                      poi.created_by_user_id === currentUser.userId;
+                      (poi.created_by_user_id === currentUser.userId || 
+                       poi.created_by === currentUser.userId);
       const shouldShow = poi.is_active || isMyPoi;
 
       return catMatch && nameMatch && shouldShow;

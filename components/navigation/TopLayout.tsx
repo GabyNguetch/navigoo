@@ -76,67 +76,6 @@ export const TopLayout = ({
             onSelect={onSelectCategory}
           />
         </div>
-
-        {/* SECTION UTILISATEUR / ACTIONS */}
-        <div className="flex items-center gap-2 ml-auto pr-1 md:pr-0">
-          
-          {user ? (
-            /* --- CAS CONNECTÉ --- */
-            <div className="flex items-center gap-2 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md p-1.5 rounded-full border border-zinc-200 dark:border-zinc-800 shadow-lg">
-              
-              {/* Bouton Raccourci Admin (Optionnel) */}
-              {user.role === "SUPER_ADMIN" && (
-                <button 
-                  onClick={() => router.push("/admin")}
-                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-600 dark:text-zinc-400 hidden lg:block"
-                  title="Panel Admin"
-                >
-                  <LayoutDashboard size={20} />
-                </button>
-              )}
-
-              {/* Grip / Menu Applications (Style Google) */}
-              <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors text-zinc-600 dark:text-zinc-400 hidden md:block">
-                <Grip size={20} />
-              </button>
-
-              {/* Avatar et Lien Profil */}
-              <button
-                onClick={handleProfileClick}
-                className={clsx(
-                  "relative group flex items-center justify-center",
-                  "w-9 h-9 rounded-full overflow-hidden transition-all duration-300",
-                  "border-2 border-primary/20 hover:border-primary active:scale-95 shadow-inner"
-                )}
-              >
-                <div className="absolute inset-0 bg-primary/10 flex items-center justify-center">
-                  <UserCircle2 size={38} className="text-primary/70 group-hover:scale-110 transition-transform" />
-                </div>
-                {/* On peut ajouter l'initiale de l'utilisateur par dessus si pas de photo */}
-                <span className="relative z-10 text-[10px] font-black text-primary pointer-events-none">
-                   {user.username.charAt(0).toUpperCase()}
-                </span>
-              </button>
-            </div>
-          ) : (
-            /* --- CAS DÉCONNECTÉ --- */
-            <button
-              onClick={() => router.push("/signin")}
-              className={clsx(
-                "group relative flex items-center gap-2 px-6 py-2.5 rounded-full overflow-hidden",
-                "bg-primary text-white font-bold text-sm",
-                "shadow-lg shadow-primary/30",
-                "transition-all duration-300 hover:shadow-primary/50 hover:scale-[1.03] active:scale-95"
-              )}
-            >
-              {/* Effet Brillance / Hover */}
-              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-              
-              <LogIn size={18} className="stroke-[3]" />
-              <span className="whitespace-nowrap">Connexion</span>
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );
