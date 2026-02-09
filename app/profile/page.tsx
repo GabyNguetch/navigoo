@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { 
@@ -37,7 +37,7 @@ import { mediaService } from "@/services/mediaService";
 
 type TabType = 'overview' | 'pois' | 'reviews' | 'blogs' | 'podcasts' | 'activity' | 'saved' | 'add-poi' | 'edit-poi';
 
-export default function ProfilePage() {
+function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {
@@ -1229,3 +1229,11 @@ const EmptyState = ({ icon, title, description, action }: any) => (
     {action}
   </div>
 );
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<Loader />}>
+      <ProfileContent />
+    </Suspense>
+  );
+}
