@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   User, Mail, Phone, Lock, Eye, EyeOff,
-  ArrowRight, Loader2, Building, AlertCircle
+  ArrowRight, Loader2, Building, Camera, AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { authService, DEFAULT_ORG_ID, Organization } from "@/services/authService";
@@ -20,6 +20,7 @@ export default function RegisterPage() {
   // State pour les organisations
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loadingOrgs, setLoadingOrgs] = useState(true);
+  const [profilePreview, setProfilePreview] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     username: "",
@@ -27,6 +28,7 @@ export default function RegisterPage() {
     phone: "",
     password: "",
     organizationId: DEFAULT_ORG_ID,
+    file: null as File | null
   });
 
   // Validation du formulaire
@@ -63,12 +65,33 @@ export default function RegisterPage() {
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Vérifier la taille du fichier (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError("L'image ne doit pas dépasser 5 MB");
+        return;
+      }
+      
+      // Vérifier le type de fichier
+      if (!file.type.startsWith('image/')) {
+        setError("Veuillez sélectionner une image valide");
+        return;
+      }
+
+      setFormData({ ...formData, file });
+      setProfilePreview(URL.createObjectURL(file));
+      setError(null);
+    }
+  };
+
   // Validation côté client
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
     // Username (3-50 caractères, alphanumériques et certains caractères spéciaux)
-    if (!formData.username || formData.username.trim().length < 3) {
+    if (!formData.username || formData.username.length < 3) {
       errors.username = "Le nom d'utilisateur doit contenir au moins 3 caractères";
     } else if (formData.username.length > 50) {
       errors.username = "Le nom d'utilisateur ne doit pas dépasser 50 caractères";
@@ -86,10 +109,8 @@ export default function RegisterPage() {
     }
 
     // Téléphone (optionnel mais si rempli, doit être valide)
-    if (formData.phone && formData.phone.trim()) {
-      if (!/^[+]?[0-9]{10,15}$/.test(formData.phone)) {
-        errors.phone = "Numéro de téléphone invalide (10-15 chiffres, peut commencer par +)";
-      }
+    if (formData.phone && !/^[+]?[0-9]{10,15}$/.test(formData.phone)) {
+      errors.phone = "Numéro de téléphone invalide (10-15 chiffres, peut commencer par +)";
     }
 
     // Mot de passe (min 8 caractères avec exigences)
@@ -116,20 +137,14 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      // ✅ Construire le payload en omettant phone s'il est vide
-      const registerData: any = {
+      // ✅ Envoyer uniquement les champs requis par l'API
+      await authService.register({
         username: formData.username,
         email: formData.email,
         password: formData.password,
+        phone: formData.phone || undefined, // Envoyer undefined si vide
         organizationId: formData.organizationId
-      };
-
-      // N'ajouter phone que s'il est rempli
-      if (formData.phone && formData.phone.trim()) {
-        registerData.phone = formData.phone;
-      }
-
-      await authService.register(registerData);
+      });
       
       // Succès
       alert("✅ Compte créé avec succès ! Vous pouvez maintenant vous connecter.");
@@ -145,12 +160,10 @@ export default function RegisterPage() {
         errorMessage = err.message;
         
         // Messages d'erreur spécifiques du backend
-        if (errorMessage.toLowerCase().includes("email") && errorMessage.toLowerCase().includes("already")) {
+        if (errorMessage.includes("email") && errorMessage.includes("already")) {
           errorMessage = "Cet email est déjà utilisé";
-        } else if (errorMessage.toLowerCase().includes("username") && errorMessage.toLowerCase().includes("already")) {
+        } else if (errorMessage.includes("username") && errorMessage.includes("already")) {
           errorMessage = "Ce nom d'utilisateur est déjà pris";
-        } else if (errorMessage.toLowerCase().includes("password")) {
-          errorMessage = "Le mot de passe ne respecte pas les critères de sécurité";
         }
       }
       
@@ -213,6 +226,9 @@ export default function RegisterPage() {
               <span>{error}</span>
             </div>
           )}
+
+          {/* Photo de profil Uploader (Optionnel - retiré pour simplifier) */}
+          {/* Vous pouvez le réactiver après avoir configuré le Media Service */}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             
