@@ -70,6 +70,9 @@ export interface POI {
     website?: string;
     email?: string;
   };
+    website_url?: string; // NOUVEAU
+  
+  operation_time_plan?: OperationTimePlan; // NOUVEAU pour fixer l'autre erreur possible avec Open
 }
 
 export interface CreatePoiDTO {
@@ -161,3 +164,6 @@ export interface MediaDto {
 }
 
 
+export interface OperationTimePlan {
+  [day: string]: { open: string; close: string; closed?: boolean } | string; // Permettre string pour "Open": "08:00-18:00"
+}
