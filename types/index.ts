@@ -41,6 +41,7 @@ export interface POI {
   poi_type?: string;
 
   created_at?: string;
+  created_by?: string; // AJOUTEZ CETTE LIGNE
   
   // Supporte les deux formats pour la transition
   latitude?: number;

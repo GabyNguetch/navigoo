@@ -295,7 +295,9 @@ class PoiService {
   async getPoisByUser(userId: string): Promise<POI[]> {
     console.log(`👤 [POI SIMULÉ] POIs de l'utilisateur: ${userId}`);
     const localPois = this.getAllPoisFromStorage();
-    return localPois.filter(poi => poi.created_by === userId || poi.created_by_user_id === userId);
+    return localPois.filter(poi => 
+  (poi.created_by === userId) || (poi.created_by_user_id === userId)
+);
   }
 
   /**
