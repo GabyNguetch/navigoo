@@ -363,9 +363,14 @@ class PoiService {
       
       website_url: formData.poi_contacts?.website || "",
       
-      operation_time_plan: {
-        "Open": "08:00-18:00"
-      },
+// Ligne 366 environ, dans la fonction createPoi :
+operation_time_plan: {
+  "Lundi": { open: "08:00", close: "18:00" }, // Format conforme à votre interface
+  "Mardi": { open: "08:00", close: "18:00" },
+  "Mercredi": { open: "08:00", close: "18:00" },
+  "Jeudi": { open: "08:00", close: "18:00" },
+  "Vendredi": { open: "08:00", close: "18:00" }
+},
       
       poi_contacts: {
         phone: formData.poi_contacts?.phone || "",
