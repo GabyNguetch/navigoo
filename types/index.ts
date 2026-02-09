@@ -107,6 +107,7 @@ export interface Trip {
   date: string; 
   distance: number;
   duration: number;
+  poiId?: string; // AJOUTEZ CETTE LIGNE (le ? signifie qu'elle est optionnelle)
 }
 
 export type MapStyle = "streets-v2" | "hybrid";

@@ -4077,10 +4077,10 @@ export default function Home() {
             let approvedData = data.filter(poi => poi.is_active);
             
             // Ajouter mes POIs même s'ils ne sont pas actifs
-            if (currentUser?.userId) {
-              const myUserPois = data.filter(poi => 
-                (poi.created_by === currentUser.userId || poi.created_by_user_id === currentUser.userId)
-              );
+              if (currentUser?.userId) {
+                const myUserPois = data.filter(poi => 
+                  poi.created_by_user_id === currentUser.userId
+                );
               myUserPois.forEach(poi => {
                 if (!approvedData.find(p => p.poi_id === poi.poi_id)) {
                   approvedData.push(poi);
@@ -4257,7 +4257,7 @@ export default function Home() {
         if (user?.userId) {
           try {
             await userProfileService.createAccessLog({
-              poiId: externalPoi.poi_id,
+              poiId: externalPoi.poi_id || "",
               userId: user.userId,
               organizationId: user.organizationId,
               platformType: "WEB",
@@ -4336,7 +4336,7 @@ export default function Home() {
       
       // Afficher si: POI approuvé OU c'est mon POI
       const isMyPoi = currentUser?.userId && 
-                      (poi.created_by === currentUser.userId || poi.created_by_user_id === currentUser.userId);
+                      poi.created_by_user_id === currentUser.userId;
       const shouldShow = poi.is_active || isMyPoi;
 
       return catMatch && nameMatch && shouldShow;
@@ -8331,7 +8331,7 @@ const Sidebar = ({
                 Aucun commentaire. Soyez le premier à commenter !
               </p>
             ) : (
-              comments.map((comment) => (
+              comments.map((comment: any) => (
                 <div key={comment.comment_id} className="flex gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                     {comment.username.substring(0, 2).toUpperCase()}
@@ -8406,7 +8406,8 @@ import {
   FileText, Mic, Grid, List, X, ChevronRight,
   Phone, Globe, Clock, Navigation, Heart, MessageCircle,
   Building2, Utensils, Hotel, ShoppingBag, Coffee, Landmark,
-  ExternalLink, HandCoins, Car, Truck, PenTool, StoreIcon, Settings
+  ExternalLink, HandCoins, Car, Truck, PenTool, StoreIcon, Settings,
+  Loader
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
@@ -8418,7 +8419,10 @@ import { POI } from "@/types";
 import dynamic from "next/dynamic";
 
 // Import dynamique de la carte pour éviter les erreurs SSR
-const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapContainer), { ssr: false });
+const MapComponent = dynamic(() => import("@/components/map/Map"), {
+  ssr: false,
+  loading: () => <Loader className="h-[600px] rounded-2xl relative" />,
+});
 const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
 const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
 const Popup = dynamic(() => import("react-leaflet").then(mod => mod.Popup), { ssr: false });
@@ -8785,30 +8789,30 @@ export default function MarketplacePage() {
               </div>
               
               <div className="flex gap-2">
-                <Button
-                  variant={viewMode === "grid" ? "default" : "outline"}
-                  onClick={() => setViewMode("grid")}
-                  className="gap-2"
-                >
-                  <Grid size={18} />
-                  Grille
-                </Button>
-                <Button
-                  variant={viewMode === "list" ? "default" : "outline"}
-                  onClick={() => setViewMode("list")}
-                  className="gap-2"
-                >
-                  <List size={18} />
-                  Liste
-                </Button>
-                <Button
-                  variant={viewMode === "map" ? "default" : "outline"}
-                  onClick={() => setViewMode("map")}
-                  className="gap-2"
-                >
-                  <MapPin size={18} />
-                  Carte
-                </Button>
+                  <Button
+                    variant={viewMode === "grid" ? "primary" : "outline"} // Corrigé
+                    onClick={() => setViewMode("grid")}
+                    className="gap-2"
+                  >
+                    <Grid size={18} />
+                    Grille
+                  </Button>
+                  <Button
+                    variant={viewMode === "list" ? "primary" : "outline"} // Corrigé
+                    onClick={() => setViewMode("list")}
+                    className="gap-2"
+                  >
+                    <List size={18} />
+                    Liste
+                  </Button>
+                  <Button
+                    variant={viewMode === "map" ? "primary" : "outline"} // Corrigé
+                    onClick={() => setViewMode("map")}
+                    className="gap-2"
+                  >
+                    <MapPin size={18} />
+                    Carte
+                  </Button>
               </div>
             </div>
 
@@ -8859,29 +8863,17 @@ export default function MarketplacePage() {
               )}
 
               {viewMode === "map" && (
-                <div className="h-[600px] rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
-                  <MapContainer center={mapCenter} zoom={13} className="h-full w-full">
-                    <TileLayer
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                      attribution='&copy; OpenStreetMap contributors'
-                    />
-                    {filteredPois.map((poi) => (
-                      poi.location && (
-                        <Marker
-                          key={poi.poi_id}
-                          position={[poi.location.latitude, poi.location.longitude]}
-                          eventHandlers={{ click: () => openPoiDetails(poi) }}
-                        >
-                          <Popup>
-                            <div className="p-2">
-                              <h3 className="font-bold">{poi.poi_name}</h3>
-                              <p className="text-sm text-zinc-600">{poi.address_city}</p>
-                            </div>
-                          </Popup>
-                        </Marker>
-                      )
-                    ))}
-                  </MapContainer>
+                <div className="h-[600px] rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 relative">
+                  <MapComponent
+                    apiKey="Lr72DkH8TYyjpP7RNZS9"
+                    pois={filteredPois}
+                    selectedPoi={selectedPoi}
+                    onSelectPoi={(poi) => setSelectedPoi(poi as PoiWithStats | null)}
+                    userLocation={{ latitude: mapCenter[0], longitude: mapCenter[1] }} // Utiliser le centre actuel comme "userLocation" pour centrer
+                    routeGeometry={null}
+                    mapStyleType="streets-v2"
+                    onMapEmptyClick={() => {}}
+                  />
                 </div>
               )}
             </>
@@ -10391,6 +10383,9 @@ export interface POI {
     website?: string;
     email?: string;
   };
+    website_url?: string; // NOUVEAU
+  
+  operation_time_plan?: OperationTimePlan; // NOUVEAU pour fixer l'autre erreur possible avec Open
 }
 
 export interface CreatePoiDTO {
@@ -10482,6 +10477,9 @@ export interface MediaDto {
 }
 
 
+export interface OperationTimePlan {
+  [day: string]: { open: string; close: string; closed?: boolean } | string; // Permettre string pour "Open": "08:00-18:00"
+}
 
 
 
@@ -13532,15 +13530,16 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  size?: 'default' | 'large';
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
+export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'default' }) => {
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-all">
       <div 
-        className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800 animate-in fade-in zoom-in duration-200 border border-gray-100 dark:border-gray-700"
+        className={`w-full ${size === 'large' ? 'max-w-4xl' : 'max-w-lg'} rounded-2xl bg-white p-6 shadow-2xl dark:bg-gray-800 animate-in fade-in zoom-in duration-200 border border-gray-100 dark:border-gray-700`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6 border-b border-gray-100 dark:border-gray-700 pb-4">
@@ -14948,9 +14947,11 @@ const AMENITIES_OPTIONS = [
 
 interface AddPoiPanelProps {
   onClose: () => void;
+  poiId?: string;
+  onSuccess?: () => void; // Optionnel pour notifier le succès
 }
 
-export const AddPoiPanel = ({ onClose }: AddPoiPanelProps) => {
+export const AddPoiPanel = ({ onClose, poiId, onSuccess }: AddPoiPanelProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [keywordsString, setKeywordsString] = useState("");
@@ -14982,6 +14983,39 @@ export const AddPoiPanel = ({ onClose }: AddPoiPanelProps) => {
       });
     }
   }, []);
+
+    // Charger les données si mode édition (poiId présent)
+  useEffect(() => {
+    if (poiId) {
+      const fetchPoi = async () => {
+        setIsLoading(true);
+        try {
+          const data = await poiService.getPoiById(poiId);
+          setFormData(data);
+          if (data.location) {
+            setTempLocation(data.location);
+          }
+          if (data.poi_images_urls && data.poi_images_urls.length > 0) {
+            setPreviewImage(data.poi_images_urls[0]);
+          }
+          if (data.poi_keywords) {
+            setKeywordsString(data.poi_keywords.join(', '));
+          }
+        } catch (error) {
+          console.error("Erreur chargement POI:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchPoi();
+    } else if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        setFormData(prev => ({ ...prev, location: loc }));
+        setTempLocation(loc);
+      });
+    }
+  }, [poiId]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
