@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, MapPin, Plus, DollarSign, BookOpen, User, LogOut, MapPinHouse } from "lucide-react";
+import { Menu, X, MapPin, Plus, DollarSign, BookOpen, User, LogOut, MapPinHouse, Users, FileText, Store } from "lucide-react";
 import { authService } from "@/services/authService";
 import { clsx } from "clsx";
 
@@ -28,8 +28,10 @@ export const Navbar = () => {
   }, []);
 
   const navLinks = [
-      { href: "/navigoo", label: "Naviguer", icon: <MapPin size={18} /> },
+    { href: "/navigoo", label: "Naviguer", icon: <MapPin size={18} /> },
     { href: "/add-poi", label: "Créer un POI", icon: <Plus size={18} /> },
+    { href: "/blogs", label: "Actualité", icon: <FileText size={18} /> },
+    { href: "/marketplace", label: "MarketPlace", icon: <Store size={18} /> },
     { href: "/pricing", label: "Tarifs", icon: <DollarSign size={18} /> },
     { href: "/docs", label: "Documentation", icon: <BookOpen size={18} /> },
   ];
@@ -67,7 +69,7 @@ export const Navbar = () => {
             </motion.div>
             <div className="hidden sm:block">
               <h1 className="text-2xl font-black bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-                PoI - Navigoo
+                PoI-Navigoo
               </h1>
               <p className="text-[10px] text-zinc-500 -mt-1">by TraMaSys</p>
             </div>

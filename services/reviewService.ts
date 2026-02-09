@@ -19,181 +19,275 @@ export interface ReviewStats {
 }
 
 class ReviewService {
-    // Ajout d'une petite fonction utilitaire pour vérifier si l'ID est un lieu système
+  // Vérifier si l'ID est un lieu système
   private isExternalId(id: string): boolean {
     return id.startsWith("external-") || id.startsWith("search-");
   }
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${API_BASE_URL}${endpoint}`;
+
+  /**
+   * Récupère toutes les reviews depuis localStorage
+   */
+  private getAllReviewsFromStorage(): PoiReview[] {
+    if (typeof window === 'undefined') return [];
     
-    console.log(`📡 [ReviewService] Request: ${options.method || 'GET'} ${url}`);
-
-    const response = await fetch(url, {
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      ...options,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ [ReviewService] Error ${response.status}:`, errorText);
-      throw new Error(`Erreur API (${response.status}): ${errorText}`);
+    const stored = localStorage.getItem("navigoo_reviews");
+    if (!stored) return [];
+    
+    try {
+      return JSON.parse(stored);
+    } catch {
+      return [];
     }
-
-    if (response.status === 204) {
-      console.log(`✅ [ReviewService] Success (No Content)`);
-      return {} as T;
-    }
-
-    const data = await response.json();
-    console.log(`✅ [ReviewService] Success:`, data);
-    return data;
   }
+
+  /**
+   * Sauvegarde toutes les reviews dans localStorage
+   */
+  private saveAllReviews(reviews: PoiReview[]) {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem("navigoo_reviews", JSON.stringify(reviews));
+  }
+
+  /**
+   * Crée une review (SIMULÉ)
+   */
   async createReview(data: any) {
-    const payload = {
+    const payload: PoiReview = {
+      reviewId: this.generateUUID(),
       poiId: data.poiId,
       userId: data.userId,
       organizationId: data.organizationId,
       rating: data.rating,
-      reviewText: data.reviewText,
+      reviewText: data.reviewText || "",
       platformType: "WEB",
       likes: 0,
-      dislikes: 0
+      dislikes: 0,
+      createdAt: new Date().toISOString()
     };
 
-    console.group(`⭐ Liaison Review: POST /api-reviews`);
-    const res = await fetch(API_BASE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const result = await res.json();
-    console.log("Result:", result);
+    console.group(`⭐ [ReviewService SIMULÉ] POST /api-reviews`);
+    console.log("Payload:", payload);
+    
+    const reviews = this.getAllReviewsFromStorage();
+    reviews.push(payload);
+    this.saveAllReviews(reviews);
+    
+    console.log("✅ Review créée avec succès");
     console.groupEnd();
-    return result;
+    
+    return payload;
   }
-  // Obtenir tous les avis
+
+  /**
+   * Obtenir tous les avis (SIMULÉ)
+   */
   async getAllReviews(): Promise<PoiReview[]> {
-    console.log("📋 [ReviewService] Récupération de tous les avis");
-    return this.request<PoiReview[]>("/api-reviews");
+    console.log("📋 [ReviewService SIMULÉ] Récupération de tous les avis");
+    return this.getAllReviewsFromStorage();
   }
 
-  // Obtenir un avis par ID
+  /**
+   * Obtenir un avis par ID (SIMULÉ)
+   */
   async getReviewById(reviewId: string): Promise<PoiReview> {
-    console.log(`🔍 [ReviewService] Récupération avis ID: ${reviewId}`);
-    return this.request<PoiReview>(`/api-reviews/${reviewId}`);
+    console.log(`🔍 [ReviewService SIMULÉ] Récupération avis ID: ${reviewId}`);
+    const reviews = this.getAllReviewsFromStorage();
+    const review = reviews.find(r => r.reviewId === reviewId);
+    
+    if (!review) {
+      throw new Error("Avis non trouvé");
+    }
+    
+    return review;
   }
 
-  // Obtenir les avis d'un utilisateur
+  /**
+   * Obtenir les avis d'un utilisateur (SIMULÉ)
+   */
   async getReviewsByUser(userId: string): Promise<PoiReview[]> {
-    console.log(`👤 [ReviewService] Récupération avis utilisateur: ${userId}`);
-    return this.request<PoiReview[]>(`/api-reviews/user/${userId}/reviews`);
+    console.log(`👤 [ReviewService SIMULÉ] Récupération avis utilisateur: ${userId}`);
+    const reviews = this.getAllReviewsFromStorage();
+    return reviews.filter(r => r.userId === userId);
   }
 
-  // Obtenir les avis d'une organisation
+  /**
+   * Obtenir les avis d'une organisation (SIMULÉ)
+   */
   async getReviewsByOrganization(orgId: string): Promise<PoiReview[]> {
-    console.log(`🏢 [ReviewService] Récupération avis organisation: ${orgId}`);
-    return this.request<PoiReview[]>(`/api-reviews/organization/${orgId}/reviews`);
+    console.log(`🏢 [ReviewService SIMULÉ] Récupération avis organisation: ${orgId}`);
+    const reviews = this.getAllReviewsFromStorage();
+    return reviews.filter(r => r.organizationId === orgId);
   }
 
+  /**
+   * Obtenir les avis d'un POI (SIMULÉ)
+   */
   async getReviewsByPoi(poiId: string): Promise<PoiReview[]> {
-    if (this.isExternalId(poiId)) return []; // Retourne une liste vide sans requête
-    console.log(`📍 [ReviewService] Récupération avis POI: ${poiId}`);
-    return this.request<PoiReview[]>(`/api-reviews/poi/${poiId}/reviews`);
+    if (this.isExternalId(poiId)) return [];
+    
+    console.log(`📍 [ReviewService SIMULÉ] Récupération avis POI: ${poiId}`);
+    const reviews = this.getAllReviewsFromStorage();
+    return reviews.filter(r => r.poiId === poiId);
   }
 
-  async getPoiStats(poiId: string) {
-    const res = await fetch(`${API_BASE_URL}/poi/${poiId}/stats`);
-    if (!res.ok) return { averageRating: 0, reviewCount: 0 };
-    return res.json();
+  /**
+   * Obtenir les statistiques d'un POI (SIMULÉ)
+   */
+  async getPoiStats(poiId: string): Promise<ReviewStats> {
+    const reviews = await this.getReviewsByPoi(poiId);
+    
+    if (reviews.length === 0) {
+      return { averageRating: 0, reviewCount: 0 };
+    }
+
+    const totalRating = reviews.reduce((sum, r) => sum + r.rating, 0);
+    const averageRating = totalRating / reviews.length;
+
+    return {
+      averageRating: Math.round(averageRating * 10) / 10,
+      reviewCount: reviews.length
+    };
   }
 
-  // Obtenir la note moyenne d'un POI
+  /**
+   * Obtenir la note moyenne d'un POI (SIMULÉ)
+   */
   async getAverageRating(poiId: string): Promise<number> {
-    console.log(`⭐ [ReviewService] Récupération note moyenne POI: ${poiId}`);
-    return this.request<number>(`/api-reviews/poi/${poiId}/average-rating`);
+    console.log(`⭐ [ReviewService SIMULÉ] Récupération note moyenne POI: ${poiId}`);
+    const stats = await this.getPoiStats(poiId);
+    return stats.averageRating;
   }
 
-  // Obtenir le nombre d'avis d'un POI
+  /**
+   * Obtenir le nombre d'avis d'un POI (SIMULÉ)
+   */
   async getReviewCount(poiId: string): Promise<number> {
-    console.log(`🔢 [ReviewService] Récupération nombre avis POI: ${poiId}`);
-    return this.request<number>(`/api-reviews/poi/${poiId}/count`);
+    console.log(`🔢 [ReviewService SIMULÉ] Récupération nombre avis POI: ${poiId}`);
+    const stats = await this.getPoiStats(poiId);
+    return stats.reviewCount;
   }
 
-  // Mettre à jour un avis
+  /**
+   * Mettre à jour un avis (SIMULÉ)
+   */
   async updateReview(reviewId: string, data: Partial<PoiReview>): Promise<PoiReview> {
-    console.log(`✏️ [ReviewService] Mise à jour avis ${reviewId}:`, data);
+    console.log(`✏️ [ReviewService SIMULÉ] Mise à jour avis ${reviewId}:`, data);
     
-    return this.request<PoiReview>(`/api-reviews/${reviewId}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
+    const reviews = this.getAllReviewsFromStorage();
+    const index = reviews.findIndex(r => r.reviewId === reviewId);
+    
+    if (index === -1) {
+      throw new Error("Avis non trouvé");
+    }
+
+    reviews[index] = {
+      ...reviews[index],
+      ...data
+    };
+
+    this.saveAllReviews(reviews);
+    return reviews[index];
   }
 
-  // Supprimer un avis
+  /**
+   * Supprimer un avis (SIMULÉ)
+   */
   async deleteReview(reviewId: string): Promise<void> {
-    console.log(`🗑️ [ReviewService] Suppression avis: ${reviewId}`);
+    console.log(`🗑️ [ReviewService SIMULÉ] Suppression avis: ${reviewId}`);
     
-    return this.request<void>(`/api-reviews/${reviewId}`, {
-      method: "DELETE",
-    });
+    const reviews = this.getAllReviewsFromStorage();
+    const filtered = reviews.filter(r => r.reviewId !== reviewId);
+    this.saveAllReviews(filtered);
   }
 
-  // Liker un avis
+  /**
+   * Liker un avis (SIMULÉ)
+   */
   async likeReview(reviewId: string): Promise<PoiReview> {
-    console.log(`👍 [ReviewService] Like avis: ${reviewId}`);
+    console.log(`👍 [ReviewService SIMULÉ] Like avis: ${reviewId}`);
     
-    return this.request<PoiReview>(`/api-reviews/${reviewId}/like`, {
-      method: "PATCH",
-    });
+    const reviews = this.getAllReviewsFromStorage();
+    const index = reviews.findIndex(r => r.reviewId === reviewId);
+    
+    if (index === -1) {
+      throw new Error("Avis non trouvé");
+    }
+
+    reviews[index].likes += 1;
+    this.saveAllReviews(reviews);
+    
+    return reviews[index];
   }
 
-  // Disliker un avis
+  /**
+   * Disliker un avis (SIMULÉ)
+   */
   async dislikeReview(reviewId: string): Promise<PoiReview> {
-    console.log(`👎 [ReviewService] Dislike avis: ${reviewId}`);
+    console.log(`👎 [ReviewService SIMULÉ] Dislike avis: ${reviewId}`);
     
-    return this.request<PoiReview>(`/api-reviews/${reviewId}/unlike`, {
-      method: "PATCH",
-    });
+    const reviews = this.getAllReviewsFromStorage();
+    const index = reviews.findIndex(r => r.reviewId === reviewId);
+    
+    if (index === -1) {
+      throw new Error("Avis non trouvé");
+    }
+
+    reviews[index].dislikes += 1;
+    this.saveAllReviews(reviews);
+    
+    return reviews[index];
   }
 
-  // Vérifier si un utilisateur a déjà laissé un avis sur un POI
+  /**
+   * Vérifier si un utilisateur a déjà laissé un avis sur un POI (SIMULÉ)
+   */
   async hasUserReviewed(userId: string, poiId: string): Promise<boolean> {
-    console.log(`🔍 [ReviewService] Vérification avis existant - User: ${userId}, POI: ${poiId}`);
+    console.log(`🔍 [ReviewService SIMULÉ] Vérification avis existant - User: ${userId}, POI: ${poiId}`);
     
     try {
       const userReviews = await this.getReviewsByUser(userId);
       const hasReviewed = userReviews.some(review => review.poiId === poiId);
       
-      console.log(`✅ [ReviewService] Utilisateur a déjà reviewé: ${hasReviewed}`);
+      console.log(`✅ [ReviewService SIMULÉ] Utilisateur a déjà reviewé: ${hasReviewed}`);
       return hasReviewed;
     } catch (error) {
-      console.error("❌ [ReviewService] Erreur vérification:", error);
+      console.error("❌ [ReviewService SIMULÉ] Erreur vérification:", error);
       return false;
     }
   }
 
-  // Obtenir l'avis d'un utilisateur sur un POI spécifique
+  /**
+   * Obtenir l'avis d'un utilisateur sur un POI spécifique (SIMULÉ)
+   */
   async getUserReviewForPoi(userId: string, poiId: string): Promise<PoiReview | null> {
-    console.log(`🔍 [ReviewService] Récupération avis spécifique - User: ${userId}, POI: ${poiId}`);
+    console.log(`🔍 [ReviewService SIMULÉ] Récupération avis spécifique - User: ${userId}, POI: ${poiId}`);
     
     try {
       const userReviews = await this.getReviewsByUser(userId);
       const review = userReviews.find(r => r.poiId === poiId);
       
       if (review) {
-        console.log(`✅ [ReviewService] Avis trouvé:`, review);
+        console.log(`✅ [ReviewService SIMULÉ] Avis trouvé:`, review);
       } else {
-        console.log(`ℹ️ [ReviewService] Aucun avis trouvé`);
+        console.log(`ℹ️ [ReviewService SIMULÉ] Aucun avis trouvé`);
       }
       
       return review || null;
     } catch (error) {
-      console.error("❌ [ReviewService] Erreur récupération:", error);
+      console.error("❌ [ReviewService SIMULÉ] Erreur récupération:", error);
       return null;
     }
+  }
+
+  /**
+   * Utilitaire privé
+   */
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 }
 
