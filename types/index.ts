@@ -1,6 +1,3 @@
-export interface OperationTimePlan {
-  [day: string]: { open: string; close: string; closed?: boolean } | string;
-}
 export type UserRole = "USER" | "ADMIN" | "SUPER_ADMIN";
 
 export interface Location {
@@ -173,7 +170,7 @@ export interface MediaDto {
   updated_at?: string;
 }
 
-
 export interface OperationTimePlan {
-  [day: string]: { open: string; close: string; closed?: boolean } | string; // Permettre string pour "Open": "08:00-18:00"
+  [day: string]: { open: string; close: string; closed?: boolean } | string;
 }
+
