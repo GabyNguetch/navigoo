@@ -469,7 +469,7 @@ export default function MarketplacePage() {
                     apiKey="Lr72DkH8TYyjpP7RNZS9"
                     pois={filteredPois}
                     selectedPoi={selectedPoi}
-                    onSelectPoi={setSelectedPoi}
+                    onSelectPoi={(poi) => setSelectedPoi(poi as PoiWithStats | null)}
                     userLocation={{ latitude: mapCenter[0], longitude: mapCenter[1] }} // Utiliser le centre actuel comme "userLocation" pour centrer
                     routeGeometry={null}
                     mapStyleType="streets-v2"
