@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+workflow-complet-api.*
+sequence_interaction_poi.drawio.png
