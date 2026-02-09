@@ -1,7 +1,6 @@
 export interface OperationTimePlan {
-  [day: string]: { open: string; close: string; closed?: boolean };
+  [day: string]: { open: string; close: string; closed?: boolean } | string;
 }
-
 export type UserRole = "USER" | "ADMIN" | "SUPER_ADMIN";
 
 export interface Location {

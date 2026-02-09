@@ -59,7 +59,7 @@ const config: Config = {
       },
     },
   },
-
+  plugins: [], // Laissez le tableau vide ici pour Tailwind v4
 };
 
 export default config;
