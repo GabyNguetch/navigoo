@@ -51,23 +51,29 @@ class ReviewService {
     console.log(`✅ [ReviewService] Success:`, data);
     return data;
   }
+  async createReview(data: any) {
+    const payload = {
+      poiId: data.poiId,
+      userId: data.userId,
+      organizationId: data.organizationId,
+      rating: data.rating,
+      reviewText: data.reviewText,
+      platformType: "WEB",
+      likes: 0,
+      dislikes: 0
+    };
 
-async createReview(review: Omit<PoiReview, 'reviewId' | 'createdAt'>): Promise<PoiReview> {
-  // Sécurité : forcer les types attendus par le Backend Spring/R2DBC
-  const payload = {
-    ...review,
-    rating: Math.floor(review.rating), // Forcer un entier 1-5
-    organizationId: review.organizationId || "83ce5943-d920-454f-908d-3248a73aafdf", // ID Défaut
-    platformType: "WEB"
-  };
-
-  console.log("📤 Publication de l'avis au backend...", payload);
-  
-  return this.request<PoiReview>("/api-reviews", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
+    console.group(`⭐ Liaison Review: POST /api-reviews`);
+    const res = await fetch(API_BASE_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    console.log("Result:", result);
+    console.groupEnd();
+    return result;
+  }
   // Obtenir tous les avis
   async getAllReviews(): Promise<PoiReview[]> {
     console.log("📋 [ReviewService] Récupération de tous les avis");
@@ -98,19 +104,10 @@ async createReview(review: Omit<PoiReview, 'reviewId' | 'createdAt'>): Promise<P
     return this.request<PoiReview[]>(`/api-reviews/poi/${poiId}/reviews`);
   }
 
-  async getPoiStats(poiId: string): Promise<ReviewStats> {
-    // Si l'ID est externe, on ne contacte pas le backend (éviter l'erreur 400/500)
-    if (this.isExternalId(poiId)) {
-        return { averageRating: 0, reviewCount: 0 };
-    }
-    
-    try {
-        console.log(`📊 [ReviewService] Récupération stats POI: ${poiId}`);
-        return await this.request<ReviewStats>(`/api-reviews/poi/${poiId}/stats`);
-    } catch (e) {
-        // Fallback pour les nouveaux POI réels sans avis encore créés
-        return { averageRating: 0, reviewCount: 0 };
-    }
+  async getPoiStats(poiId: string) {
+    const res = await fetch(`${API_BASE_URL}/poi/${poiId}/stats`);
+    if (!res.ok) return { averageRating: 0, reviewCount: 0 };
+    return res.json();
   }
 
   // Obtenir la note moyenne d'un POI

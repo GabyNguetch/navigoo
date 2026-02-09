@@ -6,7 +6,7 @@ import {
   ArrowLeft, Save, Loader2, Camera, MapPin, 
   Hash, Globe, Phone, Building2, Flag, Mail, 
   ScanLine, Type, Sparkles, CheckCircle2, CircleDashed,
-  Target, ImagePlus, LocateFixed, Maximize, Check
+  Target, ImagePlus, LocateFixed, Maximize, Check, Upload, X
 } from "lucide-react";
 
 // Imports pour la carte
@@ -24,7 +24,7 @@ import { clsx } from "clsx";
 import { poiService } from "@/services/poiService";
 import { mediaService } from "@/services/mediaService";
 
-// Clé API MapTiler (la même que dans page.tsx)
+// Clé API MapTiler
 const MAPTILER_API_KEY = "Lr72DkH8TYyjpP7RNZS9"; 
 
 const AMENITIES_OPTIONS = [
@@ -39,7 +39,9 @@ function AddPoiContent() {
   
   // States
   const [isLoading, setIsLoading] = useState(true);
-  const [isMapOpen, setIsMapOpen] = useState(false); // Modal Carte
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const [postalCode, setPostalCode] = useState(""); 
   const [keywordsString, setKeywordsString] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -52,7 +54,7 @@ function AddPoiContent() {
     poi_category: "",
     poi_description: "",
     poi_amenities: [],
-    location: { latitude: 3.86667, longitude: 11.51667 }, // Défaut: Yaoundé
+    location: { latitude: 3.86667, longitude: 11.51667 },
     address_informal: "",
     address_city: "Yaoundé",
     address_country: "Cameroun",
@@ -116,26 +118,45 @@ function AddPoiContent() {
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-        setIsLoading(true); // Afficher loading pendant upload
+        setIsUploadingImage(true);
+        
+        // Créer un preview local immédiatement
+        const localPreview = URL.createObjectURL(file);
+        setPreviewImage(localPreview);
+        
         try {
-            // Upload vers le service media
-            const media = await mediaService.uploadFile(file, "poi");
+            // 1. Upload vers Media Service
+            const media = await mediaService.uploadFile(file, "pois_galleries");
             
-            // On stocke l'URL publique fournie par le proxy
+            // 2. Récupérer l'URL propre
             const imageUrl = mediaService.getMediaUrl(media.id);
             
-            setPreviewImage(imageUrl);
+            // Conversion localhost -> URL Réelle si nécessaire
+            const finalUrl = imageUrl.replace('http://localhost:3000/media-api', 'https://media-service.pynfi.com');
+
+            // Révoquer l'URL locale et utiliser l'URL finale
+            URL.revokeObjectURL(localPreview);
+            setPreviewImage(finalUrl);
+            
             setFormData(prev => ({ 
                 ...prev, 
-                poi_images_urls: [imageUrl] 
+                poi_images_urls: [finalUrl]
             }));
-        } catch (e) {
-            console.error(e);
-            alert("Erreur upload image");
+
+            console.log("📸 Image liée avec succès:", finalUrl);
+        } catch (error) {
+            console.error("Erreur upload:", error);
+            alert("Erreur lors de l'upload de l'image");
+            setPreviewImage(null);
         } finally {
-            setIsLoading(false);
+            setIsUploadingImage(false);
         }
     }
+  };
+
+  const handleRemoveImage = () => {
+    setPreviewImage(null);
+    setFormData(prev => ({ ...prev, poi_images_urls: [] }));
   };
 
   // Gestion Carte
@@ -160,68 +181,117 @@ function AddPoiContent() {
     }));
     setIsMapOpen(false);
   };
+
 const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation basique
-    if (!formData.poi_name || !formData.poi_category) {
-        alert("Veuillez renseigner au moins le nom et la catégorie.");
+    // Validation des champs requis
+    if (!formData.poi_name?.trim()) {
+        alert("❌ Le nom du lieu est requis.");
         return;
     }
 
-    setIsLoading(true);
+    if (!formData.poi_category) {
+        alert("❌ La catégorie est requise.");
+        return;
+    }
+
+    if (!formData.location?.latitude || !formData.location?.longitude) {
+        alert("❌ Veuillez définir la position sur la carte.");
+        return;
+    }
+
+    setIsSubmitting(true);
 
     try {
-        // Préparer les données avec keywords convertis
-        const dataToSubmit = {
-            ...formData,
-            poi_keywords: keywordsString 
-                ? keywordsString.split(',').map(k => k.trim()).filter(k => k.length > 0)
-                : [],
-            address_state_province: "Adamaoua" // Province de Ngaoundéré
+        // Nettoyage des mots-clés
+        const cleanKeywords = keywordsString
+            .split(/[,\s]+/) // Split par virgule OU espace
+            .map(k => k.trim())
+            .filter(k => k.length > 0);
+
+        // Préparation du payload avec tous les champs requis
+        const submissionData = {
+            poi_name: formData.poi_name.trim(),
+            poi_category: formData.poi_category,
+            poi_type: formData.poi_type || "OTHER",
+            poi_description: formData.poi_description || "",
+            location: formData.location,
+            address_informal: formData.address_informal || "",
+            address_city: formData.address_city || "Ngaoundéré",
+            address_state_province: "Adamaoua", // REQUIS par le backend
+            address_country: formData.address_country || "Cameroun",
+            poi_contacts: {
+                phone: formData.poi_contacts?.phone || "",
+                website: formData.poi_contacts?.website || ""
+            },
+            poi_images_urls: formData.poi_images_urls || [],
+            poi_amenities: formData.poi_amenities || [],
+            poi_keywords: cleanKeywords,
+            postalCode: postalCode || "0000"
         };
 
-        if (editId) {
-            await poiService.updatePoi(editId, dataToSubmit);
-            alert("Lieu mis à jour avec succès !");
-        } else {
-            await poiService.createPoi(dataToSubmit);
-            alert("Nouveau point d'intérêt publié sur Navigoo !");
-        }
+        console.log("📤 Données à envoyer:", submissionData);
+
+        // Appel au service
+        const result = await poiService.createPoi(submissionData);
         
-        router.push("/");
-        router.refresh();
+        console.log("✅ POI créé:", result);
+        
+        // Message de succès
+        alert("🎉 Félicitations ! Votre lieu a été créé avec succès.\n\nIl sera visible sur la carte après validation par notre équipe.");
+        
+        // Redirection automatique au profil
+        router.push("/profile");
+        router.refresh(); 
+
     } catch (err: any) {
-        console.error("❌ Erreur Backend:", err);
-        alert(`Erreur lors de l'enregistrement : ${err.message}`);
+        console.error("❌ Erreur lors de la création:", err);
+        
+        // Message d'erreur détaillé
+        const errorMessage = err.message || "Une erreur inconnue est survenue";
+        alert(`❌ Échec de la création du lieu :\n\n${errorMessage}\n\nVeuillez réessayer ou contacter le support.`);
     } finally {
-        setIsLoading(false);
+        setIsSubmitting(false);
     }
 };
-  if (isLoading) return <div className="h-screen w-full bg-zinc-50 dark:bg-black flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40}/></div>;
+  
+  if (isLoading) {
+    return (
+      <div className="h-screen w-full bg-zinc-50 dark:bg-black flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="animate-spin text-violet-600 mx-auto" size={48}/>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="h-screen w-full bg-zinc-50 dark:bg-black font-sans overflow-y-auto">
+    <div className="min-h-screen w-full bg-gradient-to-br from-zinc-50 via-violet-50/30 to-zinc-100 dark:from-black dark:via-violet-950/20 dark:to-zinc-950 font-sans overflow-y-auto">
       
       {/* HEADER FIXE */}
-      <div className="sticky top-0 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 z-40 py-3 shadow-sm">
+      <div className="sticky top-0 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border-b border-zinc-200 dark:border-zinc-800 z-40 py-4 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 lg:px-8">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => router.back()} className="p-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700">
+                    <button 
+                      onClick={() => router.back()} 
+                      className="p-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-all duration-200 border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700 hover:scale-105 active:scale-95"
+                    >
                         <ArrowLeft size={20} className="text-zinc-600 dark:text-zinc-400" />
                     </button>
                     <div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-primary uppercase tracking-wider bg-primary/10 px-2 py-0.5 rounded-full">
+                        <div className="flex items-center gap-2.5">
+                            <span className="text-xs font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider bg-violet-100 dark:bg-violet-900/30 px-2.5 py-1 rounded-full">
                                 {editId ? "Édition" : "Nouveau"}
                             </span>
                             <h1 className="text-lg md:text-xl font-bold text-zinc-900 dark:text-white leading-none">
                                 Bienvenue, Explorateur
                             </h1>
                         </div>
-                        <p className="text-xs md:text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 mt-1">
-                            <Sparkles size={12} className="text-yellow-500 fill-yellow-500" /> 
+                        <p className="text-xs md:text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 mt-1.5">
+                            <Sparkles size={12} className="text-amber-500 fill-amber-500" /> 
                             Partagez vos meilleures découvertes et enrichissez la carte.
                         </p>
                     </div>
@@ -229,10 +299,21 @@ const handleSubmit = async (e: React.FormEvent) => {
                 <div className="flex items-center justify-end">
                     <Button 
                         onClick={handleSubmit} 
+                        disabled={isSubmitting || isUploadingImage}
                         variant="primary" 
-                        className="px-6 py-2 h-11 text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-transform flex items-center gap-2"
+                        className="px-6 py-2.5 h-12 text-sm font-bold shadow-lg shadow-violet-600/20 hover:shadow-violet-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 flex items-center gap-2.5 bg-gradient-to-r from-violet-600 to-violet-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                     >
-                        <Save size={18} /> {editId ? "Mettre à jour" : "Publier le lieu"}
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 size={18} className="animate-spin" />
+                            Envoi en cours...
+                          </>
+                        ) : (
+                          <>
+                            <Save size={18} /> 
+                            {editId ? "Mettre à jour" : "Publier le lieu"}
+                          </>
+                        )}
                     </Button>
                 </div>
             </div>
@@ -243,9 +324,9 @@ const handleSubmit = async (e: React.FormEvent) => {
         <form className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
             {/* GAUCHE : INFOS */}
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-5 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-5">
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 border border-zinc-200 dark:border-zinc-800 shadow-lg shadow-zinc-200/50 dark:shadow-zinc-950/50 space-y-6 transition-all duration-300 hover:shadow-xl hover:shadow-zinc-300/50 dark:hover:shadow-zinc-900/50">
                 <div className="flex items-center gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800">
-                    <div className="p-2.5 bg-violet-100 dark:bg-violet-900/30 rounded-xl text-primary">
+                    <div className="p-2.5 bg-gradient-to-br from-violet-100 to-violet-50 dark:from-violet-900/30 dark:to-violet-800/20 rounded-xl text-violet-600 dark:text-violet-400">
                         <ScanLine size={20} />
                     </div>
                     <div>
@@ -254,71 +335,153 @@ const handleSubmit = async (e: React.FormEvent) => {
                     </div>
                 </div>
 
-                {/* Upload Photo */}
-                <div className="relative h-40 w-full bg-zinc-100 dark:bg-zinc-800 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 overflow-hidden group cursor-pointer transition-colors hover:border-primary hover:bg-primary/5">
+                {/* Upload Photo avec Preview Amélioré */}
+                <div className="relative h-48 w-full bg-gradient-to-br from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 overflow-hidden group transition-all duration-300 hover:border-violet-400 dark:hover:border-violet-600 hover:shadow-lg">
                     {previewImage ? (
-                        <Image src={previewImage} alt="Cover" fill className="object-cover transition-transform group-hover:scale-105" />
+                        <>
+                            {/* Image avec effet de chargement */}
+                            <div className="relative w-full h-full">
+                                <Image 
+                                  src={previewImage} 
+                                  alt="Cover" 
+                                  fill 
+                                  className={clsx(
+                                    "object-cover transition-all duration-500",
+                                    isUploadingImage ? "blur-md scale-105" : "blur-0 scale-100"
+                                  )} 
+                                />
+                                
+                                {/* Overlay de chargement */}
+                                {isUploadingImage && (
+                                  <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center z-10 animate-in fade-in duration-300">
+                                    <Loader2 className="animate-spin text-white mb-3" size={40} />
+                                    <p className="text-white text-sm font-semibold">Upload en cours...</p>
+                                  </div>
+                                )}
+                                
+                                {/* Bouton de suppression */}
+                                {!isUploadingImage && (
+                                  <button
+                                    type="button"
+                                    onClick={handleRemoveImage}
+                                    className="absolute top-3 right-3 p-2 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 transition-all duration-200 hover:scale-110 active:scale-95 z-20 opacity-0 group-hover:opacity-100"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                )}
+
+                                {/* Badge de succès */}
+                                {!isUploadingImage && (
+                                  <div className="absolute bottom-3 left-3 bg-green-600 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                    <CheckCircle2 size={14} />
+                                    Image chargée
+                                  </div>
+                                )}
+                            </div>
+                        </>
                     ) : (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400">
-                            <ImagePlus size={24} className="mb-2 group-hover:text-primary" />
-                            <span className="text-xs font-semibold">Ajouter une couverture</span>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-zinc-400 cursor-pointer">
+                            <div className="p-4 bg-violet-100 dark:bg-violet-900/30 rounded-full mb-3 group-hover:scale-110 transition-transform duration-300">
+                              <ImagePlus size={28} className="text-violet-600 dark:text-violet-400" />
+                            </div>
+                            <span className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Ajouter une photo de couverture</span>
+                            <span className="text-xs text-zinc-400 mt-1">Cliquez ou glissez une image</span>
                         </div>
                     )}
-                    <input type="file" onChange={handleImageChange} accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                    <input 
+                      type="file" 
+                      onChange={handleImageChange} 
+                      accept="image/*" 
+                      disabled={isUploadingImage}
+                      className="absolute inset-0 opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed" 
+                    />
                 </div>
 
-                <div className="space-y-12">
+                <div className="space-y-5">
                     <FormInput 
-                        label="Nom du lieu" name="poi_name" 
-                        value={formData.poi_name} onChange={handleChange} 
-                        icon={<Type size={16}/>} className="h-11" placeholder="Ex: Restaurant Le Délice"
+                        label="Nom du lieu" 
+                        name="poi_name" 
+                        value={formData.poi_name} 
+                        onChange={handleChange} 
+                        icon={<Type size={16}/>} 
+                        className="h-12 transition-all duration-200 focus-within:ring-2 focus-within:ring-violet-500/20" 
+                        placeholder="Ex: Restaurant Le Délice"
+                        required
                     />
                     
                     <FormSelect 
-                        label="Catégorie" name="poi_category" 
-                        value={formData.poi_category} onChange={handleChange}
+                        label="Catégorie" 
+                        name="poi_category" 
+                        value={formData.poi_category} 
+                        onChange={handleChange}
                         icon={<Hash size={16}/>}
                         options={CATEGORIES.map(c => ({ id: c.id, label: c.label }))}
+                        required
                     />
 
                     <FormInput 
-                        as="textarea" label="Courte description" name="poi_description"
-                        value={formData.poi_description} onChange={handleChange} 
-                        icon={<Type size={16}/>} style={{ minHeight: '80px', maxHeight: '120px' }}
+                        as="textarea" 
+                        label="Courte description" 
+                        name="poi_description"
+                        value={formData.poi_description} 
+                        onChange={handleChange} 
+                        icon={<Type size={16}/>} 
+                        style={{ minHeight: '100px', maxHeight: '150px' }}
+                        placeholder="Décrivez brièvement ce lieu..."
+                        className="transition-all duration-200 focus-within:ring-2 focus-within:ring-violet-500/20"
                     />
 
                     <div className="grid grid-cols-2 gap-3">
                         <FormInput 
-                            label="Téléphone" name="phone" 
-                            value={formData.poi_contacts?.phone} onChange={handleChange}
-                            icon={<Phone size={16}/>} className="h-11" 
+                            label="Téléphone" 
+                            name="phone" 
+                            value={formData.poi_contacts?.phone} 
+                            onChange={handleChange}
+                            icon={<Phone size={16}/>} 
+                            className="h-12" 
+                            placeholder="+237 6XX XXX XXX"
                         />
                         <FormInput 
-                            label="Site Web" name="website" 
-                            value={formData.poi_contacts?.website} onChange={handleChange}
-                            icon={<Globe size={16}/>} className="h-11" placeholder="facultatif"
+                            label="Site Web" 
+                            name="website" 
+                            value={formData.poi_contacts?.website} 
+                            onChange={handleChange}
+                            icon={<Globe size={16}/>} 
+                            className="h-12" 
+                            placeholder="www.exemple.com"
                         />
                     </div>
 
                     <FormInput 
-                        label="Mots-clés" name="keywords" 
-                        value={keywordsString} onChange={(e) => setKeywordsString(e.target.value)}
-                        icon={<Hash size={16}/>} className="h-11" placeholder="tag1, tag2..."
+                        label="Mots-clés" 
+                        name="keywords" 
+                        value={keywordsString} 
+                        onChange={(e) => setKeywordsString(e.target.value)}
+                        icon={<Hash size={16}/>} 
+                        className="h-12" 
+                        placeholder="restaurant, africain, bastos..."
                     />
 
                     <div>
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-2 ml-1 block">Équipements</label>
-                        <div className="flex flex-wrap gap-1.5">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-3 ml-1 block">Équipements & Services</label>
+                        <div className="flex flex-wrap gap-2">
                             {AMENITIES_OPTIONS.map(am => (
-                                <button key={am} type="button" onClick={() => handleAmenityToggle(am)}
-                                    className={clsx(
-                                        "px-3 py-1.5 rounded-lg text-[11px] font-bold border flex items-center gap-1.5 transition-all",
-                                        formData.poi_amenities?.includes(am)
-                                        ? "bg-zinc-800 text-white border-zinc-800 dark:bg-white dark:text-black shadow-sm" 
-                                        : "bg-white dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50"
-                                    )}
+                                <button 
+                                  key={am} 
+                                  type="button" 
+                                  onClick={() => handleAmenityToggle(am)}
+                                  className={clsx(
+                                      "px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-2 transition-all duration-200 hover:scale-105 active:scale-95",
+                                      formData.poi_amenities?.includes(am)
+                                      ? "bg-gradient-to-r from-violet-600 to-violet-500 text-white border-violet-600 shadow-md shadow-violet-600/20" 
+                                      : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-violet-300 dark:hover:border-violet-600"
+                                  )}
                                 >
-                                    {formData.poi_amenities?.includes(am) ? <CheckCircle2 size={12}/> : <CircleDashed size={12}/>}
+                                    {formData.poi_amenities?.includes(am) ? (
+                                      <CheckCircle2 size={14} className="shrink-0"/>
+                                    ) : (
+                                      <CircleDashed size={14} className="shrink-0"/>
+                                    )}
                                     {am}
                                 </button>
                             ))}
@@ -328,23 +491,20 @@ const handleSubmit = async (e: React.FormEvent) => {
             </div>
 
             {/* DROITE : COORDONNÉES */}
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-5 border border-zinc-200 dark:border-zinc-800 shadow-sm space-y-5 h-full flex flex-col">
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 border border-zinc-200 dark:border-zinc-800 shadow-lg shadow-zinc-200/50 dark:shadow-zinc-950/50 space-y-6 h-full flex flex-col transition-all duration-300 hover:shadow-xl hover:shadow-zinc-300/50 dark:hover:shadow-zinc-900/50">
                 <div className="flex items-center gap-3 pb-4 border-b border-zinc-100 dark:border-zinc-800">
-                    <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl text-blue-600">
+                    <div className="p-2.5 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-900/30 dark:to-blue-800/20 rounded-xl text-blue-600 dark:text-blue-400">
                         <MapPin size={20} />
                     </div>
                     <div>
-                        <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Coordonnées</h2>
-                        <p className="text-[11px] text-zinc-500">Sélectionnez la position exacte sur la carte.</p>
+                        <h2 className="text-base font-bold text-zinc-800 dark:text-zinc-100">Localisation</h2>
+                        <p className="text-[11px] text-zinc-500">Définissez la position exacte sur la carte.</p>
                     </div>
                 </div>
 
-                {/* --- VUE MINIATURE AVEC BOUTON --- */}
-                <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-inner group">
-                    {/* Carte Miniature Statique (MapLibre avec interactivité désactivée) */}
-                    <div className="absolute inset-0 grayscale-[50%] group-hover:grayscale-0 transition-all duration-500">
-                       {/* Note: Pour éviter trop de lourdeur, on peut aussi utiliser une image statique, 
-                           mais ici j'utilise la Map désactivée pour la précision visuelle */}
+                {/* VUE MINIATURE AVEC BOUTON */}
+                <div className="relative w-full h-52 rounded-2xl overflow-hidden border-2 border-zinc-200 dark:border-zinc-800 shadow-inner group">
+                    <div className="absolute inset-0 grayscale-[40%] group-hover:grayscale-0 transition-all duration-500">
                         <Map
                             initialViewState={{
                                 longitude: formData.location?.longitude || 11.5,
@@ -358,63 +518,78 @@ const handleSubmit = async (e: React.FormEvent) => {
                             attributionControl={false}
                         >
                             <Marker longitude={formData.location?.longitude || 0} latitude={formData.location?.latitude || 0}>
-                                <MapPin size={32} className="text-primary fill-primary/20 drop-shadow-md" />
+                                <MapPin size={36} className="text-violet-600 fill-violet-600/20 drop-shadow-lg animate-bounce" />
                             </Marker>
                         </Map>
                     </div>
 
                     {/* Overlay d'Action */}
-                    <div className="absolute inset-0 bg-black/10 hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
-                        <div className="pointer-events-auto transform transition-transform group-hover:scale-105">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent group-hover:from-black/60 transition-all duration-300 flex items-center justify-center pointer-events-none">
+                        <div className="pointer-events-auto transform transition-all duration-300 group-hover:scale-105">
                             <button 
                                 type="button"
                                 onClick={() => { setTempLocation(formData.location!); setIsMapOpen(true); }}
-                                className="bg-white text-zinc-800 px-5 py-2.5 rounded-full font-bold shadow-xl flex items-center gap-2 text-sm border-2 border-primary/20 hover:border-primary transition-all"
+                                className="bg-white text-zinc-800 px-6 py-3 rounded-full font-bold shadow-2xl flex items-center gap-2.5 text-sm border-2 border-violet-200 hover:border-violet-400 transition-all duration-200 hover:shadow-violet-400/30"
                             >
-                                <Maximize size={16} className="text-primary"/> 
-                                Choisir sur la carte
+                                <Maximize size={18} className="text-violet-600"/> 
+                                Ouvrir la carte
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <div className="space-y-12 pt-2 flex-1">
-                    {/* Bloc info GPS Rapide */}
-                    <div className="p-3 bg-zinc-50 dark:bg-zinc-950 border border-dashed border-zinc-200 dark:border-zinc-700 rounded-xl flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Target size={16} className="text-zinc-400"/>
-                            <div className="text-xs font-mono font-bold text-zinc-600 dark:text-zinc-300">
+                <div className="space-y-5 pt-2 flex-1">
+                    {/* Bloc info GPS */}
+                    <div className="p-4 bg-gradient-to-br from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-900 border-2 border-dashed border-zinc-200 dark:border-zinc-700 rounded-xl flex items-center justify-between transition-all duration-300 hover:border-violet-300 dark:hover:border-violet-700">
+                        <div className="flex items-center gap-2.5">
+                            <Target size={18} className="text-violet-600 dark:text-violet-400"/>
+                            <div className="text-xs font-mono font-bold text-zinc-700 dark:text-zinc-300">
                                 {formData.location?.latitude.toFixed(6)}, {formData.location?.longitude.toFixed(6)}
                             </div>
                         </div>
-                        <span className="text-[10px] text-green-600 font-bold bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] text-green-600 font-bold bg-green-100 dark:bg-green-900/30 px-2.5 py-1 rounded-full flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 bg-green-600 rounded-full animate-pulse"></div>
                             Synchronisé
                         </span>
                     </div>
 
                     <FormInput 
-                        label="Adresse / Lieu-dit" name="address_informal"
-                        value={formData.address_informal} onChange={handleChange} 
-                        icon={<MapPin size={16}/>} className="h-11" placeholder="Ex: Bastos, Face ambassade..."
+                        label="Adresse / Lieu-dit" 
+                        name="address_informal"
+                        value={formData.address_informal} 
+                        onChange={handleChange} 
+                        icon={<MapPin size={16}/>} 
+                        className="h-12" 
+                        placeholder="Ex: Bastos, Face ambassade USA..."
                     />
 
                     <div className="grid grid-cols-2 gap-3">
                         <FormInput 
-                            label="Ville" name="address_city"
-                            value={formData.address_city} onChange={handleChange} 
-                            icon={<Building2 size={16}/>} className="h-11"
+                            label="Ville" 
+                            name="address_city"
+                            value={formData.address_city} 
+                            onChange={handleChange} 
+                            icon={<Building2 size={16}/>} 
+                            className="h-12"
                         />
                         <FormInput 
-                            label="Pays" name="address_country"
-                            value={formData.address_country} onChange={handleChange} 
-                            icon={<Flag size={16}/>} className="h-11"
+                            label="Pays" 
+                            name="address_country"
+                            value={formData.address_country} 
+                            onChange={handleChange} 
+                            icon={<Flag size={16}/>} 
+                            className="h-12"
                         />
                     </div>
 
                     <FormInput 
-                        label="Code Postal" name="postalCode"
-                        value={postalCode} onChange={(e) => setPostalCode(e.target.value)} 
-                        icon={<Mail size={16}/>} className="h-11"
+                        label="Code Postal" 
+                        name="postalCode"
+                        value={postalCode} 
+                        onChange={(e) => setPostalCode(e.target.value)} 
+                        icon={<Mail size={16}/>} 
+                        className="h-12"
+                        placeholder="Optionnel"
                     />
                 </div>
             </div>
@@ -422,24 +597,25 @@ const handleSubmit = async (e: React.FormEvent) => {
         </form>
       </div>
 
-      {/* --- MODALE CARTE PLEIN ÉCRAN --- */}
+      {/* MODALE CARTE PLEIN ÉCRAN */}
       {isMapOpen && (
-        <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 md:p-8 animate-in fade-in zoom-in-95 duration-200">
-            <div className="bg-white dark:bg-zinc-900 w-full h-full rounded-3xl overflow-hidden relative shadow-2xl flex flex-col">
+        <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-0 md:p-6 animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-white dark:bg-zinc-900 w-full h-full md:rounded-3xl overflow-hidden relative shadow-2xl flex flex-col">
                 
                 {/* En-tête Modal */}
-                <div className="absolute top-4 left-4 right-4 z-10 flex justify-between pointer-events-none">
-                    <div className="bg-white/90 dark:bg-zinc-800/90 backdrop-blur px-4 py-2 rounded-full shadow-lg border border-zinc-200 dark:border-zinc-700 pointer-events-auto">
-                        <h3 className="text-sm font-bold flex items-center gap-2">
-                            <MapPin size={16} className="text-primary"/>
-                            Glissez le marqueur ou cliquez pour définir
+                <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-start pointer-events-none gap-3">
+                    <div className="bg-white/95 dark:bg-zinc-800/95 backdrop-blur-lg px-5 py-3 rounded-2xl shadow-xl border border-zinc-200 dark:border-zinc-700 pointer-events-auto max-w-md">
+                        <h3 className="text-sm font-bold flex items-center gap-2.5 text-zinc-800 dark:text-zinc-100">
+                            <MapPin size={18} className="text-violet-600"/>
+                            Positionnez le marqueur
                         </h3>
+                        <p className="text-xs text-zinc-500 mt-1">Glissez le marqueur ou cliquez sur la carte</p>
                     </div>
                     <button 
                         onClick={() => setIsMapOpen(false)}
-                        className="bg-white text-zinc-800 p-2 rounded-full shadow-lg pointer-events-auto hover:bg-zinc-100"
+                        className="bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 p-3 rounded-full shadow-xl pointer-events-auto hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-all duration-200 hover:scale-110 active:scale-95 border border-zinc-200 dark:border-zinc-700"
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        <X size={20} strokeWidth={2.5} />
                     </button>
                 </div>
 
@@ -465,28 +641,48 @@ const handleSubmit = async (e: React.FormEvent) => {
                             onDragEnd={handleDragEnd}
                             anchor="bottom"
                         >
-                            <div className="flex flex-col items-center cursor-move hover:scale-110 transition-transform">
-                                <Flag size={40} className="text-red-600 fill-red-600 drop-shadow-xl filter" strokeWidth={2} />
-                                <div className="w-2.5 h-2.5 bg-black/50 rounded-full blur-[2px] mt-[-2px]"></div>
+                            <div className="flex flex-col items-center cursor-move hover:scale-110 transition-transform duration-200 animate-bounce">
+                                <Flag size={44} className="text-red-600 fill-red-600 drop-shadow-2xl filter" strokeWidth={2.5} />
+                                <div className="w-3 h-3 bg-black/50 rounded-full blur-[3px] mt-[-4px]"></div>
                             </div>
                         </Marker>
                     </Map>
                 </div>
 
-                {/* Footer Modal avec Actions */}
-                <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 p-4 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
-                    <div className="flex items-center gap-2 text-zinc-500 text-xs font-mono">
-                       <LocateFixed size={14}/>
-                       Lat: <span className="text-zinc-800 dark:text-zinc-200 font-bold">{tempLocation.latitude.toFixed(6)}</span> 
-                       Lon: <span className="text-zinc-800 dark:text-zinc-200 font-bold">{tempLocation.longitude.toFixed(6)}</span>
+                {/* Footer Modal */}
+                <div className="bg-white dark:bg-zinc-900 border-t-2 border-zinc-200 dark:border-zinc-800 p-5 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
+                    <div className="flex items-center gap-3 text-zinc-500 text-xs font-mono bg-zinc-50 dark:bg-zinc-950 px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800">
+                       <LocateFixed size={16} className="text-violet-600"/>
+                       <span className="font-bold text-zinc-700 dark:text-zinc-300">
+                         {tempLocation.latitude.toFixed(6)}, {tempLocation.longitude.toFixed(6)}
+                       </span>
                     </div>
                     
                     <div className="flex gap-3 w-full md:w-auto">
-                        <Button variant="secondary" onClick={() => navigator.geolocation.getCurrentPosition(p => setTempLocation({latitude: p.coords.latitude, longitude: p.coords.longitude}))} size="md" className="flex-1 md:flex-none">
+                        <Button 
+                          variant="secondary" 
+                          onClick={() => {
+                            if ("geolocation" in navigator) {
+                              navigator.geolocation.getCurrentPosition(p => {
+                                setTempLocation({
+                                  latitude: p.coords.latitude, 
+                                  longitude: p.coords.longitude
+                                });
+                              });
+                            }
+                          }}
+                          size="md" 
+                          className="flex-1 md:flex-none h-12 gap-2 font-bold"
+                        >
                             <LocateFixed size={18} /> Ma position
                         </Button>
-                        <Button onClick={saveMapLocation} variant="primary" size="md" className="flex-1 md:flex-none font-bold gap-2">
-                            <Check size={18} /> Valider la position
+                        <Button 
+                          onClick={saveMapLocation} 
+                          variant="primary" 
+                          size="md" 
+                          className="flex-1 md:flex-none font-bold gap-2.5 h-12 bg-gradient-to-r from-violet-600 to-violet-500 shadow-lg shadow-violet-600/30"
+                        >
+                            <Check size={18} strokeWidth={3} /> Valider la position
                         </Button>
                     </div>
                 </div>
@@ -501,7 +697,11 @@ const handleSubmit = async (e: React.FormEvent) => {
 // Wrapper Suspense pour Next.js 
 export default function AddPoiPage() {
     return (
-        <Suspense fallback={<div className="h-screen w-full bg-white dark:bg-black" />}>
+        <Suspense fallback={
+          <div className="h-screen w-full bg-white dark:bg-black flex items-center justify-center">
+            <Loader2 className="animate-spin text-violet-600" size={48} />
+          </div>
+        }>
             <AddPoiContent />
         </Suspense>
     )

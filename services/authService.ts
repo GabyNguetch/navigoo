@@ -1,9 +1,7 @@
 import { AppUser } from "@/types";
-import { mediaService } from "./mediaService"; // Import nécessaire pour l'upload préalable
 
-// URL des PROXYS (configurés dans next.config.ts)
-const POI_PROXY = "/remote-api";
-const AUTH_PROXY = "/auth-api";
+// Utilise le proxy POI unifié
+const API_PROXY = "/remote-api";
 
 export const DEFAULT_ORG_ID = "83ce5943-d920-454f-908d-3248a73aafdf"; 
 
@@ -11,7 +9,27 @@ export interface Organization {
   organizationId: string;
   organizationName: string;
   orgCode?: string;
+  orgType?: string;
   isActive: boolean;
+}
+
+export interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  expiresIn: number;
+  user: {
+    userId: string;
+    organizationId: string;
+    username: string;
+    email: string;
+    phone?: string;
+    role: "USER" | "ADMIN" | "SUPER_ADMIN";
+    isActive: boolean;
+    emailVerified: boolean;
+    createdAt: string;
+    lastLoginAt?: string;
+  };
 }
 
 class AuthService {
@@ -21,10 +39,19 @@ class AuthService {
    */
   async getOrganizations(): Promise<Organization[]> {
     try {
-      const res = await fetch(`${POI_PROXY}/api/organizations`);
-      if (!res.ok) throw new Error("Erreur chargement organisations");
+      const res = await fetch(`${API_PROXY}/api/organizations`, {
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+      
+      if (!res.ok) {
+        console.warn("❌ Erreur chargement organisations:", res.status);
+        return [];
+      }
+      
       const data = await res.json();
-      return data.filter((org: Organization) => org.isActive !== false);
+      return Array.isArray(data) ? data.filter((org: Organization) => org.isActive !== false) : [];
     } catch (error) {
       console.error("❌ [AuthService] Erreur Organizations:", error);
       return [];
@@ -32,211 +59,357 @@ class AuthService {
   }
 
   /**
-   * Orchestration complète de l'inscription :
-   * 1. Upload de la photo vers MediaService (si présente)
-   * 2. Injection de l'ID de la photo dans le payload
-   * 3. Envoi de l'inscription à AuthService
+   * ✅ INSCRIPTION selon OpenAPI spec:
+   * POST /api/auth/register
+   * Body: RegisterRequest { username, email, password, phone?, organizationId, role }
    */
   async register(userData: {
     username: string;
     email: string;
     password: string;
     phone?: string;
-    firstName: string;
-    lastName: string;
     organizationId: string;
-    file?: File | null;
   }): Promise<AppUser> {
     
-    // --- 1. Validation Regex Stricte ---
-    const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (!pwdRegex.test(userData.password)) {
-      throw new Error("Le mot de passe doit contenir: 8 chars min, 1 Maj, 1 Min, 1 Chiffre, 1 Spécial (@$!%*?&)");
-    }
+    console.log("🚀 [AuthService] Démarrage inscription pour:", userData.username);
 
-    if (userData.phone) {
-      const phoneRegex = /^[+]?[0-9]{10,15}$/;
-      if (!phoneRegex.test(userData.phone)) {
-        throw new Error("Le téléphone doit contenir entre 10 et 15 chiffres (+ optionnel au début)");
-      }
-    }
-
-    if (userData.username) {
-      const usernameRegex = /^[a-zA-Z0-9_.-]+$/;
-      if (!usernameRegex.test(userData.username) || userData.username.length < 3) {
-        throw new Error("Nom d'utilisateur invalide (3-50 caractères, alphanumérique, _ . -)");
-      }
-    }
-
-    // --- 2. Upload préalable de la photo (Le changement est ICI) ---
-    let uploadedPhotoId: string | null = null;
-    let uploadedPhotoUri: string | null = null;
-
-    if (userData.file) {
-      console.log("⬆️ [AuthService] Upload de la photo de profil vers Media Service...");
-      try {
-        // On upload vers le bucket "users"
-        const media = await mediaService.uploadFile(userData.file, "users");
-        uploadedPhotoId = media.id;
-        uploadedPhotoUri = media.uri;
-        console.log("✅ [AuthService] Photo uploadée avec succès. ID:", uploadedPhotoId);
-      } catch (mediaError) {
-        console.error("⚠️ [AuthService] Echec de l'upload photo, continuation sans photo:", mediaError);
-        // On ne bloque pas l'inscription si l'image échoue, mais on log l'erreur
-      }
-    }
-
-    // --- 3. Préparation du Payload Auth ---
-    // On injecte photoId et photoUri récupérés du Media Service
-    const registerPayload = {
-      username: userData.username,
-      email: userData.email,
+    // ✅ Construire le payload en omettant les champs vides au lieu d'envoyer null
+    const registerPayload: any = {
+      username: userData.username.trim(),
+      email: userData.email.trim().toLowerCase(),
       password: userData.password,
-      phone: userData.phone || null,
-      firstName: userData.firstName,
-      lastName: userData.lastName,
-      organizationId: userData.organizationId || DEFAULT_ORG_ID,
-      
-      // Champs spécifiques pour lier l'image
-      photoId: uploadedPhotoId, 
-      photoUri: uploadedPhotoUri, 
-
-      service: "NAVIGOO",
-      roles: ["USER"],
-      isActive: true
+      organizationId: userData.organizationId,
+      role: "USER" as const
     };
 
-    console.log("📤 [AuthService] Envoi Payload Register:", registerPayload);
-
-    // --- 4. Envoi Multipart à l'API Auth ---
-    const endpoint = `${AUTH_PROXY}/api/auth/register`;
-    const formData = new FormData();
-
-    // Partie 'data' : Le JSON contenant les infos utilisateur + l'ID de la photo
-    formData.append(
-      "data", 
-      new Blob([JSON.stringify(registerPayload)], { type: "application/json" })
-    );
-
-    // Partie 'file' :
-    // Même si on a déjà uploadé l'image, l'API Auth attend souvent obligatoirement une part 'file' 
-    // si elle est définie en @RequestPart("file") strict.
-    // On renvoie le fichier pour satisfaire la signature du contrôleur Java, 
-    // ou un fichier vide si pas de photo.
-    if (userData.file) {
-      formData.append("file", userData.file);
-    } else {
-      // Astuce: créer un blob vide si le backend plante sans la partie 'file'
-      // Si le backend gère le @RequestPart(required=false), ceci n'est pas nécessaire.
-      // Dans le doute avec Swagger, on laisse vide si null.
+    // ✅ N'ajouter phone que s'il est défini et non vide
+    if (userData.phone && userData.phone.trim()) {
+      registerPayload.phone = userData.phone.trim();
     }
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      body: formData, // Le navigateur gère le Boundary automatiquement
-    });
+    console.log("📨 [AuthService] Payload Register:", registerPayload);
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error(`❌ [AuthService] Error ${res.status}:`, errorText);
-      try {
-        const jsonError = JSON.parse(errorText);
-        throw new Error(jsonError.message || jsonError.error || "Erreur lors de l'inscription");
-      } catch (e) {
-        throw new Error(`Erreur serveur (${res.status}) lors de l'inscription`);
+    try {
+      const response = await fetch(`${API_PROXY}/api/auth/register`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(registerPayload)
+      });
+
+      // ✅ Gestion détaillée des erreurs
+      if (!response.ok) {
+        const contentType = response.headers.get("content-type");
+        let errorMessage = `Erreur ${response.status}`;
+        
+        if (contentType?.includes("application/json")) {
+          const errorData = await response.json();
+          console.error("❌ [AuthService] Erreur JSON:", errorData);
+          
+          // ✅ Extraction intelligente du message d'erreur
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (errorData.error) {
+            errorMessage = errorData.error;
+          } else if (errorData.details) {
+            errorMessage = errorData.details;
+          } else if (errorData.errors) {
+            // Si c'est un tableau d'erreurs de validation
+            if (Array.isArray(errorData.errors)) {
+              errorMessage = errorData.errors.map((e: any) => e.message || e).join(", ");
+            } else if (typeof errorData.errors === 'object') {
+              errorMessage = Object.values(errorData.errors).join(", ");
+            }
+          }
+        } else {
+          const textError = await response.text();
+          console.error("❌ [AuthService] Erreur Text:", textError);
+          errorMessage = textError || errorMessage;
+        }
+        
+        throw new Error(errorMessage);
       }
-    }
 
-    const newUser = await res.json();
-    console.log("✅ [AuthService] Inscription réussie :", newUser);
-    
-    // Si l'inscription réussit mais que l'API Auth ne nous connecte pas directement,
-    // l'utilisateur devra se connecter manuellement à l'étape suivante.
-    return newUser;
+      const authResponse: AuthResponse = await response.json();
+      console.log("✅ [AuthService] Inscription réussie !");
+      
+      // Conversion AuthResponse → AppUser
+      const user: AppUser = {
+        id: authResponse.user.userId,
+        userId: authResponse.user.userId,
+        organizationId: authResponse.user.organizationId,
+        username: authResponse.user.username,
+        email: authResponse.user.email,
+        phone: authResponse.user.phone,
+        role: authResponse.user.role,
+        isActive: authResponse.user.isActive,
+        createdAt: authResponse.user.createdAt,
+        accessToken: authResponse.accessToken,
+        permissions: []
+      };
+
+      this.saveSession(user);
+      return user;
+      
+    } catch (error: any) {
+      console.error("❌ [AuthService] Exception Register:", error.message);
+      throw error;
+    }
   }
 
   /**
-   * Connexion Standard
+   * ✅ CONNEXION selon OpenAPI spec:
+   * POST /api/auth/login
+   * Body: LoginRequest { emailOrUsername, password }
    */
-  async login(credentials: { email: string, password: string }): Promise<AppUser> {
+  async login(credentials: { email: string; password: string }): Promise<AppUser> {
     
-    // Backdoor Admin (Pour le développement uniquement)
+    console.log("🔐 [AuthService] Tentative connexion:", credentials.email);
+
+    // Backdoor Admin (Développement uniquement - À RETIRER EN PRODUCTION)
     if (credentials.email === "admin@navigoo.com" && credentials.password === "Admin@Navigoo2026") {
-        console.log("🚀 [AuthService] Connexion Admin Statique");
-        const adminUser = {
-            id: "00000000-0000-0000-0000-000000000000",
-            organizationId: DEFAULT_ORG_ID,
-            username: "Administrateur",
-            email: "admin@navigoo.com",
-            role: "SUPER_ADMIN",
-            firstName: "Super",
-            lastName: "Admin",
-            service: "NAVIGOO",
-            isActive: true,
-            createdAt: new Date().toISOString(),
-            accessToken: "mock-token-admin",
-            permissions: ["ALL"]
-        } as AppUser;
-        this.saveSession(adminUser);
-        return adminUser;
+      console.log("🚀 [AuthService] Mode Admin Statique");
+      const adminUser: AppUser = {
+        id: "00000000-0000-0000-0000-000000000000",
+        userId: "00000000-0000-0000-0000-000000000000",
+        organizationId: DEFAULT_ORG_ID,
+        username: "Administrateur",
+        email: "admin@navigoo.com",
+        role: "SUPER_ADMIN",
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        accessToken: "mock-admin-token-dev-only",
+        permissions: ["ALL"]
+      };
+      this.saveSession(adminUser);
+      return adminUser;
     }
 
     // Connexion Réelle
-    const res = await fetch(`${AUTH_PROXY}/api/auth/login`, {
+    try {
+      const response = await fetch(`${API_PROXY}/api/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
         body: JSON.stringify({
-            identifier: credentials.email,
-            password: credentials.password
+          emailOrUsername: credentials.email.trim(),
+          password: credentials.password
         })
-    });
+      });
 
-    if (!res.ok) {
-        throw new Error("Identifiants incorrects");
+      if (!response.ok) {
+        const contentType = response.headers.get("content-type");
+        let errorMessage = "Identifiants incorrects";
+        
+        if (contentType?.includes("application/json")) {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        }
+        
+        console.error("❌ [AuthService] Erreur Login:", errorMessage);
+        throw new Error(errorMessage);
+      }
+
+      const authResponse: AuthResponse = await response.json();
+      console.log("✅ [AuthService] Connexion réussie:", authResponse.user.username);
+
+      // Conversion AuthResponse → AppUser
+      const user: AppUser = {
+        id: authResponse.user.userId,
+        userId: authResponse.user.userId,
+        organizationId: authResponse.user.organizationId,
+        username: authResponse.user.username,
+        email: authResponse.user.email,
+        phone: authResponse.user.phone,
+        role: authResponse.user.role,
+        isActive: authResponse.user.isActive,
+        createdAt: authResponse.user.createdAt,
+        accessToken: authResponse.accessToken,
+        permissions: []
+      };
+
+      this.saveSession(user);
+      return user;
+      
+    } catch (error: any) {
+      console.error("❌ [AuthService] Exception Login:", error.message);
+      throw error;
     }
-
-    const data = await res.json();
-    
-    // Mapping robuste AuthResponse -> AppUser
-    const user: AppUser = {
-        ...data.user,
-        accessToken: data.accessToken,
-        // Assurance que l'org ID est présent pour le service POI
-        organizationId: data.user.organizationId || DEFAULT_ORG_ID 
-    };
-
-    this.saveSession(user);
-    console.log("✅ [AuthService] Utilisateur connecté:", user.username);
-    return user;
   }
 
+  /**
+   * Sauvegarde la session utilisateur
+   */
   saveSession(user: AppUser) {
     if (typeof window !== 'undefined') {
       localStorage.setItem("navigoo_user", JSON.stringify(user));
+      console.log("💾 Session sauvegardée pour:", user.username);
     }
   }
 
+  /**
+   * Récupère la session utilisateur
+   */
   getSession(): AppUser | null {
     if (typeof window !== 'undefined') {
-      const u = localStorage.getItem("navigoo_user");
-      return u ? JSON.parse(u) : null;
+      const stored = localStorage.getItem("navigoo_user");
+      if (!stored) return null;
+      
+      try {
+        const user = JSON.parse(stored);
+        
+        // Assurance compatibilité id/userId
+        if (user) {
+          if (!user.userId && user.id) user.userId = user.id;
+          if (!user.id && user.userId) user.id = user.userId;
+        }
+        
+        return user;
+      } catch (e) {
+        console.error("❌ Erreur parsing session:", e);
+        return null;
+      }
     }
     return null;
   }
 
+  /**
+   * Récupère le token JWT
+   */
   getToken(): string | undefined {
     return this.getSession()?.accessToken;
   }
 
+  /**
+   * Vérifie si l'utilisateur est connecté
+   */
+  isAuthenticated(): boolean {
+    const session = this.getSession();
+    return session !== null && session.accessToken !== undefined;
+  }
+
+  /**
+   * ✅ DÉCONNEXION selon OpenAPI spec:
+   * POST /api/auth/logout/{userId}
+   */
   logout() {
     if (typeof window !== 'undefined') {
       const user = this.getSession();
+      
       // Tentative de logout propre côté serveur
-      if (user && user.id) {
-        fetch(`${AUTH_PROXY}/api/auth/logout/${user.id}`, { method: 'POST' }).catch(() => {});
+      if (user && user.userId) {
+        fetch(`${API_PROXY}/api/auth/logout/${user.userId}`, { 
+          method: 'POST',
+          headers: {
+            "Authorization": `Bearer ${user.accessToken}`
+          }
+        })
+        .then(() => console.log("✅ Logout serveur réussi"))
+        .catch(err => console.warn("⚠️ Logout serveur échoué:", err));
       }
+      
       localStorage.removeItem("navigoo_user");
+      console.log("🚪 Déconnexion locale");
       window.location.href = "/signin";
+    }
+  }
+
+  /**
+   * ✅ RAFRAÎCHISSEMENT TOKEN selon OpenAPI spec:
+   * POST /api/auth/refresh
+   * Body: { refreshToken }
+   */
+  async refreshToken(refreshToken: string): Promise<AppUser> {
+    try {
+      const response = await fetch(`${API_PROXY}/api/auth/refresh`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ refreshToken })
+      });
+
+      if (!response.ok) {
+        throw new Error("Token refresh failed");
+      }
+
+      const authResponse: AuthResponse = await response.json();
+      
+      const user: AppUser = {
+        id: authResponse.user.userId,
+        userId: authResponse.user.userId,
+        organizationId: authResponse.user.organizationId,
+        username: authResponse.user.username,
+        email: authResponse.user.email,
+        phone: authResponse.user.phone,
+        role: authResponse.user.role,
+        isActive: authResponse.user.isActive,
+        createdAt: authResponse.user.createdAt,
+        accessToken: authResponse.accessToken,
+        permissions: []
+      };
+
+      this.saveSession(user);
+      return user;
+      
+    } catch (error) {
+      console.error("❌ Refresh token failed:", error);
+      this.logout();
+      throw error;
+    }
+  }
+
+  /**
+   * ✅ RÉCUPÉRATION PROFIL selon OpenAPI spec:
+   * GET /api/auth/me
+   */
+  async getCurrentUser(): Promise<AppUser> {
+    const token = this.getToken();
+    
+    if (!token) {
+      throw new Error("Non authentifié");
+    }
+
+    try {
+      const response = await fetch(`${API_PROXY}/api/auth/me`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("Session expirée");
+      }
+
+      const userData = await response.json();
+      
+      // Mise à jour de la session
+      const user: AppUser = {
+        id: userData.userId,
+        userId: userData.userId,
+        organizationId: userData.organizationId,
+        username: userData.username,
+        email: userData.email,
+        phone: userData.phone,
+        role: userData.role,
+        isActive: userData.isActive,
+        createdAt: userData.createdAt,
+        accessToken: token,
+        permissions: []
+      };
+
+      this.saveSession(user);
+      return user;
+      
+    } catch (error) {
+      console.error("❌ Get current user failed:", error);
+      throw error;
     }
   }
 }

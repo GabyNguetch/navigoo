@@ -28,6 +28,7 @@ export interface AppUser {
   accessToken?: string; // Ajouté côté client pour la session
   isActive: boolean;
   createdAt?: string;
+  
 }
 
 export interface POI {
@@ -147,9 +148,16 @@ export interface Podcast {
 // DTO Media Service
 export interface MediaDto {
   id: string;
-  uri: string;
-  mime: string;
   name: string;
+  real_name: string;
+  service: string;
+  mime: string;
+  size: number;
+  extension: string;
+  path: string;
+  uri: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 

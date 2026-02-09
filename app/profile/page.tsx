@@ -149,6 +149,34 @@ export default function ProfilePage() {
     authService.logout();
   };
 
+    // Gestion du changement de photo
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    try {
+      // 1. Upload vers Media Service
+      // On peut montrer un loader ici
+      const media = await mediaService.uploadFile(file, "users/avatars");
+      
+      // 2. Mise à jour du profil utilisateur avec le nouvel ID
+      const updatedProfile = await userProfileService.updateUserProfile(user.userId, {
+        photoId: media.id // On met à jour l'ID de la photo
+      });
+
+      // 3. Mise à jour de la session locale pour refléter le changement immédiat
+      // Note: Assurez-vous que authService a une méthode pour rafraîchir ou mettre à jour la session
+      const newUserSession = { ...user, photoId: media.id };
+      // hack temporaire pour l'UI, idéalement via un contexte
+      setUser(newUserSession); 
+      
+      alert("Photo de profil mise à jour !");
+    } catch (err) {
+      console.error("Erreur mise à jour photo", err);
+      alert("Erreur lors de la mise à jour de la photo");
+    }
+  };
+
   const handleContentSuccess = () => {
     alert("Contenu publié avec succès !");
   };
@@ -215,7 +243,7 @@ export default function ProfilePage() {
                   </div>
                   {/* Bouton pour changer la photo */}
                   <button 
-                    onClick={() => console.log("Upload photo dialog")} 
+                    onClick={handlePhotoUpload} 
                     className="absolute -bottom-2 -right-2 p-2 bg-primary text-white rounded-full md:rounded-2xl shadow-lg hover:scale-110 active:scale-95 transition-transform"
                   >
                     <Camera size={18} />
