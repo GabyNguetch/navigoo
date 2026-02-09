@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { userProfileService, UserProfile, UserStats } from "@/services/userProfileService";
 import { authService } from "@/services/authService";
-import { AppUser } from "@/services/adminService";
+import { AppUser } from "@/types";
 
 export const useUserProfile = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);

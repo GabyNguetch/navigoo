@@ -10,7 +10,7 @@ export interface Location {
 }
 
 export interface AppUser {
-  id: string; // UUID du Auth Service
+  id?: string; // UUID du Auth Service
   userId: string;
   organizationId: string;
   username: string;
