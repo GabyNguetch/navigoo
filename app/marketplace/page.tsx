@@ -386,30 +386,30 @@ export default function MarketplacePage() {
               </div>
               
               <div className="flex gap-2">
-                <Button
-                  variant={viewMode === "grid" ? "default" : "outline"}
-                  onClick={() => setViewMode("grid")}
-                  className="gap-2"
-                >
-                  <Grid size={18} />
-                  Grille
-                </Button>
-                <Button
-                  variant={viewMode === "list" ? "default" : "outline"}
-                  onClick={() => setViewMode("list")}
-                  className="gap-2"
-                >
-                  <List size={18} />
-                  Liste
-                </Button>
-                <Button
-                  variant={viewMode === "map" ? "default" : "outline"}
-                  onClick={() => setViewMode("map")}
-                  className="gap-2"
-                >
-                  <MapPin size={18} />
-                  Carte
-                </Button>
+                  <Button
+                    variant={viewMode === "grid" ? "primary" : "outline"} // Corrigé
+                    onClick={() => setViewMode("grid")}
+                    className="gap-2"
+                  >
+                    <Grid size={18} />
+                    Grille
+                  </Button>
+                  <Button
+                    variant={viewMode === "list" ? "primary" : "outline"} // Corrigé
+                    onClick={() => setViewMode("list")}
+                    className="gap-2"
+                  >
+                    <List size={18} />
+                    Liste
+                  </Button>
+                  <Button
+                    variant={viewMode === "map" ? "primary" : "outline"} // Corrigé
+                    onClick={() => setViewMode("map")}
+                    className="gap-2"
+                  >
+                    <MapPin size={18} />
+                    Carte
+                  </Button>
               </div>
             </div>
 
