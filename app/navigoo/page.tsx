@@ -313,7 +313,7 @@ export default function Home() {
         if (user?.userId) {
           try {
             await userProfileService.createAccessLog({
-              poiId: externalPoi.poi_id,
+              poiId: externalPoi.poi_id || "",
               userId: user.userId,
               organizationId: user.organizationId,
               platformType: "WEB",
