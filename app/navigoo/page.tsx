@@ -392,7 +392,7 @@ export default function Home() {
       
       // Afficher si: POI approuvé OU c'est mon POI
       const isMyPoi = currentUser?.userId && 
-                      (poi.created_by === currentUser.userId || poi.created_by_user_id === currentUser.userId);
+                      poi.created_by_user_id === currentUser.userId;
       const shouldShow = poi.is_active || isMyPoi;
 
       return catMatch && nameMatch && shouldShow;
