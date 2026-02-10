@@ -114,7 +114,7 @@ export const TopLayout = ({
                 </div>
                 {/* On peut ajouter l'initiale de l'utilisateur par dessus si pas de photo */}
                 <span className="relative z-10 text-[10px] font-black text-primary pointer-events-none">
-                   {user.username.charAt(0).toUpperCase()}
+                   {user?.username?.charAt(0)?.toUpperCase()}
                 </span>
               </button>
             </div>
