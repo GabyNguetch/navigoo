@@ -384,19 +384,19 @@ export class MediaService {
    * @param mediaId - UUID du fichier ou URL complète
    * @returns URL complète pour accéder au fichier
    */
-  getMediaUrl(mediaId: string): string {
-    if (!mediaId) {
+  getMediaUrl(media: MediaDto | undefined): string {
+    if (!media || !media.id) {
       console.warn("⚠️ [MediaService] Empty mediaId provided");
       return "";
     }
     
     // Si c'est déjà une URL complète, la retourner telle quelle
-    if (mediaId.startsWith("http://") || mediaId.startsWith("https://")) {
-      return mediaId;
+    if (media.uri.startsWith("http://") || media.uri.startsWith("https://")) {
+      return media.uri;
     }
     
     // Générer l'URL via le proxy
-    const fullUrl = `${window.location.origin}${MEDIA_API_BASE}/media/proxy/${mediaId}`;
+    const fullUrl = `${window.location.origin}${MEDIA_API_BASE}/media/proxy/${media.uri}`;
     
     console.log(`🔗 [MediaService] Generated URL: ${fullUrl}`);
     

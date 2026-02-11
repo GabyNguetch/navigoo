@@ -32,7 +32,7 @@ import { PodcastModal } from "@/components/content/PodcastModal";
 import { AddPoiPanel } from "@/components/profile/AddPoiPanel";
 import { clsx } from "clsx";
 import { motion, AnimatePresence } from "framer-motion";
-import { AppUser } from "@/types";
+import { AppUser, MediaDto } from "@/types";
 import { mediaService } from "@/services/mediaService";
 
 type TabType = 'overview' | 'pois' | 'reviews' | 'blogs' | 'podcasts' | 'activity' | 'saved' | 'add-poi' | 'edit-poi';
@@ -150,7 +150,7 @@ function ProfileContent() {
   const profilePic = user.photoUri 
     ? user.photoUri 
     : user.photoId 
-        ? mediaService.getMediaUrl(user.photoId) 
+        ?  mediaService.getMediaUrl(user.mediaPhoto) 
         : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=6366f1&color=fff&size=200&bold=true`;
 
   // Gestionnaires

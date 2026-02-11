@@ -19,6 +19,7 @@ export interface AppUser {
   service?: "LETS_GO" | "RIDE_AND_GO" | "FLEET_MANAGEMENT" | "SYNDICAT" | "NAVIGOO" | "PAYMENT" | "FARE_CALCULATOR";
   photoId?: string;
   photoUri?: string;
+  mediaPhoto?: MediaDto; // Ajouté pour stocker les infos du média côté client
   roles?: string[];
   permissions?: string[];
   accessToken?: string; // Ajouté côté client pour la session

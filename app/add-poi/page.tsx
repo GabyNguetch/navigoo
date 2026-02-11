@@ -129,7 +129,7 @@ function AddPoiContent() {
             const media = await mediaService.uploadFile(file, "pois_galleries");
             
             // 2. Récupérer l'URL propre
-            const imageUrl = mediaService.getMediaUrl(media.id);
+            const imageUrl = mediaService.getMediaUrl(media);
             
             // Conversion localhost -> URL Réelle si nécessaire
             const finalUrl = imageUrl.replace('http://localhost:3000/media-api', 'https://media-service.pynfi.com');
